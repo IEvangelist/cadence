@@ -80,6 +80,11 @@ squad under the team's rules, dispatches Copilot agents, and **escalates to a hu
 when judgment or approval is needed**. Off-hours pausing, notify levels, and a
 `git-notes`/`orphan-branch` state backend keep it controllable and auditable.
 
+> **Operational guide:** see [`docs/squad-ops.md`](./squad-ops.md) for the label taxonomy,
+> the exact routing rules, the mandatory human approval gates, and the precise command a human
+> runs to (optionally) enable execute mode. In this repo, autonomous execution and auto-merge
+> are **off by default** — Ralph only triages, labels, and assigns.
+
 **Aspire-friendly.** `squad aspire` opens an Aspire dashboard for squad observability
 (complements the app's own OTEL). The preview **`Squad.Agents.AI`** NuGet can later
 expose a Squad-backed `AIAgent` (Microsoft Agent Framework) inside the product itself

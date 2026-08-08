@@ -1,3 +1,23 @@
 {
-  "version": 1
+  "version": 1,
+  "watch": {
+    "_comment": "SAFE POSTURE — triage/label/assign only. Autonomous code execution and auto-merge are OFF. A human opts into execute mode explicitly via the CLI (see docs/squad-ops.md); this file must never turn it on. squad-cli reads only the keys below (watch/config.js); unknown keys like this comment are ignored.",
+    "execute": false,
+    "interval": 10,
+    "maxConcurrent": 1,
+    "timeout": 30,
+    "notifyLevel": "important",
+    "stateBackend": "local",
+    "self-pull": false,
+    "board": false,
+    "fleet-dispatch": false,
+    "monitor-teams": false,
+    "monitor-email": false,
+    "two-pass": false,
+    "wave-dispatch": false,
+    "retro": false,
+    "decision-hygiene": false,
+    "cleanup": false,
+    "notes-promote": false
+  }
 }

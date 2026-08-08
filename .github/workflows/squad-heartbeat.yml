@@ -70,7 +70,7 @@ jobs:
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issue_number: decision.issueNumber,
-                  labels: [decision.label]
+                  labels: [decision.label, 'status:ready']
                 });
                 
                 await github.rest.issues.createComment({
