@@ -12,10 +12,11 @@ EF Core in `Cadence.Data`) for user accounts. Four sign-in methods are supported
 | **Microsoft** OAuth | `GET /api/auth/external/Microsoft` |
 
 Sessions are carried by a **hardened cookie** (`cadence.auth`): `HttpOnly`,
-`SameSite=Lax`, `Secure` when the request is HTTPS. The API answers unauthorized
-requests with `401`/`403` status codes (never HTML redirects) so the SPA can
-react. **No secrets are committed** — every provider is off until you supply its
-credentials locally.
+`SameSite=Lax`, and `Secure` in every environment except Development/Testing
+(which are served over plain HTTP) — so the cookie is never emitted in the clear,
+even behind a TLS-terminating proxy. The API answers unauthorized requests with
+`401`/`403` status codes (never HTML redirects) so the SPA can react. **No secrets
+are committed** — every provider is off until you supply its credentials locally.
 
 ## Provider configuration keys
 
@@ -81,10 +82,34 @@ integration tests, and it means no email provider or secret is required to try
 passwordless sign-in. Wire a real transactional-email implementation (SendGrid,
 Azure Communication Services, …) by registering it in `AddCadenceIdentity`.
 
-Magic-link tokens are generated with Identity's `DefaultEmailProvider` and are
+Magic-link tokens are high-entropy, opaque values produced by a dedicated
+**data-protector token provider** (`MagicLinkTokenProvider`) — deliberately *not*
+Identity's `DefaultEmailProvider`, whose tokens are short numeric TOTP codes that
+are feasible to brute-force. Each token embeds a short expiry (15 minutes) and is
 **single-use**: verifying one rotates the user's security stamp, invalidating it.
+The verify endpoint is additionally protected by **per-email rate limiting** and
+**failed-attempt lockout**, so repeated guesses lock the account rather than
+widening the guessing window.
+
 The request endpoint always returns `202 Accepted` whether or not the account
-exists, so it can't be used to enumerate registered emails.
+exists, so it can't be used to enumerate registered emails. It **never creates an
+account** for an unknown address — otherwise an unauthenticated caller could
+mass-create accounts for arbitrary/victim emails (resource exhaustion, email
+squatting) or pre-stage an account for an external-login hijack.
+
+### External-login account linking
+
+When an OAuth sign-in has no existing linked login, Cadence links it to a local
+account with the same email **only when both**: the provider asserts the email is
+verified (the OIDC `email_verified` claim) **and** the local account's own email
+is confirmed. Otherwise the user is redirected to an explicit, authenticated
+linking step (`?auth=error&reason=link-required`). This blocks a pre-account
+hijack where an attacker pre-registers the victim's address and waits for the
+victim's provider sign-in to be silently linked to the attacker's account.
+
+> **GitHub caveat:** GitHub's OAuth userinfo does not emit an `email_verified`
+> claim, so a GitHub sign-in will not auto-link to a pre-existing local account —
+> it requires the explicit linking step. New GitHub accounts are created normally.
 
 ## Profiles, tiers & the entitlement seam
 
@@ -112,8 +137,12 @@ the Aspire-wired Postgres database. To add a migration after changing an entity:
 ```bash
 dotnet tool install --global dotnet-ef            # once, version 10.0.10
 dotnet ef migrations add <Name> \
-  --project src/Cadence.Data --startup-project src/Cadence.Api
+  --project src/Cadence.Data --startup-project src/Cadence.Data
 ```
+
+The `Cadence.Data` project carries the EF Core **design-time** package and a
+`CadenceDbContextFactory`, so migrations are generated from it directly (no live
+database required). The API remains the runtime startup that applies them.
 
 ## Related endpoints
 
@@ -136,5 +165,9 @@ dotnet ef migrations add <Name> \
 Projects are **owned**: every `/api/projects` handler filters by the caller's
 user id, so a user can only list, read, update, or delete their **own** projects.
 Requesting another user's project id returns `404 Not Found` (not `403`, so the
-API doesn't leak the existence of other users' data). This is covered by an
-integration test asserting user A cannot read or modify user B's project.
+API doesn't leak the existence of other users' data). Project rows use a
+**composite `{OwnerId, Id}` primary key**, so a client-supplied project id is
+unique *per user* — two users may hold the same id without collision, and the
+create-time existence check is scoped to the owner (no cross-tenant existence
+oracle). This is covered by an integration test asserting user A cannot read or
+modify user B's project.

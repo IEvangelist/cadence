@@ -39,12 +39,22 @@ public static class CadenceIdentityExtensions
             .AddRoles<IdentityRole>()
             .AddEntityFrameworkStores<CadenceDbContext>()
             .AddSignInManager()
-            .AddDefaultTokenProviders();
+            .AddDefaultTokenProviders()
+            // Dedicated opaque, short-lived token provider for magic links (never
+            // the 6-digit default email provider — see MagicLinkTokenProvider).
+            .AddTokenProvider<MagicLinkTokenProvider>(AccountHelpers.MagicLinkProvider);
 
         // Tier/display-name claims + entitlement + magic-link seams.
         services.AddScoped<IUserClaimsPrincipalFactory<ApplicationUser>, TierClaimsPrincipalFactory>();
         services.AddScoped<IEntitlementService, TierEntitlementService>();
         services.AddSingleton<IMagicLinkSender, LoggingMagicLinkSender>();
+
+        // Outside Development/Testing (both served over plain HTTP by the test host
+        // and local dev), always mark the auth cookies Secure so they are never
+        // emitted over an unencrypted hop (e.g. a TLS-terminating proxy).
+        var securePolicy = ResolveCookieSecurePolicy(
+            builder.Environment.IsDevelopment(),
+            builder.Environment.IsEnvironment("Testing"));
 
         var auth = services
             .AddAuthentication(options =>
@@ -57,7 +67,7 @@ public static class CadenceIdentityExtensions
                 options.Cookie.Name = "cadence.auth";
                 options.Cookie.HttpOnly = true;
                 options.Cookie.SameSite = SameSiteMode.Lax;
-                options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+                options.Cookie.SecurePolicy = securePolicy;
                 options.SlidingExpiration = true;
                 options.ExpireTimeSpan = TimeSpan.FromDays(14);
                 // The API is called by a SPA: answer with status codes, never HTML redirects.
@@ -69,7 +79,7 @@ public static class CadenceIdentityExtensions
                 options.Cookie.Name = "cadence.external";
                 options.Cookie.HttpOnly = true;
                 options.Cookie.SameSite = SameSiteMode.Lax;
-                options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+                options.Cookie.SecurePolicy = securePolicy;
                 options.ExpireTimeSpan = TimeSpan.FromMinutes(10);
             });
 
@@ -93,6 +103,17 @@ public static class CadenceIdentityExtensions
             context.Response.StatusCode = statusCode;
             return Task.CompletedTask;
         };
+
+    /// <summary>
+    /// Decide the auth cookie <see cref="CookieSecurePolicy"/>. Development and the
+    /// integration/unit test host are served over plain HTTP, so they use
+    /// <see cref="CookieSecurePolicy.SameAsRequest"/>; every other environment uses
+    /// <see cref="CookieSecurePolicy.Always"/> so the cookie is never sent in the clear.
+    /// </summary>
+    public static CookieSecurePolicy ResolveCookieSecurePolicy(bool isDevelopment, bool isTesting) =>
+        isDevelopment || isTesting
+            ? CookieSecurePolicy.SameAsRequest
+            : CookieSecurePolicy.Always;
 
     private static void AddConfiguredExternalProviders(AuthenticationBuilder auth, IConfiguration configuration)
     {

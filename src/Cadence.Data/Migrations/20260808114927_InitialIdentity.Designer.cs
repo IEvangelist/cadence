@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Cadence.Data.Migrations
 {
     [DbContext(typeof(CadenceDbContext))]
-    [Migration("20260808071108_InitialIdentity")]
+    [Migration("20260808114927_InitialIdentity")]
     partial class InitialIdentity
     {
         /// <inheritdoc />
@@ -95,6 +95,9 @@ namespace Cadence.Data.Migrations
 
             modelBuilder.Entity("Cadence.Data.Entities.ProjectEntity", b =>
                 {
+                    b.Property<string>("OwnerId")
+                        .HasColumnType("text");
+
                     b.Property<string>("Id")
                         .HasColumnType("text");
 
@@ -110,19 +113,13 @@ namespace Cadence.Data.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<string>("OwnerId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<int>("SchemaVersion")
                         .HasColumnType("integer");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
-
-                    b.HasIndex("OwnerId");
+                    b.HasKey("OwnerId", "Id");
 
                     b.ToTable("Projects");
                 });

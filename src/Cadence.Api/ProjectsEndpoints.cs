@@ -64,7 +64,10 @@ public static class ProjectsEndpoints
         var ownerId = users.GetUserId(principal)!;
         var id = string.IsNullOrWhiteSpace(request.Id) ? Guid.NewGuid().ToString("N") : request.Id!;
 
-        if (await db.Projects.AnyAsync(p => p.Id == id))
+        // Owner-scoped existence check: ids are unique per user (composite key), so
+        // this neither leaks the existence of another user's project nor lets a
+        // client squat a global id.
+        if (await db.Projects.AnyAsync(p => p.OwnerId == ownerId && p.Id == id))
         {
             return Results.Conflict(new { error = $"A project with id '{id}' already exists." });
         }

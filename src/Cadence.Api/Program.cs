@@ -1,4 +1,5 @@
 using Cadence.Api;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -7,6 +8,24 @@ builder.AddServiceDefaults();
 
 // OpenAPI document generation.
 builder.Services.AddOpenApi();
+
+// Throttle magic-link verification per target email so token guessing can't be
+// amplified by volume (defense in depth on top of the opaque token + lockout).
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(AuthEndpoints.MagicLinkVerifyRateLimitPolicy, context =>
+    {
+        var email = context.Request.Query["email"].ToString();
+        var partitionKey = string.IsNullOrEmpty(email) ? "anonymous" : email;
+        return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+        });
+    });
+});
 
 // Postgres-backed persistence (skipped in the Testing environment, where the
 // test host registers an in-memory SQLite context instead).
@@ -32,6 +51,7 @@ if (!app.Environment.IsEnvironment("Testing"))
     await app.MigrateCadenceDatabaseAsync();
 }
 
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 

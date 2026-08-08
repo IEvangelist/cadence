@@ -12,6 +12,13 @@ internal static class AccountHelpers
     /// <summary>Token purpose for passwordless magic-link sign-in.</summary>
     public const string MagicLinkPurpose = "cadence-magic-link";
 
+    /// <summary>
+    /// Name of the dedicated, high-entropy data-protector token provider used for
+    /// magic links. Deliberately NOT the default email provider, whose tokens are
+    /// short numeric TOTP codes that are feasible to brute-force.
+    /// </summary>
+    public const string MagicLinkProvider = "MagicLink";
+
     /// <summary>Derive a friendly display name from an email local-part.</summary>
     public static string DeriveDisplayName(string email)
     {
@@ -71,4 +78,13 @@ internal static class AccountHelpers
     /// <summary>Redirect target after a failed browser-based sign-in.</summary>
     public static string FailureUrl(IConfiguration configuration) =>
         $"{WebBaseUrl(configuration)}/?auth=error";
+
+    /// <summary>
+    /// Redirect target when an external sign-in matches an existing local account
+    /// that cannot be auto-linked safely (unverified provider email or an
+    /// unconfirmed local account). The user must complete an explicit,
+    /// authenticated linking step instead.
+    /// </summary>
+    public static string LinkRequiredUrl(IConfiguration configuration) =>
+        $"{WebBaseUrl(configuration)}/?auth=error&reason=link-required";
 }

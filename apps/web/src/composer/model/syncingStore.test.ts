@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEmptyProject } from './project'
 import { LocalStorageProjectStore, MemoryStorage, type ProjectStore } from './storage'
 import { SyncingProjectStore, type AuthFlag } from './syncingStore'
@@ -63,6 +63,44 @@ describe('SyncingProjectStore', () => {
 
     expect(synced).toBe(1)
     expect((await remote.list()).map((m) => m.id).sort()).toEqual(['a', 'b'])
+  })
+
+  it('syncLocalToRemote() pushes offline edits when the local copy is newer', async () => {
+    vi.useFakeTimers()
+    try {
+      // Server has an older copy of 'x'.
+      vi.setSystemTime(new Date(1_000))
+      await remote.save({ ...createEmptyProject('x'), name: 'Server copy' })
+
+      // The same project was edited offline more recently.
+      vi.setSystemTime(new Date(2_000))
+      await local.save({ ...createEmptyProject('x'), name: 'Offline edit' })
+
+      const synced = await store.syncLocalToRemote()
+
+      expect(synced).toBe(1)
+      expect((await remote.load('x'))?.name).toBe('Offline edit')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('syncLocalToRemote() keeps the server copy when it is newer', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date(1_000))
+      await local.save({ ...createEmptyProject('y'), name: 'Stale local' })
+
+      vi.setSystemTime(new Date(2_000))
+      await remote.save({ ...createEmptyProject('y'), name: 'Fresh server' })
+
+      const synced = await store.syncLocalToRemote()
+
+      expect(synced).toBe(0)
+      expect((await remote.load('y'))?.name).toBe('Fresh server')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('syncLocalToRemote() is a no-op with nothing local', async () => {

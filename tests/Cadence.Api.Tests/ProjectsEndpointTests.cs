@@ -52,6 +52,34 @@ public class ProjectsEndpointTests(CadenceApiFactory factory) : IClassFixture<Ca
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
     }
 
+    // Issue E: project ids are owner-scoped (composite key), so two different users
+    // may each use the same client-provided id without a cross-tenant conflict, and
+    // there is no global existence oracle on create.
+    [Fact]
+    public async Task Create_SameClientId_ForDifferentOwners_DoesNotConflict()
+    {
+        const string sharedId = "shared-client-id";
+
+        var alice = _factory.CreateClient();
+        await alice.RegisterAsync("e.alice@example.com");
+        var aliceCreate = await alice.PostAsJsonAsync("/api/projects", NewProject("Alice", sharedId));
+        Assert.Equal(HttpStatusCode.Created, aliceCreate.StatusCode);
+
+        var bob = _factory.CreateClient();
+        await bob.RegisterAsync("e.bob@example.com");
+        var bobCreate = await bob.PostAsJsonAsync("/api/projects", NewProject("Bob", sharedId));
+        Assert.Equal(HttpStatusCode.Created, bobCreate.StatusCode);
+
+        // Each owner reads back their own copy under the shared id.
+        var aliceGet = await (await alice.GetAsync($"/api/projects/{sharedId}"))
+            .Content.ReadFromJsonAsync<ProjectDetail>();
+        var bobGet = await (await bob.GetAsync($"/api/projects/{sharedId}"))
+            .Content.ReadFromJsonAsync<ProjectDetail>();
+
+        Assert.Equal("Alice", aliceGet!.Name);
+        Assert.Equal("Bob", bobGet!.Name);
+    }
+
     [Fact]
     public async Task Create_WithBlankName_ReturnsValidationProblem()
     {

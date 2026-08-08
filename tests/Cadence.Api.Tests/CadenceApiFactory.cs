@@ -22,6 +22,12 @@ public sealed class CadenceApiFactory : WebApplicationFactory<Program>
     /// <summary>Captures magic-link tokens so tests can complete the flow.</summary>
     public CapturingMagicLinkSender MagicLinks { get; } = new();
 
+    /// <summary>
+    /// Optional override for the magic-link token lifespan, so a test can force a
+    /// token to expire quickly and assert the expiry is enforced.
+    /// </summary>
+    public TimeSpan? MagicLinkTokenLifespan { get; init; }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -31,6 +37,11 @@ public sealed class CadenceApiFactory : WebApplicationFactory<Program>
         {
             services.AddDbContext<CadenceDbContext>(options => options.UseSqlite(_connection));
             services.AddSingleton<IMagicLinkSender>(MagicLinks);
+
+            if (MagicLinkTokenLifespan is { } lifespan)
+            {
+                services.Configure<MagicLinkTokenProviderOptions>(o => o.TokenLifespan = lifespan);
+            }
 
             using var provider = services.BuildServiceProvider();
             using var scope = provider.CreateScope();

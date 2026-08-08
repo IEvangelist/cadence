@@ -196,7 +196,7 @@ namespace Cadence.Data.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Projects", x => x.Id);
+                    table.PrimaryKey("PK_Projects", x => new { x.OwnerId, x.Id });
                     table.ForeignKey(
                         name: "FK_Projects_AspNetUsers_OwnerId",
                         column: x => x.OwnerId,
@@ -247,11 +247,6 @@ namespace Cadence.Data.Migrations
                 table: "Profiles",
                 column: "UserId",
                 unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Projects_OwnerId",
-                table: "Projects",
-                column: "OwnerId");
         }
 
         /// <inheritdoc />

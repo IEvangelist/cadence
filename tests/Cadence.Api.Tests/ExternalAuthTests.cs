@@ -11,14 +11,25 @@ public class ExternalAuthTests(CadenceApiFactory factory) : IClassFixture<Cadenc
     private HttpClient CreateClient() =>
         _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-    private static async Task SignInExternalAsync(HttpClient client, string email, string key, string name)
+    private static async Task<HttpResponseMessage> AttemptExternalAsync(
+        HttpClient client, string email, string key, string name, bool? emailVerified = null)
     {
-        var challenge = await client.GetAsync(
-            $"/api/auth/external/Mock?email={Uri.EscapeDataString(email)}" +
-            $"&key={Uri.EscapeDataString(key)}&name={Uri.EscapeDataString(name)}");
-        Assert.Equal(HttpStatusCode.Redirect, challenge.StatusCode);
+        var url = $"/api/auth/external/Mock?email={Uri.EscapeDataString(email)}" +
+                  $"&key={Uri.EscapeDataString(key)}&name={Uri.EscapeDataString(name)}";
+        if (emailVerified is { } verified)
+        {
+            url += $"&emailVerified={(verified ? "true" : "false")}";
+        }
 
-        var callback = await client.GetAsync(challenge.Headers.Location);
+        var challenge = await client.GetAsync(url);
+        Assert.Equal(HttpStatusCode.Redirect, challenge.StatusCode);
+        return await client.GetAsync(challenge.Headers.Location);
+    }
+
+    private static async Task SignInExternalAsync(
+        HttpClient client, string email, string key, string name, bool? emailVerified = null)
+    {
+        var callback = await AttemptExternalAsync(client, email, key, name, emailVerified);
         Assert.Equal(HttpStatusCode.Redirect, callback.StatusCode);
         Assert.Contains("auth=success", callback.Headers.Location!.ToString());
     }
@@ -48,6 +59,64 @@ public class ExternalAuthTests(CadenceApiFactory factory) : IClassFixture<Cadenc
 
         var me = await client.GetAsync("/api/auth/me");
         Assert.Equal(HttpStatusCode.OK, me.StatusCode);
+    }
+
+    // Issue B: an external login whose email matches an UNCONFIRMED local account
+    // must NOT auto-link or sign in — otherwise an attacker who pre-registered the
+    // victim's address hijacks the victim's later OAuth sign-in.
+    [Fact]
+    public async Task ExternalCallback_DoesNotAutoLink_ToUnconfirmedLocalAccount()
+    {
+        const string email = "b.unconfirmed@example.com";
+        await _factory.CreateClient().RegisterAsync(email); // EmailConfirmed == false
+
+        var client = CreateClient();
+        var callback = await AttemptExternalAsync(
+            client, email, "attacker-key", "Attacker", emailVerified: true);
+
+        Assert.Equal(HttpStatusCode.Redirect, callback.StatusCode);
+        Assert.Contains("reason=link-required", callback.Headers.Location!.ToString());
+
+        var me = await client.GetAsync("/api/auth/me");
+        Assert.Equal(HttpStatusCode.Unauthorized, me.StatusCode);
+        Assert.Equal(0, await _factory.ExternalLoginCountAsync(email));
+    }
+
+    // Issue B: even a confirmed local account must not be linked when the provider
+    // does not assert the email is verified.
+    [Fact]
+    public async Task ExternalCallback_DoesNotAutoLink_WhenProviderEmailUnverified()
+    {
+        const string email = "b.provider-unverified@example.com";
+        await _factory.CreateClient().RegisterAsync(email);
+        await _factory.ConfirmEmailAsync(email);
+
+        var client = CreateClient();
+        var callback = await AttemptExternalAsync(
+            client, email, "unverified-key", "User", emailVerified: false);
+
+        Assert.Contains("reason=link-required", callback.Headers.Location!.ToString());
+
+        var me = await client.GetAsync("/api/auth/me");
+        Assert.Equal(HttpStatusCode.Unauthorized, me.StatusCode);
+        Assert.Equal(0, await _factory.ExternalLoginCountAsync(email));
+    }
+
+    // Issue B (positive): linking is allowed only when the provider email is
+    // verified AND the local account's own email is confirmed.
+    [Fact]
+    public async Task ExternalCallback_AutoLinks_WhenVerifiedAndConfirmed()
+    {
+        const string email = "b.linkable@example.com";
+        await _factory.CreateClient().RegisterAsync(email);
+        await _factory.ConfirmEmailAsync(email);
+
+        var client = CreateClient();
+        await SignInExternalAsync(client, email, "linkable-key", "Linkable", emailVerified: true);
+
+        var me = await client.GetAsync("/api/auth/me");
+        Assert.Equal(HttpStatusCode.OK, me.StatusCode);
+        Assert.Equal(1, await _factory.ExternalLoginCountAsync(email));
     }
 
     [Fact]

@@ -57,19 +57,24 @@ export class SyncingProjectStore implements ProjectStore {
   }
 
   /**
-   * Push every local project that the server doesn't already have up to the
-   * remote store. Called once when the user transitions to signed-in. Returns
-   * the number of projects uploaded.
+   * Reconcile local projects up to the remote store when the user transitions to
+   * signed-in. A project is pushed when the server doesn't have it yet, or when the
+   * local copy is strictly newer than the server's (last-writer-wins by
+   * `updatedAt`) — so edits made offline to an already-synced project are not lost.
+   * Returns the number of projects uploaded.
    */
   async syncLocalToRemote(): Promise<number> {
     const [localMetas, remoteMetas] = await Promise.all([this.local.list(), this.remote.list()])
-    const remoteIds = new Set(remoteMetas.map((m) => m.id))
+    const remoteById = new Map(remoteMetas.map((m) => [m.id, m]))
 
     let synced = 0
     for (const meta of localMetas) {
-      if (remoteIds.has(meta.id)) continue
+      const remote = remoteById.get(meta.id)
+      // Skip only when the server already has a copy that is at least as new.
+      if (remote && remote.updatedAt >= meta.updatedAt) continue
       const project = await this.local.load(meta.id)
       if (!project) continue
+      // remote.save() upserts (POST, falling back to PUT on conflict).
       await this.remote.save(project)
       synced += 1
     }

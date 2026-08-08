@@ -17,12 +17,16 @@ public sealed class CapturingMagicLinkSender : IMagicLinkSender
     /// <summary>The last generated single-use token.</summary>
     public string? LastToken { get; private set; }
 
+    /// <summary>Number of links actually sent (an existing account was found).</summary>
+    public int SentCount { get; private set; }
+
     /// <inheritdoc />
     public Task SendMagicLinkAsync(string email, string link, string token, CancellationToken cancellationToken = default)
     {
         LastEmail = email;
         LastLink = link;
         LastToken = token;
+        SentCount++;
         return Task.CompletedTask;
     }
 }

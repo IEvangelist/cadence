@@ -41,10 +41,12 @@ public sealed class CadenceDbContext(DbContextOptions<CadenceDbContext> options)
 
         builder.Entity<ProjectEntity>(project =>
         {
-            project.HasKey(p => p.Id);
+            // Composite, owner-scoped key: a project id is unique per user, not
+            // globally. Two users may independently use the same client-generated
+            // id without colliding, and no cross-tenant existence oracle exists.
+            project.HasKey(p => new { p.OwnerId, p.Id });
             project.Property(p => p.Name).HasMaxLength(256).IsRequired();
             project.Property(p => p.Data).IsRequired();
-            project.HasIndex(p => p.OwnerId);
             project
                 .HasOne(p => p.Owner)
                 .WithMany()

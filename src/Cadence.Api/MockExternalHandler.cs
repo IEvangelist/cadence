@@ -57,6 +57,15 @@ public sealed class MockExternalHandler(
             new(ClaimTypes.Email, email),
             new(ClaimTypes.Name, name),
         };
+
+        // Simulate the OIDC email_verified claim so tests can exercise both the
+        // verified and unverified external-login linking paths.
+        var emailVerified = Request.Query["emailVerified"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(emailVerified))
+        {
+            claims.Add(new Claim("email_verified", emailVerified));
+        }
+
         var identity = new ClaimsIdentity(claims, MockExternalDefaults.Scheme);
         var principal = new ClaimsPrincipal(identity);
 

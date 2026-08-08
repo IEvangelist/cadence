@@ -13,6 +13,9 @@ namespace Cadence.Api;
 /// <summary>Maps the authentication and profile HTTP endpoints.</summary>
 public static class AuthEndpoints
 {
+    /// <summary>Rate-limit policy guarding the magic-link verify endpoint.</summary>
+    public const string MagicLinkVerifyRateLimitPolicy = "magic-link-verify";
+
     /// <summary>Map <c>/api/auth/*</c> (local, magic-link, and external OAuth).</summary>
     public static IEndpointRouteBuilder MapCadenceAuth(this IEndpointRouteBuilder app)
     {
@@ -23,7 +26,8 @@ public static class AuthEndpoints
         group.MapPost("/logout", LogoutAsync).RequireAuthorization();
         group.MapGet("/me", MeAsync).RequireAuthorization();
         group.MapPost("/magic-link", RequestMagicLinkAsync);
-        group.MapGet("/magic-link/verify", VerifyMagicLinkAsync);
+        group.MapGet("/magic-link/verify", VerifyMagicLinkAsync)
+            .RequireRateLimiting(MagicLinkVerifyRateLimitPolicy);
         group.MapGet("/external/{provider}", ChallengeExternalAsync);
         group.MapGet("/external/callback", ExternalCallbackAsync);
         group.MapGet("/providers", ListProviders);
@@ -98,35 +102,24 @@ public static class AuthEndpoints
     private static async Task<IResult> RequestMagicLinkAsync(
         MagicLinkRequest request,
         UserManager<ApplicationUser> users,
-        CadenceDbContext db,
         IMagicLinkSender sender,
         IConfiguration configuration)
     {
+        // Only send a link to an address that already has an account. We must NOT
+        // create accounts here: an unauthenticated caller could otherwise mass-
+        // create accounts for arbitrary/victim emails (resource exhaustion, email
+        // squatting) and set up an account for a later external-login hijack.
         var user = await users.FindByEmailAsync(request.Email);
-        if (user is null)
+        if (user is not null)
         {
-            user = new ApplicationUser
-            {
-                UserName = request.Email,
-                Email = request.Email,
-                DisplayName = AccountHelpers.DeriveDisplayName(request.Email),
-            };
-            var create = await users.CreateAsync(user);
-            if (!create.Succeeded)
-            {
-                return Results.ValidationProblem(AccountHelpers.ToValidationErrors(create));
-            }
+            var token = await users.GenerateUserTokenAsync(
+                user, AccountHelpers.MagicLinkProvider, AccountHelpers.MagicLinkPurpose);
 
-            await AccountHelpers.EnsureProfileAsync(db, user);
+            var link = $"{AccountHelpers.WebBaseUrl(configuration)}/api/auth/magic-link/verify" +
+                       $"?email={Uri.EscapeDataString(request.Email)}&token={Uri.EscapeDataString(token)}";
+
+            await sender.SendMagicLinkAsync(request.Email, link, token);
         }
-
-        var token = await users.GenerateUserTokenAsync(
-            user, TokenOptions.DefaultEmailProvider, AccountHelpers.MagicLinkPurpose);
-
-        var link = $"{AccountHelpers.WebBaseUrl(configuration)}/api/auth/magic-link/verify" +
-                   $"?email={Uri.EscapeDataString(request.Email)}&token={Uri.EscapeDataString(token)}";
-
-        await sender.SendMagicLinkAsync(request.Email, link, token);
 
         // Always 202 regardless of whether the account existed (no enumeration).
         return Results.Accepted();
@@ -145,13 +138,23 @@ public static class AuthEndpoints
             return Results.Redirect(AccountHelpers.FailureUrl(configuration));
         }
 
-        var valid = await users.VerifyUserTokenAsync(
-            user, TokenOptions.DefaultEmailProvider, AccountHelpers.MagicLinkPurpose, token);
-        if (!valid)
+        // Defense in depth on top of the opaque token + endpoint rate limit: lock
+        // the account after repeated bad tokens so the (already infeasible) guessing
+        // window can't be widened by volume.
+        if (await users.IsLockedOutAsync(user))
         {
             return Results.Redirect(AccountHelpers.FailureUrl(configuration));
         }
 
+        var valid = await users.VerifyUserTokenAsync(
+            user, AccountHelpers.MagicLinkProvider, AccountHelpers.MagicLinkPurpose, token);
+        if (!valid)
+        {
+            await users.AccessFailedAsync(user);
+            return Results.Redirect(AccountHelpers.FailureUrl(configuration));
+        }
+
+        await users.ResetAccessFailedCountAsync(user);
         // Single-use: rotating the stamp invalidates the just-used token.
         await users.UpdateSecurityStampAsync(user);
         await signIn.SignInAsync(user, isPersistent: true);
@@ -186,6 +189,7 @@ public static class AuthEndpoints
             return Results.Redirect(AccountHelpers.FailureUrl(configuration));
         }
 
+        // Returning user: this external login is already linked to an account.
         var signInResult = await signIn.ExternalLoginSignInAsync(
             info.LoginProvider, info.ProviderKey, isPersistent: true, bypassTwoFactor: true);
         if (signInResult.Succeeded)
@@ -193,17 +197,21 @@ public static class AuthEndpoints
             return Results.Redirect(AccountHelpers.SuccessUrl(configuration));
         }
 
+        var providerEmailVerified = ExternalEmailIsVerified(info.Principal);
         var email = info.Principal.FindFirstValue(ClaimTypes.Email)
             ?? $"{info.ProviderKey}@{info.LoginProvider}.external.local";
 
         var user = await users.FindByEmailAsync(email);
         if (user is null)
         {
+            // First time we've seen this address: create an account bound to this
+            // external identity. Confirm the email only when the provider vouched
+            // for it, so an unverified provider email can't later be auto-linked.
             user = new ApplicationUser
             {
                 UserName = email,
                 Email = email,
-                EmailConfirmed = true,
+                EmailConfirmed = providerEmailVerified,
                 DisplayName = info.Principal.FindFirstValue(ClaimTypes.Name)
                     ?? AccountHelpers.DeriveDisplayName(email),
             };
@@ -214,12 +222,44 @@ public static class AuthEndpoints
             }
 
             await AccountHelpers.EnsureProfileAsync(db, user);
+
+            var linkNew = await users.AddLoginAsync(user, info);
+            if (!linkNew.Succeeded)
+            {
+                return Results.Redirect(AccountHelpers.FailureUrl(configuration));
+            }
+
+            await signIn.SignInAsync(user, isPersistent: true);
+            return Results.Redirect(AccountHelpers.SuccessUrl(configuration));
         }
 
-        await users.AddLoginAsync(user, info);
+        // A local account with this email exists but this provider login is NOT yet
+        // linked to it. Only auto-link when BOTH the provider asserts the email is
+        // verified AND the local account's own email is confirmed. Otherwise an
+        // attacker who pre-registered the address (or a spoofed provider email)
+        // could hijack the sign-in — so require an explicit linking step instead.
+        if (!providerEmailVerified || !user.EmailConfirmed)
+        {
+            return Results.Redirect(AccountHelpers.LinkRequiredUrl(configuration));
+        }
+
+        var link = await users.AddLoginAsync(user, info);
+        if (!link.Succeeded)
+        {
+            return Results.Redirect(AccountHelpers.FailureUrl(configuration));
+        }
+
         await signIn.SignInAsync(user, isPersistent: true);
         return Results.Redirect(AccountHelpers.SuccessUrl(configuration));
     }
+
+    /// <summary>
+    /// True when the external principal asserts a verified email (the standard
+    /// OIDC <c>email_verified</c> claim from Google/Microsoft). Absent or false is
+    /// treated as unverified.
+    /// </summary>
+    private static bool ExternalEmailIsVerified(ClaimsPrincipal principal) =>
+        string.Equals(principal.FindFirstValue("email_verified"), "true", StringComparison.OrdinalIgnoreCase);
 
     private static async Task<IResult> ListProviders(IAuthenticationSchemeProvider schemes)
     {
