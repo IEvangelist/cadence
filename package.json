@@ -8,6 +8,12 @@
     "apps/web",
     "apps/desktop"
   ],
+  "scripts": {
+    "lint": "npm run lint --workspace @cadence/web",
+    "typecheck": "npm run typecheck --workspace @cadence/web",
+    "build": "npm run build --workspace @cadence/web",
+    "test": "npm run test --workspace @cadence/web"
+  },
   "engines": {
     "node": ">=20"
   }

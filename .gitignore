@@ -27,6 +27,8 @@ artifacts/
 apps/desktop/target/
 apps/desktop/**/target/
 Cargo.lock
+# Commit the desktop app's lockfile for reproducible binary builds (see docs/versioning-policy.md)
+!apps/desktop/src-tauri/Cargo.lock
 
 # ---- Aspire / azd ----
 .azure/
