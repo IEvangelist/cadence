@@ -119,30 +119,49 @@ public class MagicLinkTests(CadenceApiFactory factory) : IClassFixture<CadenceAp
         Assert.Contains("auth=error", second.Headers.Location!.ToString());
     }
 
-    // Issue A (b): repeated wrong tokens lock the account so even a valid token is
-    // rejected afterward — brute-force guessing can't be sustained.
+    // NEW-1: bad magic-link tokens must NOT feed the shared Identity lockout
+    // counter, otherwise an unauthenticated attacker who knows a victim's email
+    // could lock the victim out of password sign-in (DoS). After several bad
+    // magic-link verifies, the correct password still logs the user in.
     [Fact]
-    public async Task VerifyMagicLink_LocksOut_AfterRepeatedBadTokens()
+    public async Task VerifyMagicLink_BadTokens_DoNotLock_PasswordLogin()
     {
-        const string email = "magic.lockout@example.com";
+        const string email = "magic.nolockdos@example.com";
         await _factory.CreateClient().RegisterAsync(email);
 
         var client = CreateNonRedirectingClient();
-        await client.PostAsJsonAsync("/api/auth/magic-link", new MagicLinkRequest(email));
-        var validToken = _factory.MagicLinks.LastToken!;
-
-        for (var i = 0; i < 5; i++)
+        for (var i = 0; i < 6; i++)
         {
             var bad = await client.GetAsync(VerifyUrl(email, $"wrong-token-{i}"));
             Assert.Contains("auth=error", bad.Headers.Location!.ToString());
         }
 
-        // Even the genuine token is now refused because the account is locked.
-        var locked = await client.GetAsync(VerifyUrl(email, validToken));
-        Assert.Contains("auth=error", locked.Headers.Location!.ToString());
+        // The account must not be locked: password login with the right password works.
+        var login = await _factory.CreateClient().LoginAsync(email);
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+    }
 
-        var me = await client.GetAsync("/api/auth/me");
-        Assert.Equal(HttpStatusCode.Unauthorized, me.StatusCode);
+    // Issue A volume control (now via the rate limiter, not lockout): once the
+    // per-email budget is exhausted the verify endpoint returns 429.
+    [Fact]
+    public async Task VerifyMagicLink_IsRateLimited_AfterTooManyAttempts()
+    {
+        const string email = "magic.ratelimit@example.com";
+        await _factory.CreateClient().RegisterAsync(email);
+
+        var client = CreateNonRedirectingClient();
+        HttpResponseMessage? limited = null;
+        for (var i = 0; i < 15; i++)
+        {
+            var resp = await client.GetAsync(VerifyUrl(email, $"junk-{i}"));
+            if (resp.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                limited = resp;
+                break;
+            }
+        }
+
+        Assert.NotNull(limited);
     }
 
     // Issue A (c): an expired token is rejected.

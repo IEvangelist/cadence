@@ -87,9 +87,24 @@ Magic-link tokens are high-entropy, opaque values produced by a dedicated
 Identity's `DefaultEmailProvider`, whose tokens are short numeric TOTP codes that
 are feasible to brute-force. Each token embeds a short expiry (15 minutes) and is
 **single-use**: verifying one rotates the user's security stamp, invalidating it.
-The verify endpoint is additionally protected by **per-email rate limiting** and
-**failed-attempt lockout**, so repeated guesses lock the account rather than
-widening the guessing window.
+The verify endpoint is throttled by a **per-email rate limiter** (normalized email
+partition, `429` when the budget is exceeded), which is the volume control for the
+(already infeasible) guessing of an opaque token.
+
+A failed verify **does not** increment Identity's account-lockout counter. Because
+the endpoint is an unauthenticated `GET`, feeding that shared counter would let an
+attacker who merely knows a victim's email lock the victim out of *both* magic-link
+and password sign-in — a denial-of-service lever that the opaque token + rate
+limiter already make unnecessary. A **successful** magic-link sign-in, conversely,
+resets the failed-attempt count (a legitimate recovery path) and rotates the stamp.
+
+> **Delivery note — link prefetching:** because the link is verified on `GET`,
+> mail-security prefetchers (Outlook SafeLinks, AV scanners) may fetch the URL
+> before the user clicks and, with single-use tokens, consume it so the real click
+> fails. For the MVP the logging/dev sender makes this a non-issue; if you wire a
+> real email sender and see prefetch-consumed tokens, switch to a POST-confirm
+> landing page (render a page on `GET`, then `POST` the token to verify) so passive
+> fetches don't burn the token.
 
 The request endpoint always returns `202 Accepted` whether or not the account
 exists, so it can't be used to enumerate registered emails. It **never creates an

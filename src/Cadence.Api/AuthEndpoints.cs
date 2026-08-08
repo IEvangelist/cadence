@@ -138,24 +138,22 @@ public static class AuthEndpoints
             return Results.Redirect(AccountHelpers.FailureUrl(configuration));
         }
 
-        // Defense in depth on top of the opaque token + endpoint rate limit: lock
-        // the account after repeated bad tokens so the (already infeasible) guessing
-        // window can't be widened by volume.
-        if (await users.IsLockedOutAsync(user))
-        {
-            return Results.Redirect(AccountHelpers.FailureUrl(configuration));
-        }
-
         var valid = await users.VerifyUserTokenAsync(
             user, AccountHelpers.MagicLinkProvider, AccountHelpers.MagicLinkPurpose, token);
         if (!valid)
         {
-            await users.AccessFailedAsync(user);
+            // Deliberately do NOT call AccessFailedAsync here. The token is already
+            // high-entropy and the endpoint is rate-limited, so the shared Identity
+            // lockout adds no anti-guessing value — and feeding that counter from an
+            // unauthenticated GET would let an attacker who only knows a victim's
+            // email lock the victim out of BOTH magic-link and password sign-in
+            // (denial of service). Volume is bounded by the verify rate limiter.
             return Results.Redirect(AccountHelpers.FailureUrl(configuration));
         }
 
+        // A successful magic link is a legitimate recovery path: clear any password
+        // failure count, rotate the stamp (single-use), and sign in.
         await users.ResetAccessFailedCountAsync(user);
-        // Single-use: rotating the stamp invalidates the just-used token.
         await users.UpdateSecurityStampAsync(user);
         await signIn.SignInAsync(user, isPersistent: true);
         return Results.Redirect(AccountHelpers.SuccessUrl(configuration));

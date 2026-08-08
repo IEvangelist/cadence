@@ -10,14 +10,19 @@ builder.AddServiceDefaults();
 builder.Services.AddOpenApi();
 
 // Throttle magic-link verification per target email so token guessing can't be
-// amplified by volume (defense in depth on top of the opaque token + lockout).
+// amplified by volume (the primary volume control now that bad tokens no longer
+// feed the shared account lockout — see VerifyMagicLinkAsync).
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.AddPolicy(AuthEndpoints.MagicLinkVerifyRateLimitPolicy, context =>
     {
+        // Normalize the email so casing/whitespace variants (Victim@x vs victim@x)
+        // share one budget instead of each getting an independent 10/min window.
         var email = context.Request.Query["email"].ToString();
-        var partitionKey = string.IsNullOrEmpty(email) ? "anonymous" : email;
+        var partitionKey = string.IsNullOrWhiteSpace(email)
+            ? "anonymous"
+            : email.Trim().ToLowerInvariant();
         return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = 10,
