@@ -31,7 +31,7 @@ describe('AuthClient', () => {
   })
 
   it('login() posts credentials and returns the user', async () => {
-    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) =>
+    const fetchImpl = vi.fn(async () =>
       json({ id: '1', email: 'a@b.com', displayName: 'A', tier: 'Free' }),
     )
     const client = new AuthClient(fetchImpl, '')
@@ -39,7 +39,7 @@ describe('AuthClient', () => {
     const me = await client.login('a@b.com', 'pw')
 
     expect(me.email).toBe('a@b.com')
-    const [, init] = fetchImpl.mock.calls[0]
+    const [, init] = fetchImpl.mock.calls[0] as unknown as [unknown, RequestInit?]
     expect(init?.method).toBe('POST')
     expect(JSON.parse(init?.body as string)).toEqual({ email: 'a@b.com', password: 'pw' })
   })
@@ -63,14 +63,12 @@ describe('AuthClient', () => {
   })
 
   it('requestMagicLink() posts the email', async () => {
-    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) =>
-      new Response(null, { status: 202 }),
-    )
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 202 }))
     const client = new AuthClient(fetchImpl, '')
 
     await client.requestMagicLink('a@b.com')
 
-    const [url, init] = fetchImpl.mock.calls[0]
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit?]
     expect(url).toBe('/api/auth/magic-link')
     expect(JSON.parse(init?.body as string)).toEqual({ email: 'a@b.com' })
   })
@@ -91,7 +89,7 @@ describe('AuthClient', () => {
   })
 
   it('updateProfile() PUTs the patch and returns the profile', async () => {
-    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) =>
+    const fetchImpl = vi.fn(async () =>
       json({
         id: '1',
         displayName: 'New',
@@ -107,7 +105,7 @@ describe('AuthClient', () => {
     const profile = await client.updateProfile({ displayName: 'New' })
 
     expect(profile.displayName).toBe('New')
-    const [url, init] = fetchImpl.mock.calls[0]
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit?]
     expect(url).toBe('/api/profile')
     expect(init?.method).toBe('PUT')
   })
