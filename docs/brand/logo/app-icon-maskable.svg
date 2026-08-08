@@ -1,24 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Cadence app icon">
-  <title>Cadence app icon</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Cadence maskable app icon">
+  <title>Cadence maskable app icon</title>
   <defs>
-    <linearGradient id="cadBg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+    <linearGradient id="cadBgM" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#7A2FF0"/>
       <stop offset="0.55" stop-color="#5A34E0"/>
       <stop offset="1" stop-color="#2563EB"/>
     </linearGradient>
-    <linearGradient id="cadResolveIcon" x1="374" y1="120" x2="438" y2="416" gradientUnits="userSpaceOnUse">
+    <linearGradient id="cadResolveM" x1="374" y1="120" x2="438" y2="416" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#8CF0FF"/>
       <stop offset="1" stop-color="#22D3EE"/>
     </linearGradient>
   </defs>
-  <rect width="1024" height="1024" rx="224" fill="url(#cadBg)"/>
-  <g transform="translate(64,64) scale(1.75)">
+  <rect width="1024" height="1024" fill="url(#cadBgM)"/>
+  <g transform="translate(115,115) scale(1.55)">
     <g fill="#FFFFFF">
       <rect x="74"  y="266" width="64" height="150" rx="32"/>
       <rect x="174" y="186" width="64" height="230" rx="32"/>
       <rect x="274" y="96"  width="64" height="320" rx="32"/>
     </g>
-    <g fill="url(#cadResolveIcon)">
+    <g fill="url(#cadResolveM)">
       <rect x="374" y="216" width="64" height="200" rx="32"/>
       <circle cx="406" cy="154" r="34"/>
     </g>
