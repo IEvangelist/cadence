@@ -107,7 +107,7 @@ def main():
     add(buf, pad(A4, 2.0, 0.18), res)
     add(buf, pad(D5, 2.0, 0.12), res)
 
-    # 3) Cyan "resolution ping" — the logomark's dot, in sound.
+    # 3) Cyan "resolution ping" — the logomark's tonic dot, in sound.
     add(buf, mallet(A6, 0.5, 0.12), res)
 
     # Space + master.

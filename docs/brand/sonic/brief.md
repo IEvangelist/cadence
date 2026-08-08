@@ -6,7 +6,7 @@
 ## The idea
 A brand called **Cadence** should *sound* like a cadence: a musical phrase that
 builds and then **resolves home**. The audio logo is the sonic twin of the
-logomark — the violet bars rise, the cyan tonic lands.
+logomark — the waves rise and oscillate, the cyan tonic lands.
 
 ## Precise spec (for a composer/sound designer to re-record)
 
@@ -43,7 +43,7 @@ A warm **D-major tonic bloom** enters at **0.60s** and sustains ~2.0s with a slo
 
 ### Layer 3 — the "resolution ping"
 A single soft, high **A6** (1760 Hz) bell at 0.60s — the audible twin of the
-logomark's floating cyan dot. Very low gain, quick decay.
+logomark's floating cyan tonic dot. Very low gain, quick decay.
 
 ### Space
 A cheap fixed-tap reverb (taps at 60 / 130 / 230 / 370 ms, decaying gain)

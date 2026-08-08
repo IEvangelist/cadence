@@ -40,8 +40,8 @@ reinforces rhythm, and never gets in the way of making music.
 - **Focus ring:** appears instantly (no delay); use `--shadow-glow`.
 - **Signature "resolve":** on success/AI-accept, the accent (cyan) element settles
   with a small `--ease-spring` overshoot — the visual echo of the sonic logo.
-- **Loading/AI thinking:** a calm looping pulse on the logomark bars
-  (opacity/height, ≥1s cycle) — a metronome, never a frantic spinner.
+- **Loading/AI thinking:** a calm looping pulse along the logomark waves
+  (amplitude/opacity, ≥1s cycle) — a metronome, never a frantic spinner.
 
 ## Implementation
 ```css

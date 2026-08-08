@@ -27,9 +27,10 @@ endlessly deep to master.*
 ## 2. Logo
 
 ### Anatomy
-The **logomark** is four rounded bars that rise like a musical phrase to a climax,
-then **resolve** into a separate cyan bar + floating dot — the "tonic" landing.
-Violet = the phrase building; **cyan = the resolution.**
+The **logomark** is a trio of interwoven sound waves that rise, oscillate, and
+**taper to a line** at both ends — resolving into a floating cyan **tonic** dot,
+the phrase landing "home." Each wave flows through a bright gradient
+(violet → magenta → blue → cyan); **cyan = the resolution.**
 
 ### Assets ([`logo/`](./logo/))
 | File | Use |
@@ -37,13 +38,14 @@ Violet = the phrase building; **cyan = the resolution.**
 | `logomark.svg` | Full-color mark, transparent. Primary in-app/site mark. |
 | `logomark-mono-light.svg` / `-mono-dark.svg` | One-color mark for constrained/mono contexts. |
 | `wordmark-light.svg` / `wordmark-dark.svg` | Mark + "Cadence" lockup (Space Grotesk). |
-| `app-icon.svg` | Rounded-square app icon (mark on brand gradient). |
+| `app-icon.svg` | Rounded-square app icon (glowing waves on a deep-violet field). |
 | `app-icon-maskable.svg` | Full-bleed variant for PWA maskable icons. |
 | `raster/` + generated icons | PNG/ICO/ICNS exports (regenerate via `tools/brand`). |
 
 ### Clearspace
-Keep clear space of **one bar-width** (the width of a single logomark bar) on all
-sides of the mark or lockup. Nothing — text, other logos, UI chrome — intrudes.
+Keep clear space of **one wave-crest height** (the height of the mark's tallest
+wave) on all sides of the mark or lockup. Nothing — text, other logos, UI
+chrome — intrudes.
 
 ### Minimum sizes
 - Logomark: **16px** (favicon floor). Below 24px prefer the mark alone, never the
