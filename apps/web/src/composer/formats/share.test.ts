@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
+  MAX_SHARE_FRAGMENT_LENGTH,
   MAX_SHARE_URL_LENGTH,
   createShareSnapshot,
   decodeProjectFromFragment,
@@ -64,6 +65,18 @@ describe('project fragment round trip', () => {
 
   it('returns null (not throw) on a corrupt payload', () => {
     expect(decodeProjectFromFragment('#project=@@not-base64@@')).toBeNull()
+  })
+
+  it('returns null for an over-long fragment without decoding it', () => {
+    // A large project encodes to a fragment past the decode cap; the guard must
+    // bail before atob/JSON.parse so a hostile link can't force a big decode.
+    const encoded = encodeProjectToFragment(largeProject())
+    const payload = encoded.slice(`${'project'}=`.length)
+    expect(payload.length).toBeGreaterThan(MAX_SHARE_FRAGMENT_LENGTH)
+    const atobSpy = vi.spyOn(globalThis, 'atob')
+    expect(decodeProjectFromFragment(`#${encoded}`)).toBeNull()
+    expect(atobSpy).not.toHaveBeenCalled()
+    atobSpy.mockRestore()
   })
 })
 

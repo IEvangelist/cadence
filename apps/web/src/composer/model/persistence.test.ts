@@ -67,9 +67,9 @@ describe('migrateProject', () => {
     })
     const note = project.tracks[0].notes[0]
     expect(project.tracks[0].instrumentId).toBe('poly-synth')
-    // Pitch is rounded but not range-clamped on load; only MIDI export clamps
-    // pitch to 0–127 (the synth path passes the raw pitch straight through).
-    expect(note.pitch).toBe(999)
+    // Pitch is rounded and clamped to the valid MIDI range 0–127 on load, so a
+    // corrupted score can't inject an out-of-range pitch into live state.
+    expect(note.pitch).toBe(127)
     expect(note.start).toBe(0)
     expect(note.duration).toBeGreaterThan(0)
     expect(note.velocity).toBe(1)

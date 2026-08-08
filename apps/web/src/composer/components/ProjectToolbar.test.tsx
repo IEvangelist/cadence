@@ -199,6 +199,21 @@ describe('<ProjectToolbar /> — multi-format import', () => {
       expect(screen.getByRole('status')).toHaveTextContent(/Couldn.t open that file/),
     )
   })
+
+  it('opens a .cadence.json whose content contains "score-partwise" as a project', async () => {
+    render(<Harness download={vi.fn()} />)
+    const project = createDemoProject('demo')
+    project.name = 'my score-partwise piece'
+    const text = projectToFile(project)
+    expect(text).toContain('score-partwise') // the substring that used to misroute
+    const file = new File([text], 'tricky.cadence.json', { type: 'application/json' })
+    const input = screen.getByLabelText('Import project or MusicXML file') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [file] } })
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('Opened project file'),
+    )
+    expect((screen.getByLabelText('Project name') as HTMLInputElement).value).toBe('tricky')
+  })
 })
 
 describe('<ProjectToolbar /> — share', () => {

@@ -30,6 +30,7 @@ import {
   createTrack,
   newId,
 } from '../model/project'
+import { migrateProject } from '../model/persistence'
 
 /** Divisions per quarter note written to the file (also our tick resolution). */
 const DIVISIONS = 480
@@ -343,6 +344,16 @@ function numberOf(el: Element | null, selector: string, fallback: number): numbe
   return Number.isFinite(value) ? value : fallback
 }
 
+/**
+ * Read a `<duration>` in divisions as a finite, non-negative number. Malformed or
+ * missing content coerces to 0 so a single bad note can't poison the measure
+ * cursor (and thus every following note's start) with NaN.
+ */
+function durationDivisions(el: Element): number {
+  const value = numberOf(el, 'duration', 0)
+  return value >= 0 ? value : 0
+}
+
 function parseDocument(xml: string): Document {
   if (typeof DOMParser === 'undefined') {
     throw new MusicXmlImportError('XML parsing is not available in this environment')
@@ -402,7 +413,7 @@ function segmentsFromPart(part: Element, divisions: number): ImportedSegment[] {
     for (const child of Array.from(measure.children)) {
       const tag = child.tagName.toLowerCase()
       if (tag === 'note') {
-        const duration = Number(textOf(child, 'duration') ?? 0)
+        const duration = durationDivisions(child)
         const isRest = child.querySelector('rest') !== null
         if (!isRest) {
           const step = textOf(child, 'pitch step')
@@ -425,9 +436,9 @@ function segmentsFromPart(part: Element, divisions: number): ImportedSegment[] {
         // cursor for non-chord notes.
         if (child.querySelector('chord') === null) cursor += duration
       } else if (tag === 'forward') {
-        cursor += Number(textOf(child, 'duration') ?? 0)
+        cursor += durationDivisions(child)
       } else if (tag === 'backup') {
-        cursor -= Number(textOf(child, 'duration') ?? 0)
+        cursor -= durationDivisions(child)
       }
     }
     measureStart += MEASURE_DIVISIONS / divisions
@@ -486,7 +497,12 @@ export function musicXmlToProject(
 
   const workTitle = doc.querySelector('work-title')?.textContent?.trim() || null
 
-  return {
+  // Route the assembled project through the same migrate/sanitize seam used by
+  // the portable-file and share importers, so malformed numeric content in an
+  // otherwise-parseable score (bad/missing durations, out-of-range pitches,
+  // negative starts from a backup>forward) is clamped instead of injecting
+  // NaN/negative/out-of-range values into live state.
+  return migrateProject({
     schemaVersion: SCHEMA_VERSION,
     id: options.id ?? newId('project'),
     name: options.name ?? workTitle ?? 'Imported',
@@ -495,5 +511,5 @@ export function musicXmlToProject(
     lengthBeats,
     loop: { enabled: false, start: 0, end: lengthBeats },
     tracks,
-  }
+  })
 }

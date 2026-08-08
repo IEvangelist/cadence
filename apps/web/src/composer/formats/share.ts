@@ -26,6 +26,14 @@ export const SHARE_FRAGMENT_KEY = 'project'
  */
 export const MAX_SHARE_URL_LENGTH = 8000
 
+/**
+ * Upper bound on the encoded fragment payload accepted by
+ * {@link decodeProjectFromFragment}. The producer already caps the whole URL, but
+ * an incoming `#project=…` can be any length; bailing before decode avoids a
+ * self-inflicted DoS from a hostile, over-long fragment.
+ */
+export const MAX_SHARE_FRAGMENT_LENGTH = MAX_SHARE_URL_LENGTH
+
 /** UTF-8 → base64url (URL-fragment safe, no padding). */
 export function toBase64Url(text: string): string {
   const bytes = new TextEncoder().encode(text)
@@ -57,6 +65,9 @@ export function decodeProjectFromFragment(hash: string): Project | null {
   const params = new URLSearchParams(cleaned)
   const encoded = params.get(SHARE_FRAGMENT_KEY)
   if (!encoded) return null
+  // Bail before decoding an over-long payload (weak DoS guard); the producer caps
+  // the URL, but an inbound fragment can be arbitrarily large.
+  if (encoded.length > MAX_SHARE_FRAGMENT_LENGTH) return null
   try {
     return fileToProject(fromBase64Url(encoded))
   } catch {

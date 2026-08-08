@@ -39,6 +39,24 @@ const slug = (name: string): string =>
 const baseName = (filename: string): string =>
   filename.replace(/\.cadence\.json$/i, '').replace(/\.[^.]+$/, '')
 
+/**
+ * Decide whether an imported file is a portable project (`.cadence.json`) or
+ * MusicXML. Extension is the primary signal; when it's ambiguous we sniff
+ * *structurally* (a project file is JSON) rather than scanning the text for a
+ * substring like "score-partwise" — which would misroute a valid project whose
+ * own content happens to contain that string.
+ */
+function isProjectFileImport(filename: string, text: string): boolean {
+  if (/\.(xml|musicxml)$/i.test(filename)) return false
+  if (/\.cadence(\.json)?$/i.test(filename) || /\.json$/i.test(filename)) return true
+  try {
+    JSON.parse(text)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** Project name + New/Demo/Save/Open plus multi-format import/export and share. */
 export function ProjectToolbar({
   controller,
@@ -105,10 +123,8 @@ export function ProjectToolbar({
     } catch {
       return
     }
-    const isMusicXml =
-      /\.(xml|musicxml)$/i.test(file.name) || text.includes('score-partwise')
-    if (isMusicXml) importMusicXml(text, baseName(file.name))
-    else importProjectFile(text, baseName(file.name))
+    if (isProjectFileImport(file.name, text)) importProjectFile(text, baseName(file.name))
+    else importMusicXml(text, baseName(file.name))
   }
 
   const handleShare = (): void => {

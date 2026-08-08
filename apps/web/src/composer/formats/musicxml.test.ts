@@ -146,3 +146,73 @@ describe('musicXmlToProject guards malformed input', () => {
     expect(() => musicXmlToProject('<root><child/></root>')).toThrow(MusicXmlImportError)
   })
 })
+
+describe('musicXmlToProject sanitizes malformed numeric content', () => {
+  // Build a parseable score-partwise document with a single measure whose notes
+  // carry the given raw <note> markup. This slips past the parse/guard checks and
+  // exercises the numeric-coercion path.
+  const score = (notesMarkup: string): string =>
+    `<?xml version="1.0"?>
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Synth</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>480</divisions></attributes>
+      ${notesMarkup}
+    </measure>
+  </part>
+</score-partwise>`
+
+  const assertSane = (project: Project): void => {
+    expect(Number.isFinite(project.lengthBeats)).toBe(true)
+    expect(Number.isFinite(project.loop.start)).toBe(true)
+    expect(Number.isFinite(project.loop.end)).toBe(true)
+    expect(project.loop.end).toBeGreaterThanOrEqual(project.loop.start)
+    for (const track of project.tracks) {
+      for (const note of track.notes) {
+        expect(Number.isFinite(note.pitch)).toBe(true)
+        expect(note.pitch).toBeGreaterThanOrEqual(0)
+        expect(note.pitch).toBeLessThanOrEqual(127)
+        expect(Number.isFinite(note.start)).toBe(true)
+        expect(note.start).toBeGreaterThanOrEqual(0)
+        expect(Number.isFinite(note.duration)).toBe(true)
+        expect(note.duration).toBeGreaterThan(0)
+      }
+    }
+  }
+
+  it('clamps a non-numeric <duration> (never NaN)', () => {
+    const project = musicXmlToProject(
+      score('<note><pitch><step>C</step><octave>4</octave></pitch><duration>abc</duration></note>'),
+    )
+    assertSane(project)
+  })
+
+  it('clamps a missing <duration> (never NaN)', () => {
+    const project = musicXmlToProject(
+      score('<note><pitch><step>C</step><octave>4</octave></pitch></note>'),
+    )
+    assertSane(project)
+  })
+
+  it('clamps an out-of-range pitch (octave-9 B# is MIDI 132)', () => {
+    const project = musicXmlToProject(
+      score(
+        '<note><pitch><step>B</step><alter>1</alter><octave>9</octave></pitch><duration>480</duration></note>',
+      ),
+    )
+    assertSane(project)
+    expect(project.tracks[0].notes[0].pitch).toBe(127)
+  })
+
+  it('clamps a negative start produced by a backup exceeding prior forward', () => {
+    const project = musicXmlToProject(
+      score(
+        '<forward><duration>480</duration></forward>' +
+          '<backup><duration>1920</duration></backup>' +
+          '<note><pitch><step>C</step><octave>4</octave></pitch><duration>480</duration></note>',
+      ),
+    )
+    assertSane(project)
+  })
+})

@@ -51,7 +51,7 @@ function coerceNote(raw: unknown): Note {
   const n = (raw ?? {}) as Record<string, unknown>
   return {
     id: str(n.id, newId('note')),
-    pitch: Math.round(num(n.pitch, 60)),
+    pitch: clamp(Math.round(num(n.pitch, 60)), 0, 127),
     start: Math.max(0, num(n.start, 0)),
     duration: Math.max(1 / 16, num(n.duration, 1)),
     velocity: Math.min(1, Math.max(0, num(n.velocity, 0.8))),
