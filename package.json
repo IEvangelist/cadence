@@ -12,7 +12,9 @@
     "lint": "npm run lint --workspace @cadence/web",
     "typecheck": "npm run typecheck --workspace @cadence/web",
     "build": "npm run build --workspace @cadence/web",
-    "test": "npm run test --workspace @cadence/web"
+    "test": "npm run test --workspace @cadence/web",
+    "test:coverage": "npm run test:coverage --workspace @cadence/web",
+    "e2e": "npm run e2e --workspace @cadence/web"
   },
   "engines": {
     "node": ">=20"

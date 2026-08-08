@@ -24,7 +24,12 @@ Currently pinned (Phase 0):
 | actions/setup-dotnet | v6.0.0 | `a98b56852c35b8e3190ac28c8c2271da59106c68` |
 | actions/upload-artifact | v7.0.1 | `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` |
 | actions/cache | v6.1.0 | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` |
+| github/codeql-action | v4.37.6 | `5595ccaf912efad79be6eef63a5619ff05969be3` |
+| actions/dependency-review-action | v5.0.0 | `a1d282b36b6f3519aa1f3fc636f609c47dddb294` |
 | dtolnay/rust-toolchain | v1 (stable) | `e97e2d8cc328f1b50210efc529dca0028893a2d9` |
+
+> Non-action pinned tools: gitleaks `v8.30.1` (secret scan) is downloaded as a
+> version-pinned release binary in `.github/workflows/ci.yml`.
 
 > Resolve a tag → SHA with: `gh api repos/<owner>/<repo>/commits/<tag> --jq .sha`
 

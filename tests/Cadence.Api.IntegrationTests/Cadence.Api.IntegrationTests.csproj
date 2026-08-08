@@ -1,0 +1,40 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <!--
+      This project transitively references Cadence.AppHost, whose SDK injects
+      host-RID-specific Dashboard/Orchestration packages (e.g.
+      Aspire.Dashboard.Sdk.win-x64 vs .linux-x64) into packages.lock.json. A
+      single committed lock file cannot satisfy a locked restore on every OS, so
+      this project opts out of locked mode — matching Cadence.AppHost. Its
+      dependencies remain exact-pinned via Central Package Management, and the
+      lock file is still committed for auditing.
+    -->
+    <RestoreLockedMode>false</RestoreLockedMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.Testing" />
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <!--
+    Referencing the AppHost lets Aspire.Hosting.Testing generate the strongly
+    typed Projects.Cadence_AppHost metadata used to boot the full app graph.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Cadence.AppHost\Cadence.AppHost.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>
