@@ -57,6 +57,10 @@ export default defineConfig({
         // the deterministic mock provider + e2e instead.
         'src/composer/ai/assistant.worker.ts',
         'src/composer/ai/magentaProvider.ts',
+        // Offline audio render binds to Tone.Offline (Web Audio), which can't run
+        // under jsdom. WAV export is covered via encodeWav + an injected mock
+        // renderer; this thin Tone binding is exercised in the browser/e2e only.
+        'src/composer/audio/offlineRender.ts',
       ],
       // CI-enforced gate: the run fails if coverage drops below these.
       thresholds: {

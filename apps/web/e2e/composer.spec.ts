@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test'
+import { mkdtemp, readFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 // Full composer flow against the production build: create a note, run the
 // transport, export a .mid download, then reload and confirm the note persisted
@@ -35,5 +38,70 @@ test.describe('composer', () => {
     await page.reload()
     await expect(page.locator('.pr-note')).toHaveCount(1)
     await expect(page.getByText('Your canvas is empty.')).toHaveCount(0)
+  })
+
+  test('round-trips a project through the portable .cadence.json file', async ({ page }) => {
+    await page.goto('/')
+
+    await page.getByRole('button', { name: 'New' }).click()
+    await expect(page.getByText('Your canvas is empty.')).toBeVisible()
+
+    const grid = page.getByRole('application', { name: /Note grid/ })
+    await grid.click({ position: { x: 72, y: 96 } })
+    await grid.click({ position: { x: 144, y: 144 } })
+    await expect(page.locator('.pr-note')).toHaveCount(2)
+
+    // Export the portable project file and capture the download bytes.
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByLabel('Export as').selectOption('project'),
+    ])
+    expect(download.suggestedFilename()).toMatch(/\.cadence\.json$/)
+    const dir = await mkdtemp(join(tmpdir(), 'cadence-e2e-'))
+    const filePath = join(dir, download.suggestedFilename())
+    await download.saveAs(filePath)
+    const saved = JSON.parse(await readFile(filePath, 'utf8'))
+    expect(saved.format).toBe('cadence-project')
+
+    // Wipe the canvas, then re-import the file and confirm the notes return.
+    await page.getByRole('button', { name: 'New' }).click()
+    await expect(page.locator('.pr-note')).toHaveCount(0)
+
+    await page.getByLabel('Import project or MusicXML file').setInputFiles(filePath)
+    await expect(page.locator('.pr-note')).toHaveCount(2)
+  })
+
+  test('opens a project shared through a URL fragment', async ({ page, browser }) => {
+    // Build a self-contained shared project by exporting the portable file,
+    // encoding it into the #project= fragment, then loading that URL fresh.
+    await page.goto('/')
+    await page.getByRole('button', { name: 'New' }).click()
+    const grid = page.getByRole('application', { name: /Note grid/ })
+    await grid.click({ position: { x: 72, y: 96 } })
+    await expect(page.locator('.pr-note')).toHaveCount(1)
+
+    // Copy a shareable link to the clipboard (the app writes navigator.clipboard).
+    await page.evaluate(() => {
+      const w = window as unknown as { __copied?: string }
+      const original = navigator.clipboard.writeText.bind(navigator.clipboard)
+      navigator.clipboard.writeText = async (text: string) => {
+        w.__copied = text
+        return original(text)
+      }
+    })
+    await page.getByRole('button', { name: 'Share' }).click()
+    const shareUrl = await page.evaluate(
+      () => (window as unknown as { __copied?: string }).__copied ?? '',
+    )
+    expect(shareUrl).toContain('#project=')
+
+    // Open the share URL in a *fresh* context with empty storage, so the note can
+    // only come from the fragment — proving the share round-trip end to end.
+    const fresh = await browser.newContext()
+    const sharedPage = await fresh.newPage()
+    await sharedPage.goto(shareUrl)
+    // Empty storage means the note can only have come from the fragment.
+    await expect(sharedPage.locator('.pr-note')).toHaveCount(1)
+    await fresh.close()
   })
 })
