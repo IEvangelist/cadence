@@ -135,6 +135,11 @@ npm audit --audit-level=critical       # the CI gate
 dotnet restore                         # NuGetAudit runs on every restore
 ```
 
+The gitleaks ruleset is the built-in default (`[extend] useDefault = true` in
+`.gitleaks.toml`); the only allowlisted paths are the `secret-handling` skill
+docs, which intentionally list example secret *patterns* (e.g. the literal
+string `-----BEGIN PRIVATE KEY-----`) rather than real secrets.
+
 ### Known, tracked advisory
 
 `npm audit` reports one pre-existing **high** advisory: `nanoid < 3.3.17`

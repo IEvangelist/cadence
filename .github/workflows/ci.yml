@@ -261,7 +261,7 @@ jobs:
           curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o gitleaks.tar.gz
           tar -xzf gitleaks.tar.gz gitleaks
           ./gitleaks version
-          ./gitleaks dir . --redact --verbose --exit-code 1 --report-format sarif --report-path gitleaks.sarif
+          ./gitleaks dir . --config .gitleaks.toml --redact --verbose --exit-code 1 --report-format sarif --report-path gitleaks.sarif
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
