@@ -1,0 +1,17 @@
+{
+  "name": "@cadence/desktop",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Tauri desktop shell that wraps the Cadence web SPA.",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "build:web": "npm --prefix ../.. run build --workspace @cadence/web",
+    "dev:web": "npm --prefix ../.. run dev --workspace @cadence/web"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4"
+  }
+}

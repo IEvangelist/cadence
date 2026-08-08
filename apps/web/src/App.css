@@ -1,0 +1,22 @@
+.app {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 4rem 1.5rem;
+  text-align: center;
+}
+
+.app h1 {
+  font-size: 3rem;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.tagline {
+  font-size: 1.25rem;
+  opacity: 0.85;
+}
+
+.status {
+  font-size: 0.95rem;
+  opacity: 0.6;
+}
