@@ -4,12 +4,19 @@ import { type ComposerController } from '../hooks/useComposer'
 interface ProjectToolbarProps {
   controller: ComposerController
   /** Injectable so the browser download can be stubbed in tests. */
-  download?: (bytes: Uint8Array, filename: string) => void
+  download?: (data: Uint8Array | string, filename: string, mime?: string) => void
+  /** Injectable clipboard write so sharing can be asserted in tests. */
+  copyText?: (text: string) => void | Promise<void>
 }
 
-function defaultDownload(bytes: Uint8Array, filename: string): void {
+function defaultDownload(
+  data: Uint8Array | string,
+  filename: string,
+  mime = 'application/octet-stream',
+): void {
   if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return
-  const blob = new Blob([bytes as BlobPart], { type: 'audio/midi' })
+  const part: BlobPart = typeof data === 'string' ? data : (data as BlobPart)
+  const blob = new Blob([part], { type: mime })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
@@ -20,11 +27,24 @@ function defaultDownload(bytes: Uint8Array, filename: string): void {
   URL.revokeObjectURL(url)
 }
 
-const safeFilename = (name: string): string =>
-  `${name.trim().replace(/[^a-z0-9-_]+/gi, '_').replace(/^_+|_+$/g, '') || 'cadence'}.mid`
+function defaultCopyText(text: string): void {
+  const clipboard = (globalThis.navigator as Navigator | undefined)?.clipboard
+  if (clipboard?.writeText) void clipboard.writeText(text)
+}
 
-/** Project name + New/Demo/Save/Open and MIDI import/export. */
-export function ProjectToolbar({ controller, download = defaultDownload }: ProjectToolbarProps) {
+/** Slugify a project name into a safe filename stem. */
+const slug = (name: string): string =>
+  name.trim().replace(/[^a-z0-9-_]+/gi, '_').replace(/^_+|_+$/g, '') || 'cadence'
+
+const baseName = (filename: string): string =>
+  filename.replace(/\.cadence\.json$/i, '').replace(/\.[^.]+$/, '')
+
+/** Project name + New/Demo/Save/Open plus multi-format import/export and share. */
+export function ProjectToolbar({
+  controller,
+  download = defaultDownload,
+  copyText = defaultCopyText,
+}: ProjectToolbarProps) {
   const {
     project,
     setProjectName,
@@ -35,22 +55,69 @@ export function ProjectToolbar({ controller, download = defaultDownload }: Proje
     savedProjects,
     importMidi,
     exportMidi,
+    exportMusicXml,
+    importMusicXml,
+    exportProjectFile,
+    importProjectFile,
+    exportWav,
+    shareSnapshot,
     status,
   } = controller
-  const fileRef = useRef<HTMLInputElement>(null)
+  const midiRef = useRef<HTMLInputElement>(null)
+  const importRef = useRef<HTMLInputElement>(null)
 
-  const handleImport = async (file: File | undefined): Promise<void> => {
+  const exportName = (ext: string): string => `${slug(project.name)}${ext}`
+
+  const handleMidiImport = async (file: File | undefined): Promise<void> => {
     if (!file) return
     try {
       const bytes = await file.arrayBuffer()
-      importMidi(bytes, file.name.replace(/\.midi?$/i, ''))
+      importMidi(bytes, baseName(file.name))
     } catch {
       // importMidi surfaces parse errors itself; this guards the file read.
     }
   }
 
-  const handleExport = (): void => {
-    download(exportMidi(), safeFilename(project.name))
+  const handleExportMidi = (): void => {
+    download(exportMidi(), exportName('.mid'), 'audio/midi')
+  }
+
+  const handleExportFormat = async (value: string): Promise<void> => {
+    if (value === 'musicxml') {
+      download(
+        exportMusicXml(),
+        exportName('.musicxml'),
+        'application/vnd.recordare.musicxml+xml',
+      )
+    } else if (value === 'project') {
+      download(exportProjectFile(), exportName('.cadence.json'), 'application/json')
+    } else if (value === 'wav') {
+      const bytes = await exportWav()
+      if (bytes) download(bytes, exportName('.wav'), 'audio/wav')
+    }
+  }
+
+  const handleImportFile = async (file: File | undefined): Promise<void> => {
+    if (!file) return
+    let text: string
+    try {
+      text = await file.text()
+    } catch {
+      return
+    }
+    const isMusicXml =
+      /\.(xml|musicxml)$/i.test(file.name) || text.includes('score-partwise')
+    if (isMusicXml) importMusicXml(text, baseName(file.name))
+    else importProjectFile(text, baseName(file.name))
+  }
+
+  const handleShare = (): void => {
+    const snapshot = shareSnapshot()
+    if (snapshot.kind === 'url') {
+      void copyText(snapshot.url)
+    } else {
+      download(exportProjectFile(), exportName('.cadence.json'), 'application/json')
+    }
   }
 
   return (
@@ -94,21 +161,63 @@ export function ProjectToolbar({ controller, download = defaultDownload }: Proje
         </select>
       </label>
 
-      <button type="button" className="btn btn-sm" onClick={() => fileRef.current?.click()}>
+      <button
+        type="button"
+        className="btn btn-sm"
+        onClick={() => importRef.current?.click()}
+      >
+        Import file
+      </button>
+      <input
+        ref={importRef}
+        type="file"
+        accept=".cadence,.cadence.json,.json,.xml,.musicxml,application/json,application/xml"
+        className="visually-hidden"
+        aria-label="Import project or MusicXML file"
+        onChange={(event) => {
+          void handleImportFile(event.target.files?.[0])
+          event.target.value = ''
+        }}
+      />
+
+      <label className="field">
+        <span className="visually-hidden">Export as</span>
+        <select
+          className="export-select"
+          value=""
+          aria-label="Export as"
+          onChange={(event) => {
+            const { value } = event.target
+            event.target.value = ''
+            if (value) void handleExportFormat(value)
+          }}
+        >
+          <option value="">Export…</option>
+          <option value="musicxml">MusicXML (.musicxml)</option>
+          <option value="wav">Audio (.wav)</option>
+          <option value="project">Project file (.cadence.json)</option>
+        </select>
+      </label>
+
+      <button type="button" className="btn btn-sm" onClick={handleShare}>
+        Share
+      </button>
+
+      <button type="button" className="btn btn-sm" onClick={() => midiRef.current?.click()}>
         Import MIDI
       </button>
       <input
-        ref={fileRef}
+        ref={midiRef}
         type="file"
         accept=".mid,.midi,audio/midi"
         className="visually-hidden"
         aria-label="Import MIDI file"
         onChange={(event) => {
-          void handleImport(event.target.files?.[0])
+          void handleMidiImport(event.target.files?.[0])
           event.target.value = ''
         }}
       />
-      <button type="button" className="btn btn-sm" onClick={handleExport}>
+      <button type="button" className="btn btn-sm" onClick={handleExportMidi}>
         Export MIDI
       </button>
 

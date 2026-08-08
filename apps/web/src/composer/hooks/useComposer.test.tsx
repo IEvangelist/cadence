@@ -240,3 +240,144 @@ describe('useComposer', () => {
     expect(hook.result.current.positionBeats).toBe(1.5)
   })
 })
+
+describe('useComposer — format interop', () => {
+  it('exports MusicXML and the portable project file', () => {
+    const { hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+    act(() => hook.result.current.addNoteAt(trackId, 60, 0, 1))
+
+    let xml = ''
+    act(() => {
+      xml = hook.result.current.exportMusicXml()
+    })
+    expect(xml).toContain('<score-partwise')
+    expect(hook.result.current.status).toBe('Exported MusicXML')
+
+    let file = ''
+    act(() => {
+      file = hook.result.current.exportProjectFile()
+    })
+    expect(JSON.parse(file).format).toBe('cadence-project')
+    expect(hook.result.current.status).toBe('Exported project file')
+  })
+
+  it('imports a portable project file and round-trips through MusicXML', () => {
+    const { hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+    act(() => hook.result.current.addNoteAt(trackId, 64, 1, 1))
+
+    const file = hook.result.current.exportProjectFile()
+    const xml = hook.result.current.exportMusicXml()
+
+    act(() => hook.result.current.importProjectFile(file, 'From File'))
+    expect(hook.result.current.project.name).toBe('From File')
+    expect(hook.result.current.status).toBe('Opened project file')
+
+    act(() => hook.result.current.importMusicXml(xml, 'From XML'))
+    expect(hook.result.current.project.name).toBe('From XML')
+    expect(hook.result.current.status).toBe('Imported MusicXML')
+    expect(hook.result.current.project.tracks[0].notes[0].pitch).toBe(64)
+  })
+
+  it('surfaces friendly statuses for malformed imports', () => {
+    const { hook } = setup()
+    act(() => hook.result.current.importProjectFile('{ not json'))
+    expect(hook.result.current.status).toBe(
+      "Couldn't open that file — is it a Cadence project?",
+    )
+    act(() => hook.result.current.importMusicXml('not xml <<'))
+    expect(hook.result.current.status).toBe(
+      "Couldn't import that file — is it valid MusicXML?",
+    )
+  })
+
+  it('renders WAV bytes via an injected offline renderer', async () => {
+    const engine = new FakeEngine()
+    const audioRenderer = vi.fn(async (_p, durationSeconds: number, rate: number) => ({
+      sampleRate: rate,
+      channels: [new Float32Array(Math.max(1, Math.round(durationSeconds * rate)))],
+    }))
+    const hook = renderHook(() =>
+      useComposer({
+        createEngine: () => engine,
+        store: new LocalStorageProjectStore(new MemoryStorage()),
+        initialProject: createEmptyProject('wav'),
+        autosaveDelay: 0,
+        audioRenderer,
+      }),
+    )
+    let bytes: Uint8Array | null = null
+    await act(async () => {
+      bytes = await hook.result.current.exportWav()
+    })
+    expect(bytes).not.toBeNull()
+    expect((bytes as unknown as Uint8Array).byteLength).toBeGreaterThan(44)
+    expect(hook.result.current.status).toBe('Exported WAV')
+  })
+
+  it('returns null and reports a status when audio rendering fails', async () => {
+    const engine = new FakeEngine()
+    const audioRenderer = vi.fn(async () => {
+      throw new Error('no web audio')
+    })
+    const hook = renderHook(() =>
+      useComposer({
+        createEngine: () => engine,
+        store: new LocalStorageProjectStore(new MemoryStorage()),
+        initialProject: createEmptyProject('wav'),
+        autosaveDelay: 0,
+        audioRenderer,
+      }),
+    )
+    let bytes: Uint8Array | null = new Uint8Array()
+    await act(async () => {
+      bytes = await hook.result.current.exportWav()
+    })
+    expect(bytes).toBeNull()
+    expect(hook.result.current.status).toBe("Couldn't render audio in this environment")
+  })
+
+  it('builds a shareable URL snapshot for a small project', () => {
+    const { hook } = setup()
+    let url = ''
+    act(() => {
+      const snapshot = hook.result.current.shareSnapshot()
+      if (snapshot.kind === 'url') url = snapshot.url
+    })
+    expect(url).toContain('#project=')
+    expect(hook.result.current.status).toBe('Copied a shareable link')
+  })
+})
+
+describe('useComposer — share open from URL', () => {
+  const originalHash = window.location.hash
+
+  afterEach(() => {
+    window.location.hash = originalHash
+  })
+
+  it('opens a project encoded in the location fragment on mount', async () => {
+    // Encode a project, then boot a hook WITHOUT an injected project so the
+    // mount effect reads the fragment.
+    const seed = createEmptyProject('seed')
+    seed.name = 'Shared On Load'
+    seed.tracks[0].notes = [{ id: 'n', pitch: 72, start: 0, duration: 1, velocity: 0.8 }]
+    const { encodeProjectToFragment } = await import('../formats/share')
+    window.location.hash = `#${encodeProjectToFragment(seed)}`
+
+    const hook = renderHook(() =>
+      useComposer({
+        createEngine: () => new FakeEngine(),
+        store: new LocalStorageProjectStore(new MemoryStorage()),
+        autosaveDelay: 0,
+      }),
+    )
+
+    await waitFor(() =>
+      expect(hook.result.current.project.name).toBe('Shared On Load'),
+    )
+    expect(hook.result.current.status).toBe('Opened shared project')
+    expect(hook.result.current.project.tracks[0].notes[0].pitch).toBe(72)
+  })
+})

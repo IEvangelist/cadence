@@ -29,6 +29,14 @@ import {
   createProjectStore,
 } from '../model/storage'
 import { midiBytesToProject, projectToMidiBytes } from '../midi/midi'
+import { fileToProject, projectToFile } from '../formats/projectFile'
+import { musicXmlToProject, projectToMusicXml } from '../formats/musicxml'
+import { type OfflineRenderer, renderProjectToWav } from '../formats/audioExport'
+import {
+  type ShareSnapshot,
+  createShareSnapshot,
+  decodeProjectFromFragment,
+} from '../formats/share'
 import { type AudioEngine, type TransportState, createAudioEngine } from '../audio/engine'
 
 export interface UseComposerOptions {
@@ -37,6 +45,8 @@ export interface UseComposerOptions {
   initialProject?: Project
   /** Autosave debounce in ms. 0 saves synchronously (handy for tests). */
   autosaveDelay?: number
+  /** Injected offline audio renderer for WAV export (mockable in tests). */
+  audioRenderer?: OfflineRenderer
 }
 
 export interface ComposerController {
@@ -82,6 +92,12 @@ export interface ComposerController {
   loadProject: (id: string) => Promise<void>
   importMidi: (bytes: ArrayBuffer, name?: string) => void
   exportMidi: () => Uint8Array
+  exportMusicXml: () => string
+  importMusicXml: (xml: string, name?: string) => void
+  exportProjectFile: () => string
+  importProjectFile: (text: string, name?: string) => void
+  exportWav: () => Promise<Uint8Array | null>
+  shareSnapshot: () => ShareSnapshot
 }
 
 function defaultProject(options: UseComposerOptions): Project {
@@ -151,11 +167,36 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     refreshList()
   }, [refreshList])
 
-  // Restore the last autosaved project on first load (unless a project was
-  // explicitly injected, e.g. in tests). Keeps work across reloads/sessions.
+  // Restore a shared project (URL fragment) or the last autosaved project on
+  // first load — unless a project was explicitly injected (e.g. in tests). Keeps
+  // work across reloads/sessions and lets a share link reopen a piece.
   useEffect(() => {
     if (options.initialProject) return
     let cancelled = false
+    const shared =
+      typeof window !== 'undefined'
+        ? decodeProjectFromFragment(window.location.hash)
+        : null
+    if (shared) {
+      // Defer to a microtask so we don't call setState synchronously inside the
+      // effect body (mirrors the async loadLast path below).
+      void Promise.resolve().then(() => {
+        if (cancelled) return
+        dispatch({ type: 'load-project', project: { ...shared, id: newId('project') } })
+        setStatus('Opened shared project')
+        // Clear the fragment so a reload/autosave doesn't re-import it.
+        if (typeof window !== 'undefined' && window.history?.replaceState) {
+          window.history.replaceState(
+            null,
+            '',
+            window.location.pathname + window.location.search,
+          )
+        }
+      })
+      return () => {
+        cancelled = true
+      }
+    }
     void store.loadLast().then((project) => {
       if (!cancelled && project) dispatch({ type: 'load-project', project })
     })
@@ -320,6 +361,54 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     setStatus('Exported MIDI')
     return projectToMidiBytes(projectRef.current)
   }, [])
+  const exportMusicXml = useCallback(() => {
+    setStatus('Exported MusicXML')
+    return projectToMusicXml(projectRef.current)
+  }, [])
+  const importMusicXml = useCallback((xml: string, name?: string) => {
+    try {
+      const project = musicXmlToProject(xml, { id: newId('project'), name })
+      dispatch({ type: 'load-project', project })
+      setStatus('Imported MusicXML')
+    } catch {
+      setStatus("Couldn't import that file — is it valid MusicXML?")
+    }
+  }, [])
+  const exportProjectFile = useCallback(() => {
+    setStatus('Exported project file')
+    return projectToFile(projectRef.current)
+  }, [])
+  const importProjectFile = useCallback((text: string, name?: string) => {
+    try {
+      const project = fileToProject(text, { id: newId('project'), name })
+      dispatch({ type: 'load-project', project })
+      setStatus('Opened project file')
+    } catch {
+      setStatus("Couldn't open that file — is it a Cadence project?")
+    }
+  }, [])
+  const exportWav = useCallback(async (): Promise<Uint8Array | null> => {
+    setStatus('Rendering audio…')
+    try {
+      const { bytes } = await renderProjectToWav(projectRef.current, {
+        renderOffline: options.audioRenderer,
+      })
+      setStatus('Exported WAV')
+      return bytes
+    } catch {
+      setStatus("Couldn't render audio in this environment")
+      return null
+    }
+  }, [options.audioRenderer])
+  const shareSnapshot = useCallback((): ShareSnapshot => {
+    const snapshot = createShareSnapshot(projectRef.current)
+    setStatus(
+      snapshot.kind === 'url'
+        ? 'Copied a shareable link'
+        : 'Project too large for a link — share the file',
+    )
+    return snapshot
+  }, [])
 
   return {
     state,
@@ -357,5 +446,11 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     loadProject,
     importMidi,
     exportMidi,
+    exportMusicXml,
+    importMusicXml,
+    exportProjectFile,
+    importProjectFile,
+    exportWav,
+    shareSnapshot,
   }
 }

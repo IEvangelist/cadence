@@ -80,6 +80,26 @@ The coverage thresholds live in `apps/web/vite.config.ts` (`test.coverage`).
 Vitest v8 includes every file matched by `coverage.include` (`src/**`) in the
 denominator, so new untested source drags coverage down and fails the gate.
 
+### Format interop (import / export / share)
+
+Client-side format interop lives in `apps/web/src/composer/formats` and is
+documented in [`share.md`](share.md). Every format has a **round-trip** unit test
+(`model → format → model` preserves pitch/start/duration + tempo within tolerance):
+
+- `projectFile.test.ts` — portable `.cadence.json` envelope round-trip.
+- `musicxml.test.ts` — MusicXML `score-partwise` subset (velocity is not carried by
+  notation; restored to the model default on import).
+- `audioExport.test.ts` — pure `encodeWav` + a mocked offline renderer, so the WAV
+  path runs under jsdom and asserts a non-empty file of the expected duration.
+- `share.test.ts` — URL-fragment snapshot encode/decode + file fallback.
+
+Malformed input for each importer throws a typed error and surfaces a friendly UI
+status (mirrors the existing `MidiImportError` pattern). `audio/offlineRender.ts`
+binds to `Tone.Offline` (Web Audio) and is coverage-excluded — it is exercised in the
+browser/e2e, not jsdom. The `composer.spec.ts` e2e adds export → re-import and
+share-link round-trips. **No new runtime dependencies were added**, so the npm-audit
+surface and `package-lock.json` are unchanged.
+
 ## .NET
 
 ```bash

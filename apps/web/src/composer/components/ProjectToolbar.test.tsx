@@ -1,20 +1,34 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { ProjectToolbar } from './ProjectToolbar'
-import { useComposer } from '../hooks/useComposer'
+import { useComposer, type UseComposerOptions } from '../hooks/useComposer'
 import { SilentAudioEngine } from '../audio/engine'
 import { LocalStorageProjectStore, MemoryStorage } from '../model/storage'
 import { createDemoProject, createEmptyProject } from '../model/project'
 import { projectToMidiBytes } from '../midi/midi'
+import { projectToFile } from '../formats/projectFile'
+import { projectToMusicXml } from '../formats/musicxml'
 
-function Harness({ download }: { download: (b: Uint8Array, n: string) => void }) {
+type DownloadFn = (data: Uint8Array | string, filename: string, mime?: string) => void
+type CopyFn = (text: string) => void
+
+interface HarnessProps {
+  download?: DownloadFn
+  copyText?: CopyFn
+  options?: Partial<UseComposerOptions>
+}
+
+function Harness({ download, copyText, options }: HarnessProps) {
   const controller = useComposer({
     createEngine: () => new SilentAudioEngine(),
     store: new LocalStorageProjectStore(new MemoryStorage()),
     initialProject: createEmptyProject('p'),
     autosaveDelay: 0,
+    ...options,
   })
-  return <ProjectToolbar controller={controller} download={download} />
+  return (
+    <ProjectToolbar controller={controller} download={download} copyText={copyText} />
+  )
 }
 
 function DefaultHarness() {
@@ -25,6 +39,10 @@ function DefaultHarness() {
     autosaveDelay: 0,
   })
   return <ProjectToolbar controller={controller} />
+}
+
+const selectValue = (label: string, value: string): void => {
+  fireEvent.change(screen.getByLabelText(label), { target: { value } })
 }
 
 describe('<ProjectToolbar />', () => {
@@ -47,7 +65,7 @@ describe('<ProjectToolbar />', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Export MIDI' }))
     expect(download).toHaveBeenCalledTimes(1)
     const [bytes, filename] = download.mock.calls[0]
-    expect(bytes.byteLength).toBeGreaterThan(0)
+    expect((bytes as Uint8Array).byteLength).toBeGreaterThan(0)
     expect(filename).toMatch(/\.mid$/)
   })
 
@@ -89,13 +107,135 @@ describe('<ProjectToolbar />', () => {
 
   it('no-ops the default download when object URLs are unavailable', () => {
     const original = globalThis.URL
-    // Simulate an environment without URL.createObjectURL (e.g. jsdom/SSR).
     vi.stubGlobal('URL', {})
     render(<DefaultHarness />)
     expect(() =>
       fireEvent.click(screen.getByRole('button', { name: 'Export MIDI' })),
     ).not.toThrow()
     vi.stubGlobal('URL', original)
+    vi.unstubAllGlobals()
+  })
+})
+
+describe('<ProjectToolbar /> — multi-format export', () => {
+  it('exports a MusicXML file', async () => {
+    const download = vi.fn()
+    render(<Harness download={download} />)
+    selectValue('Export as', 'musicxml')
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1))
+    const [data, filename, mime] = download.mock.calls[0]
+    expect(filename).toMatch(/\.musicxml$/)
+    expect(mime).toContain('musicxml')
+    expect(data as string).toContain('<score-partwise')
+  })
+
+  it('exports a portable .cadence.json project file', async () => {
+    const download = vi.fn()
+    render(<Harness download={download} />)
+    selectValue('Export as', 'project')
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1))
+    const [data, filename] = download.mock.calls[0]
+    expect(filename).toMatch(/\.cadence\.json$/)
+    expect(JSON.parse(data as string).format).toBe('cadence-project')
+  })
+
+  it('renders audio to a downloadable .wav via the injected renderer', async () => {
+    const download = vi.fn()
+    const audioRenderer = vi.fn(async (_p, durationSeconds: number, rate: number) => ({
+      sampleRate: rate,
+      channels: [new Float32Array(Math.max(1, Math.round(durationSeconds * rate)))],
+    }))
+    render(<Harness download={download} options={{ audioRenderer }} />)
+    selectValue('Export as', 'wav')
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1))
+    const [data, filename, mime] = download.mock.calls[0]
+    expect(filename).toMatch(/\.wav$/)
+    expect(mime).toBe('audio/wav')
+    expect((data as Uint8Array).byteLength).toBeGreaterThan(44)
+    expect(audioRenderer).toHaveBeenCalledOnce()
+  })
+
+  it('reports a friendly status when audio rendering is unavailable', async () => {
+    render(<Harness download={vi.fn()} />)
+    selectValue('Export as', 'wav')
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(/Couldn.t render audio/),
+    )
+  })
+})
+
+describe('<ProjectToolbar /> — multi-format import', () => {
+  it('opens a .cadence.json project file', async () => {
+    render(<Harness download={vi.fn()} />)
+    const text = projectToFile(createDemoProject('demo'))
+    const file = new File([text], 'my-project.cadence.json', { type: 'application/json' })
+    const input = screen.getByLabelText('Import project or MusicXML file') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [file] } })
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('Opened project file'),
+    )
+    expect((screen.getByLabelText('Project name') as HTMLInputElement).value).toBe('my-project')
+  })
+
+  it('imports a MusicXML file', async () => {
+    render(<Harness download={vi.fn()} />)
+    const xml = projectToMusicXml(createDemoProject('demo'))
+    const file = new File([xml], 'score.musicxml', { type: 'application/xml' })
+    const input = screen.getByLabelText('Import project or MusicXML file') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [file] } })
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('Imported MusicXML'),
+    )
+  })
+
+  it('surfaces a typed error status for a malformed import', async () => {
+    render(<Harness download={vi.fn()} />)
+    const file = new File(['not a real project'], 'broken.cadence.json', {
+      type: 'application/json',
+    })
+    const input = screen.getByLabelText('Import project or MusicXML file') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [file] } })
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(/Couldn.t open that file/),
+    )
+  })
+})
+
+describe('<ProjectToolbar /> — share', () => {
+  it('copies a shareable link for a small project', async () => {
+    const copyText = vi.fn()
+    render(<Harness download={vi.fn()} copyText={copyText} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Share' }))
+    await waitFor(() => expect(copyText).toHaveBeenCalledTimes(1))
+    expect(copyText.mock.calls[0][0]).toContain('#project=')
+    expect(screen.getByRole('status')).toHaveTextContent('Copied a shareable link')
+  })
+
+  it('falls back to downloading the file for a large project', async () => {
+    const download = vi.fn()
+    const dense = createEmptyProject('big')
+    dense.tracks[0].notes = Array.from({ length: 400 }, (_, i) => ({
+      id: `n${i}`,
+      pitch: 60 + (i % 24),
+      start: i * 0.25,
+      duration: 0.25,
+      velocity: 0.8,
+    }))
+    render(
+      <Harness download={download} copyText={vi.fn()} options={{ initialProject: dense }} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Share' }))
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1))
+    expect(download.mock.calls[0][1]).toMatch(/\.cadence\.json$/)
+  })
+
+  it('uses the default clipboard writer when no override is provided', () => {
+    const writeText = vi.fn((_text: string) => Promise.resolve())
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    render(<DefaultHarness />)
+    fireEvent.click(screen.getByRole('button', { name: 'Share' }))
+    expect(writeText).toHaveBeenCalledTimes(1)
+    expect(writeText.mock.calls[0][0]).toContain('#project=')
     vi.unstubAllGlobals()
   })
 })
