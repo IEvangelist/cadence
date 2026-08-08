@@ -51,7 +51,43 @@ jobs:
       - run: npm run lint --if-present
       - run: npm run typecheck --if-present
       - run: npm run build --if-present
-      - run: npm test --if-present
+      # Vitest v8 coverage with enforced thresholds (see apps/web/vite.config.ts).
+      # The run fails if lines/functions/branches/statements drop below 80%.
+      - run: npm run test:coverage --if-present
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: web-coverage
+          path: apps/web/coverage
+          if-no-files-found: ignore
+
+  # End-to-end smoke + accessibility. Playwright builds the SPA and serves the
+  # production bundle via `vite preview` (see apps/web/playwright.config.ts),
+  # then runs the smoke suite (asserts the built app renders) and the axe-core
+  # a11y suite (WCAG 2.1 A/AA).
+  web-e2e:
+    needs: detect
+    if: needs.detect.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright (Chromium + OS deps)
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+      - name: Run Playwright e2e (smoke + a11y)
+        working-directory: apps/web
+        run: npx playwright test
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          if-no-files-found: ignore
 
   dotnet:
     needs: detect
@@ -70,13 +106,188 @@ jobs:
           dotnet-version: 10.0.x
       - run: dotnet restore
       - run: dotnet build --no-restore -c Release
-      - run: dotnet test --no-build -c Release --logger trx --results-directory ./TestResults
+      # Integration tests (Category=Integration) boot containers via Aspire and
+      # run in the dedicated dotnet-integration job; exclude them from the fast
+      # unit run. xUnit's `!=` also matches tests with no Category trait.
+      - run: dotnet test --no-build -c Release --filter "Category!=Integration" --logger trx --results-directory ./TestResults
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: dotnet-test-results
           path: ./TestResults
           if-no-files-found: ignore
+
+  # .NET line/method coverage gate (coverlet.msbuild). The >= 80% threshold is
+  # configured in tests/Cadence.Api.Tests.csproj and enforced on a fresh build.
+  dotnet-coverage:
+    needs: detect
+    if: needs.detect.outputs.dotnet == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet test tests/Cadence.Api.Tests -c Release /p:CollectCoverage=true
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: dotnet-coverage
+          path: tests/Cadence.Api.Tests/TestResults/coverage.cobertura.xml
+          if-no-files-found: ignore
+
+  # Backend integration tests: Aspire.Hosting.Testing boots the AppHost
+  # (API + Postgres/Redis/Blob) and asserts /health, /alive, /api/info and the
+  # OpenAPI document. ubuntu-latest ships Docker, which Aspire needs to start
+  # the backing resources.
+  dotnet-integration:
+    needs: detect
+    if: needs.detect.outputs.dotnet == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet test tests/Cadence.Api.IntegrationTests -c Release --filter "Category=Integration" --logger trx --results-directory ./TestResults
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: dotnet-integration-results
+          path: ./TestResults
+          if-no-files-found: ignore
+
+  # CodeQL static analysis (JavaScript/TypeScript). Uploading results to code
+  # scanning requires GitHub Advanced Security, which is only available on public
+  # repos here; the scan always runs and the SARIF is kept as an artifact, while
+  # upload is gated on visibility so this stays green on the private repo and
+  # lights up automatically if it goes public.
+  codeql-web:
+    needs: detect
+    if: needs.detect.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        with:
+          languages: javascript-typescript
+          build-mode: none
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        with:
+          category: "/language:javascript-typescript"
+          upload: ${{ github.event.repository.visibility == 'public' && 'always' || 'never' }}
+          output: sarif-results-web
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: codeql-web-sarif
+          path: sarif-results-web
+          if-no-files-found: ignore
+
+  # CodeQL static analysis (C#). build-mode: manual because CodeQL's autobuild
+  # is unreliable on .NET 10; we compile the product assemblies explicitly so the
+  # extractor observes them. Upload gating matches codeql-web.
+  codeql-dotnet:
+    needs: detect
+    if: needs.detect.outputs.dotnet == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        with:
+          languages: csharp
+          build-mode: manual
+      # Building Cadence.Api compiles Cadence.ServiceDefaults transitively, which
+      # covers the hand-written product code. The AppHost is deployment infra and
+      # pulls RID-specific packages, so it is intentionally not built here.
+      - name: Build for CodeQL
+        run: dotnet build src/Cadence.Api/Cadence.Api.csproj -c Release
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        with:
+          category: "/language:csharp"
+          upload: ${{ github.event.repository.visibility == 'public' && 'always' || 'never' }}
+          output: sarif-results-dotnet
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: codeql-dotnet-sarif
+          path: sarif-results-dotnet
+          if-no-files-found: ignore
+
+  # Dependency review on PRs. The action's API requires GitHub Advanced Security,
+  # available only on public repos here, so the job is gated on visibility: it is
+  # a no-op (green) on the private repo and activates automatically if it goes
+  # public. npm audit + NuGet audit provide the vulnerability gate that runs on
+  # every build regardless of visibility.
+  dependency-review:
+    if: github.event_name == 'pull_request' && github.event.repository.visibility == 'public'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+
+  # Secret scanning. A SHA-pinned gitleaks binary (no marketplace action) scans
+  # the working tree and fails the job if any committed secret is detected.
+  secret-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          set -euo pipefail
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o gitleaks.tar.gz
+          tar -xzf gitleaks.tar.gz gitleaks
+          ./gitleaks version
+          ./gitleaks dir . --config .gitleaks.toml --redact --verbose --exit-code 1 --report-format sarif --report-path gitleaks.sarif
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: gitleaks-report
+          path: gitleaks.sarif
+          if-no-files-found: ignore
+
+  # npm supply-chain audit. Surfaces the full advisory report (informational),
+  # then gates the build at critical severity. A single pre-existing high
+  # advisory (nanoid via vite -> postcss, GHSA-2v37-7h3g-55p8) has no compatible
+  # fix in the 3.3.x line; it is surfaced but does not block. See docs/testing.md.
+  npm-audit:
+    needs: detect
+    if: needs.detect.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: npm audit (full report, informational)
+        run: npm audit || true
+      - name: npm audit (gate on critical)
+        run: npm audit --audit-level=critical
 
   desktop:
     needs: detect

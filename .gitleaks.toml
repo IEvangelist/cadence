@@ -1,0 +1,16 @@
+# gitleaks configuration for the secret-scan CI gate (see .github/workflows/ci.yml).
+#
+# We keep the full built-in ruleset active and only allowlist a narrow set of
+# documentation files that intentionally contain *example* secret patterns
+# (the secret-handling skill docs literally list "-----BEGIN PRIVATE KEY-----"
+# as a pattern to scan for). These are not real secrets; every other path is
+# still scanned by the default rules.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "secret-handling skill docs that illustrate secret patterns, not real secrets"
+paths = [
+  '''skills/secret-handling/SKILL\.md$''',
+]

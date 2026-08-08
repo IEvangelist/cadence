@@ -21,6 +21,7 @@ artifacts/
 [Tt]est[Rr]esults/
 *.trx
 *.coverage
+*.cobertura.xml
 *.nupkg
 
 # ---- Rust / Tauri ----

@@ -7,4 +7,19 @@
     <RestoreLockedMode Condition="'$(ContinuousIntegrationBuild)' == 'true'">true</RestoreLockedMode>
   </PropertyGroup>
 
+  <!--
+    Supply-chain auditing (NuGetAudit). Runs on every restore and audits direct
+    *and* transitive packages against the GitHub Advisory Database.
+      * NU1901/NU1902 (low/moderate) surface as warnings.
+      * NU1903/NU1904 (high/critical) are promoted to build errors, so a
+        vulnerable dependency fails CI until it is patched or pinned up.
+    See docs/versioning-policy.md and docs/testing.md.
+  -->
+  <PropertyGroup>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1903;NU1904</WarningsAsErrors>
+  </PropertyGroup>
+
 </Project>
