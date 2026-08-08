@@ -230,7 +230,7 @@ describe('<ProjectToolbar /> — share', () => {
   })
 
   it('uses the default clipboard writer when no override is provided', () => {
-    const writeText = vi.fn((_text: string) => Promise.resolve())
+    const writeText = vi.fn((text: string) => Promise.resolve(text))
     vi.stubGlobal('navigator', { clipboard: { writeText } })
     render(<DefaultHarness />)
     fireEvent.click(screen.getByRole('button', { name: 'Share' }))
