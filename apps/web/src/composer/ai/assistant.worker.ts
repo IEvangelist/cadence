@@ -16,36 +16,15 @@
  */
 /// <reference lib="webworker" />
 import {
-  type NoteSequence,
-  beatsToSteps,
-  noteSequenceToNotes,
-  notesToNoteSequence,
-} from './noteSequence'
-import type { AssistantAction, AssistantParams, SuggestedNote } from './types'
-
-// MusicRNN is a structural type here to avoid importing @magenta at module load.
-interface MusicRNNLike {
-  initialize(): Promise<void>
-  continueSequence(
-    sequence: NoteSequence,
-    steps: number,
-    temperature?: number,
-  ): Promise<NoteSequence>
-  isInitialized(): boolean
-  dispose(): void
-}
+  generateNotes,
+  type GenerateRequest,
+  type MusicRNNLike,
+} from './generation'
+import type { SuggestedNote } from './types'
 
 /** Melody model checkpoint (basic RNN) hosted by Magenta. */
 const MELODY_CHECKPOINT =
   'https://storage.googleapis.com/magentadata/js/checkpoints/music_rnn/basic_rnn'
-
-interface GenerateRequest {
-  action: AssistantAction
-  seedNotes: SuggestedNote[]
-  regionStart: number
-  tempo: number
-  params: AssistantParams
-}
 
 interface GenerateMessage {
   type: 'generate'
@@ -83,12 +62,7 @@ async function getModel(): Promise<MusicRNNLike> {
   return rnn
 }
 
-/** Longest seed pitch run length used to size the continuation origin. */
-function seedEnd(notes: SuggestedNote[], fallback: number): number {
-  if (notes.length === 0) return fallback
-  return Math.max(...notes.map((n) => n.start + n.duration))
-}
-
+/** Load the model (if needed), then delegate assembly to the pure core. */
 async function runGenerate(id: number, request: GenerateRequest): Promise<SuggestedNote[]> {
   const post = (progress: { phase: string; fraction?: number; message?: string }): void =>
     ctx.postMessage({ type: 'progress', id, progress })
@@ -99,33 +73,9 @@ async function runGenerate(id: number, request: GenerateRequest): Promise<Sugges
 
   post({ phase: 'generating', message: 'Composing…' })
 
-  const steps = Math.max(1, beatsToSteps(Math.round(request.params.lengthBeats)))
-  const temperature = request.params.temperature
-
-  if (request.action === 'generate' || request.seedNotes.length === 0) {
-    // Seed the model with a single tonic note at the region origin, then keep
-    // only the generated tail.
-    const origin = request.action === 'generate' ? request.regionStart : seedEnd(request.seedNotes, request.regionStart)
-    const seed = notesToNoteSequence(
-      [{ pitch: 60, start: origin, duration: 0.25, velocity: 0.8 }],
-      { originBeats: origin, tempo: request.tempo },
-    )
-    const out = await rnn.continueSequence(seed, steps, temperature)
-    if (cancelled.has(id)) throw abortError()
-    // Drop the seed (step 0) and re-anchor at the origin.
-    return noteSequenceToNotes(out, { originBeats: origin, fromStep: 1 })
-  }
-
-  // continue: quantize the seed, continue, keep only the new tail.
-  const origin = Math.min(...request.seedNotes.map((n) => n.start))
-  const seedSeq = notesToNoteSequence(request.seedNotes, {
-    originBeats: origin,
-    tempo: request.tempo,
-  })
-  const tailStartStep = seedSeq.totalQuantizedSteps
-  const out = await rnn.continueSequence(seedSeq, steps, temperature)
+  const notes = await generateNotes(rnn, request)
   if (cancelled.has(id)) throw abortError()
-  return noteSequenceToNotes(out, { originBeats: origin, fromStep: tailStartStep })
+  return notes
 }
 
 function abortError(): Error {

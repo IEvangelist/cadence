@@ -5,8 +5,9 @@ import { SilentAudioEngine } from '../audio/engine'
 import { LocalStorageProjectStore, MemoryStorage } from '../model/storage'
 import { createEmptyProject, createNote, createTrack } from '../model/project'
 import { MockAssistant } from '../ai/mockProvider'
+import type { AssistantSuggestion, CompositionAssistant } from '../ai/types'
 
-function renderComposer() {
+function renderComposer(provider: CompositionAssistant = new MockAssistant()) {
   const project = createEmptyProject('p')
   project.tracks = [
     createTrack(
@@ -25,7 +26,7 @@ function renderComposer() {
         initialProject: project,
         autosaveDelay: 0,
       }}
-      assistantOptions={{ provider: new MockAssistant() }}
+      assistantOptions={{ provider }}
     />,
   )
 }
@@ -109,5 +110,30 @@ describe('<AssistantPanel />', () => {
     )
     expect(container.querySelectorAll('.pr-note.is-preview').length).toBe(0)
     expect(container.querySelectorAll('.pr-note:not(.is-preview)').length).toBe(notesBefore)
+  })
+
+  it('keeps keyboard focus on the action button when Generate becomes Cancel', async () => {
+    // A provider whose generation never settles keeps the panel in the busy
+    // state so we can observe the Generate→Cancel swap.
+    const stalling: CompositionAssistant = {
+      id: 'stall',
+      capabilities: ['continue', 'generate', 'harmonize'],
+      generate(_request, onProgress) {
+        onProgress?.({ phase: 'loading-model' })
+        return new Promise<AssistantSuggestion>(() => {})
+      },
+    }
+    renderComposer(stalling)
+    const panel = assistantRegion()
+
+    const generate = within(panel).getByRole('button', { name: 'Generate' })
+    generate.focus()
+    expect(generate).toHaveFocus()
+    fireEvent.click(generate)
+
+    const cancel = await within(panel).findByRole('button', { name: 'Cancel' })
+    // Same DOM node (not a swapped element) → focus is preserved, not lost to body.
+    expect(cancel).toBe(generate)
+    expect(cancel).toHaveFocus()
   })
 })

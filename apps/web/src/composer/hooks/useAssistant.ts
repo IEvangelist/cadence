@@ -157,7 +157,8 @@ export function useAssistant(
 
   const cancel = useCallback(() => {
     abortRef.current?.abort()
-  }, [])
+    clearAuditionTimers()
+  }, [clearAuditionTimers])
 
   const audition = useCallback(() => {
     if (!suggestion || suggestion.notes.length === 0) return

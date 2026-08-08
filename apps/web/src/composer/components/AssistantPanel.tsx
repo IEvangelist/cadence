@@ -96,20 +96,20 @@ export function AssistantPanel({ assistant }: AssistantPanelProps) {
       </div>
 
       <div className="assistant-actions">
-        {isBusy ? (
-          <button type="button" className="btn" onClick={cancel}>
-            Cancel
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => void generate()}
-            disabled={!canGenerate}
-          >
-            Generate
-          </button>
-        )}
+        {/*
+          One button that toggles between Generate and Cancel — rendering the
+          *same* element (not a ternary that swaps two buttons) keeps its DOM
+          node across the busy transition, so keyboard focus is preserved
+          instead of falling back to <body>.
+        */}
+        <button
+          type="button"
+          className={isBusy ? 'btn' : 'btn btn-primary'}
+          onClick={isBusy ? cancel : () => void generate()}
+          disabled={!isBusy && !canGenerate}
+        >
+          {isBusy ? 'Cancel' : 'Generate'}
+        </button>
       </div>
 
       <p className="assistant-status" role="status" aria-live="polite">

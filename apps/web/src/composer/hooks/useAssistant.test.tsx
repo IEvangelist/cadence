@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { useAssistant } from './useAssistant'
 import { useComposer, type ComposerController } from './useComposer'
 import { SilentAudioEngine } from '../audio/engine'
@@ -168,6 +168,25 @@ describe('useAssistant', () => {
 
     expect(result.current.assistant.suggestion).toBeNull()
     expect(result.current.assistant.phase).toBe('idle')
+  })
+
+  it('cancel clears any pending audition preview timers', async () => {
+    const { result } = renderHook(() => useHarness(new MockAssistant()))
+
+    await act(async () => {
+      await result.current.assistant.generate()
+    })
+    // Schedule preview playback timers.
+    act(() => {
+      result.current.assistant.audition()
+    })
+
+    const clearSpy = vi.spyOn(window, 'clearTimeout')
+    act(() => {
+      result.current.assistant.cancel()
+    })
+    expect(clearSpy).toHaveBeenCalled()
+    clearSpy.mockRestore()
   })
 })
 
