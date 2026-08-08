@@ -23,6 +23,14 @@
 
   <ItemGroup Label="API">
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
+    <!--
+      Transitive pin: Microsoft.AspNetCore.OpenApi 10.0.10 pulls in
+      Microsoft.OpenApi 2.0.0, which carries GHSA-v5pm-xwqc-g5wc (NU1903,
+      high severity: stack overflow on circular schema refs). 2.7.5 is the
+      lowest patched release on the 2.x line. Pinned exactly, forced up via
+      CentralPackageTransitivePinningEnabled.
+    -->
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
   </ItemGroup>
 
   <ItemGroup Label="Testing">
