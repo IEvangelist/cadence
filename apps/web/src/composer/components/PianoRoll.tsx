@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } fr
 import { MAX_PITCH, MIN_PITCH, isBlackKey, pitchToName } from '../model/project'
 import { getInstrument, drumLabel } from '../instruments/registry'
 import { type ComposerController } from '../hooks/useComposer'
+import type { SuggestedNote } from '../ai/types'
 import {
   DEFAULT_LAYOUT,
   PITCH_ROWS,
@@ -16,6 +17,8 @@ import {
 
 interface PianoRollProps {
   controller: ComposerController
+  /** Ghost notes from a pending AI suggestion, rendered visually distinct. */
+  previewNotes?: SuggestedNote[]
 }
 
 interface Gesture {
@@ -36,7 +39,7 @@ const clampPitch = (p: number): number => Math.min(MAX_PITCH, Math.max(MIN_PITCH
  * elements and the whole editor is keyboard-accessible and axe-clean. All
  * geometry comes from the pure timing helpers.
  */
-export function PianoRoll({ controller }: PianoRollProps) {
+export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
   const {
     project,
     selectedTrackId,
@@ -267,6 +270,23 @@ export function PianoRoll({ controller }: PianoRollProps) {
                   onPointerDown={(event) => startResize(event, note.id)}
                 />
               </button>
+            )
+          })}
+
+          {previewNotes.map((note, index) => {
+            const rect = noteRect(note, layout)
+            return (
+              <div
+                key={`preview-${index}`}
+                className="pr-note is-preview"
+                aria-hidden="true"
+                style={{
+                  left: rect.left,
+                  top: rect.top,
+                  width: rect.width,
+                  height: rect.height,
+                }}
+              />
             )
           })}
 

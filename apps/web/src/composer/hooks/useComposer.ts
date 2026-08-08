@@ -59,6 +59,10 @@ export interface ComposerController {
   toggleLoop: () => void
 
   addNoteAt: (trackId: string, pitch: number, start: number, duration?: number) => void
+  insertNotes: (
+    trackId: string,
+    notes: Array<{ pitch: number; start: number; duration: number; velocity: number }>,
+  ) => void
   updateNote: (trackId: string, noteId: string, changes: Partial<Note>) => void
   removeNote: (trackId: string, noteId: string) => void
   selectNote: (noteId: string | null) => void
@@ -205,6 +209,20 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     },
     [],
   )
+  // Insert a batch of notes (e.g. an accepted AI suggestion). Each note goes
+  // through the reducer's `add-note`, so all are sanitized/clamped and the
+  // timeline grows to fit — the accept path never bypasses model validation.
+  const insertNotes = useCallback(
+    (
+      trackId: string,
+      notes: Array<{ pitch: number; start: number; duration: number; velocity: number }>,
+    ) => {
+      for (const n of notes) {
+        dispatch({ type: 'add-note', trackId, note: createNote(n, newId('note')) })
+      }
+    },
+    [],
+  )
   const updateNote = useCallback(
     (trackId: string, noteId: string, changes: Partial<Note>) =>
       dispatch({ type: 'update-note', trackId, noteId, changes }),
@@ -321,6 +339,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     setTempo,
     toggleLoop,
     addNoteAt,
+    insertNotes,
     updateNote,
     removeNote,
     selectNote,
