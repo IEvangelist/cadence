@@ -1,0 +1,15 @@
+{
+  "name": "@cadence/brand-tools",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Reproducible raster export + WCAG verification for the Cadence brand kit. Standalone (not part of the npm workspaces); run manually to regenerate icons after changing the source SVGs.",
+  "scripts": {
+    "render": "node render-icons.mjs",
+    "contrast": "node contrast.mjs"
+  },
+  "dependencies": {
+    "png2icons": "2.0.1",
+    "sharp": "0.35.3"
+  }
+}

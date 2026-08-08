@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Cadence">
+  <title>Cadence logomark</title>
+  <defs>
+    <linearGradient id="cadBrand" x1="74" y1="96" x2="438" y2="416" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9B6BFF"/>
+      <stop offset="0.55" stop-color="#7A2FF0"/>
+      <stop offset="1" stop-color="#4F46E5"/>
+    </linearGradient>
+    <linearGradient id="cadResolve" x1="374" y1="120" x2="438" y2="416" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#67E8F9"/>
+      <stop offset="1" stop-color="#12BDDC"/>
+    </linearGradient>
+  </defs>
+  <!-- cadence bars: violet phrase rises to a climax, resolving into the cyan tonic -->
+  <g fill="url(#cadBrand)">
+    <rect x="74"  y="266" width="64" height="150" rx="32"/>
+    <rect x="174" y="186" width="64" height="230" rx="32"/>
+    <rect x="274" y="96"  width="64" height="320" rx="32"/>
+  </g>
+  <g fill="url(#cadResolve)">
+    <rect x="374" y="216" width="64" height="200" rx="32"/>
+    <circle cx="406" cy="154" r="34"/>
+  </g>
+</svg>

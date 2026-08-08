@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Cadence">
+  <title>Cadence logomark (mono, for dark backgrounds)</title>
+  <g fill="#FFFFFF">
+    <rect x="74"  y="266" width="64" height="150" rx="32"/>
+    <rect x="174" y="186" width="64" height="230" rx="32"/>
+    <rect x="274" y="96"  width="64" height="320" rx="32"/>
+    <rect x="374" y="216" width="64" height="200" rx="32"/>
+    <circle cx="406" cy="154" r="34"/>
+  </g>
+</svg>

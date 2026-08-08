@@ -1,22 +1,52 @@
 .app {
-  max-width: 40rem;
+  max-width: 44rem;
   margin: 0 auto;
-  padding: 4rem 1.5rem;
+  padding: var(--space-24) var(--space-6);
   text-align: center;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+}
+
+.brand-mark {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
 .app h1 {
-  font-size: 3rem;
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-5xl);
   margin: 0;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--tracking-tight);
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .tagline {
-  font-size: 1.25rem;
-  opacity: 0.85;
+  font-size: var(--font-size-lg);
+  color: var(--color-text-muted);
+  margin-top: var(--space-4);
+}
+
+.hook {
+  font-family: var(--font-display);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-accent-text);
+  margin-top: var(--space-2);
 }
 
 .status {
-  font-size: 0.95rem;
-  opacity: 0.6;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-subtle);
+  margin-top: var(--space-8);
 }
