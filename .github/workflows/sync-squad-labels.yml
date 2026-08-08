@@ -98,6 +98,17 @@ jobs:
               { name: 'priority:p2', color: 'FBCA04', description: 'Next sprint' }
             ];
 
+            // Status lifecycle for triaged squad work. `status:triage` and `status:ready`
+            // are applied by triage automation; the rest are set by the owning squad/human
+            // as work moves (see .squad/routing.md → "Status lifecycle").
+            const STATUS_LABELS = [
+              { name: 'status:triage', color: 'C5DEF5', description: 'In the squad inbox, awaiting routing' },
+              { name: 'status:ready', color: '0E8A16', description: 'Triaged + assigned to a squad, ready to start' },
+              { name: 'status:in-progress', color: 'FBCA04', description: 'A squad member or PR is actively working this' },
+              { name: 'status:needs-review', color: 'D93F0B', description: 'Work is up for review — human gate' },
+              { name: 'status:blocked', color: 'B60205', description: 'Cannot proceed — dependency or decision needed' }
+            ];
+
             function slugify(t) { return t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
 
             // Ensure the base "squad" triage label exists
@@ -122,11 +133,12 @@ jobs:
               });
             }
 
-            // Add go:, release:, type:, priority:, and high-signal labels
+            // Add go:, release:, type:, priority:, status:, and high-signal labels
             labels.push(...GO_LABELS);
             labels.push(...RELEASE_LABELS);
             labels.push(...TYPE_LABELS);
             labels.push(...PRIORITY_LABELS);
+            labels.push(...STATUS_LABELS);
             labels.push(...SIGNAL_LABELS);
 
             // Sync labels (create or update)

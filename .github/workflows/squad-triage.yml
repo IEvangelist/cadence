@@ -201,6 +201,16 @@ jobs:
               labels: ['go:needs-research']
             });
 
+            // Mark the issue triaged + assigned → ready for the squad to start.
+            // Status stays human-gated from here (in-progress / needs-review are set by
+            // the owning squad; nothing auto-executes). See .squad/routing.md.
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              labels: ['status:ready']
+            });
+
             // Auto-assign @copilot if enabled
             if (isCopilot && copilotAutoAssign) {
               try {

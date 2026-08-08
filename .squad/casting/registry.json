@@ -29,6 +29,48 @@
       "persistent_name": "docs",
       "universe": "preset:default",
       "status": "active"
+    },
+    "brand": {
+      "created_at": "2026-08-08T02:17:29.421Z",
+      "persistent_name": "brand",
+      "universe": "team-of-teams",
+      "status": "active"
+    },
+    "frontend": {
+      "created_at": "2026-08-08T02:17:29.421Z",
+      "persistent_name": "frontend",
+      "universe": "team-of-teams",
+      "status": "active"
+    },
+    "backend": {
+      "created_at": "2026-08-08T02:17:29.421Z",
+      "persistent_name": "backend",
+      "universe": "team-of-teams",
+      "status": "active"
+    },
+    "ai": {
+      "created_at": "2026-08-08T02:17:29.421Z",
+      "persistent_name": "ai",
+      "universe": "team-of-teams",
+      "status": "active"
+    },
+    "realtime": {
+      "created_at": "2026-08-08T02:17:29.421Z",
+      "persistent_name": "realtime",
+      "universe": "team-of-teams",
+      "status": "active"
+    },
+    "devops": {
+      "created_at": "2026-08-08T02:17:29.421Z",
+      "persistent_name": "devops",
+      "universe": "team-of-teams",
+      "status": "active"
+    },
+    "tester": {
+      "created_at": "2026-08-08T02:17:29.421Z",
+      "persistent_name": "tester",
+      "universe": "team-of-teams",
+      "status": "active"
     }
   }
 }
