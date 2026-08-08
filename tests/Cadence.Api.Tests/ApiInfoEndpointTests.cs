@@ -1,13 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Cadence.Api.Tests;
 
-public class ApiInfoEndpointTests(WebApplicationFactory<Program> factory)
-    : IClassFixture<WebApplicationFactory<Program>>
+public class ApiInfoEndpointTests(CadenceApiFactory factory)
+    : IClassFixture<CadenceApiFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory = factory;
+    private readonly CadenceApiFactory _factory = factory;
 
     [Fact]
     public async Task GetApiInfo_ReturnsOkWithServiceName()

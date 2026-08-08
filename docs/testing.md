@@ -28,7 +28,8 @@ Keep tests **meaningful, not tautological**: assert observable behavior
 |---|---|---|---|
 | Web unit + coverage gate | Vitest + v8 | `apps/web/src/**/*.test.tsx` | `web` |
 | Web e2e smoke | Playwright | `apps/web/e2e/smoke.spec.ts` | `web-e2e` |
-| Web accessibility | Playwright + axe-core | `apps/web/e2e/a11y.spec.ts` | `web-e2e` |
+| Web auth e2e | Playwright | `apps/web/e2e/auth.spec.ts` | `web-e2e` |
+| Web accessibility | Playwright + axe-core | `apps/web/e2e/a11y.spec.ts`, `auth.spec.ts` | `web-e2e` |
 | .NET unit | xUnit | `tests/Cadence.Api.Tests` | `dotnet` |
 | .NET coverage gate | coverlet.msbuild | `tests/Cadence.Api.Tests` | `dotnet-coverage` |
 | .NET integration | Aspire.Hosting.Testing | `tests/Cadence.Api.IntegrationTests` | `dotnet-integration` |
@@ -109,13 +110,33 @@ conditionals is intentionally not gated.
 `tests/Cadence.Api.IntegrationTests` uses `Aspire.Hosting.Testing` to boot the
 real AppHost graph (API + Postgres + Redis + Azurite blob) and asserts the API's
 contract surface — `/health`, `/alive`, `/api/info`, and the OpenAPI document at
-`/openapi/v1.json`. It **requires a container runtime (Docker)** and is tagged
+`/openapi/v1.json`. It also drives a **register → sign in → create project**
+round-trip that proves EF Core migrations apply and a project persists in
+Postgres. It **requires a container runtime (Docker)** and is tagged
 `[Trait("Category", "Integration")]`.
 
 ```bash
 # Docker must be running
 dotnet test tests/Cadence.Api.IntegrationTests -c Release --filter "Category=Integration"
 ```
+
+### Auth & persistence tests
+
+Identity, profile, and Projects behavior is covered by the `dotnet` unit suite
+using `WebApplicationFactory` over a **SQLite in-memory** database (fast, no
+container), including:
+
+- local register/login/logout and `GET /api/auth/me`,
+- passwordless magic-link request → verify (single-use),
+- external OAuth via a **mock provider handler** registered only in the `Testing`
+  environment (no live OAuth secrets), and
+- Projects CRUD **plus an authorization test that user A cannot read or modify
+  user B's projects** (non-owner access returns `404`).
+
+The EF migrations, design-time factory, and the startup migrator are excluded
+from the coverage denominator (`[*]Cadence.Data.Migrations.*` + `[ExcludeFromCodeCoverage]`)
+because they only execute under Postgres and are exercised by the integration
+suite, not the SQLite unit suite.
 
 ## Security & supply-chain gates
 

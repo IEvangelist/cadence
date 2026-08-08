@@ -8,9 +8,17 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <!-- Aspire client integration: wires the Npgsql DbContext to the "cadencedb"
+         resource with health checks, telemetry, and connection resilience. -->
+    <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <!-- External OAuth providers. -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.MicrosoftAccount" />
+    <PackageReference Include="AspNet.Security.OAuth.GitHub" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Cadence.Data\Cadence.Data.csproj" />
     <ProjectReference Include="..\Cadence.ServiceDefaults\Cadence.ServiceDefaults.csproj" />
   </ItemGroup>
 

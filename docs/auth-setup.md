@@ -1,0 +1,188 @@
+# Authentication & identity setup
+
+Cadence uses **ASP.NET Core Identity** (in `Cadence.Api`, backed by Postgres via
+EF Core in `Cadence.Data`) for user accounts. Four sign-in methods are supported:
+
+| Method | How it works |
+|---|---|
+| **Local** email + password | `POST /api/auth/register`, `POST /api/auth/login` |
+| **Passwordless magic link** | `POST /api/auth/magic-link` emails a single-use link → `GET /api/auth/magic-link/verify` |
+| **GitHub** OAuth | `GET /api/auth/external/GitHub` → provider → `GET /api/auth/external/callback` |
+| **Google** OAuth | `GET /api/auth/external/Google` |
+| **Microsoft** OAuth | `GET /api/auth/external/Microsoft` |
+
+Sessions are carried by a **hardened cookie** (`cadence.auth`): `HttpOnly`,
+`SameSite=Lax`, and `Secure` in every environment except Development/Testing
+(which are served over plain HTTP) — so the cookie is never emitted in the clear,
+even behind a TLS-terminating proxy. The API answers unauthorized requests with
+`401`/`403` status codes (never HTML redirects) so the SPA can react. **No secrets
+are committed** — every provider is off until you supply its credentials locally.
+
+## Provider configuration keys
+
+External providers are **opt-in**: each one only registers when *both* its
+`ClientId` and `ClientSecret` are present. With the empty placeholders in
+`appsettings.json`, the API runs with local + magic-link auth only, and
+`GET /api/auth/providers` returns an empty list (so the SPA hides the buttons).
+
+```
+Authentication:Web:BaseUrl            # SPA origin used to build magic-link + redirect URLs
+Authentication:GitHub:ClientId
+Authentication:GitHub:ClientSecret
+Authentication:Google:ClientId
+Authentication:Google:ClientSecret
+Authentication:Microsoft:ClientId
+Authentication:Microsoft:ClientSecret
+```
+
+### Supplying secrets with user-secrets (local dev)
+
+Never put real secrets in `appsettings.json`. Use the .NET **user-secrets** store
+(kept outside the repo, in your user profile):
+
+```bash
+cd src/Cadence.Api
+dotnet user-secrets init            # once
+dotnet user-secrets set "Authentication:GitHub:ClientId"     "<id>"
+dotnet user-secrets set "Authentication:GitHub:ClientSecret" "<secret>"
+dotnet user-secrets set "Authentication:Google:ClientId"     "<id>"
+dotnet user-secrets set "Authentication:Google:ClientSecret" "<secret>"
+dotnet user-secrets set "Authentication:Microsoft:ClientId"     "<id>"
+dotnet user-secrets set "Authentication:Microsoft:ClientSecret" "<secret>"
+```
+
+### Supplying secrets via Aspire parameters (orchestrated run)
+
+When running through `Cadence.AppHost`, the same keys can be supplied as
+[Aspire parameters](https://learn.microsoft.com/dotnet/aspire/fundamentals/external-parameters)
+(which resolve from user-secrets / environment / key vault) and passed to the API
+as environment variables using the double-underscore convention, e.g.
+`Authentication__GitHub__ClientId`. Keep parameter *values* in the AppHost's own
+user-secrets — never in `apphost.json` or source.
+
+## Registering the OAuth apps
+
+Create an OAuth app with each provider and set its **callback URL** to
+`{API origin}/signin-{provider}` (the default path the middleware listens on):
+
+| Provider | Where to register | Callback URL |
+|---|---|---|
+| GitHub | Settings → Developer settings → OAuth Apps | `https://localhost:<api-port>/signin-github` |
+| Google | Google Cloud Console → Credentials → OAuth client ID | `https://localhost:<api-port>/signin-google` |
+| Microsoft | Entra ID → App registrations | `https://localhost:<api-port>/signin-microsoft` |
+
+The API port is assigned by Aspire; check the AppHost dashboard. In production,
+swap `https://localhost:<api-port>` for the deployed API origin.
+
+## Magic-link delivery
+
+The magic-link **sender is a seam** (`IMagicLinkSender`). The default
+`LoggingMagicLinkSender` writes the link to the logs — perfect for local dev and
+integration tests, and it means no email provider or secret is required to try
+passwordless sign-in. Wire a real transactional-email implementation (SendGrid,
+Azure Communication Services, …) by registering it in `AddCadenceIdentity`.
+
+Magic-link tokens are high-entropy, opaque values produced by a dedicated
+**data-protector token provider** (`MagicLinkTokenProvider`) — deliberately *not*
+Identity's `DefaultEmailProvider`, whose tokens are short numeric TOTP codes that
+are feasible to brute-force. Each token embeds a short expiry (15 minutes) and is
+**single-use**: verifying one rotates the user's security stamp, invalidating it.
+The verify endpoint is throttled by a **per-email rate limiter** (normalized email
+partition, `429` when the budget is exceeded), which is the volume control for the
+(already infeasible) guessing of an opaque token.
+
+A failed verify **does not** increment Identity's account-lockout counter. Because
+the endpoint is an unauthenticated `GET`, feeding that shared counter would let an
+attacker who merely knows a victim's email lock the victim out of *both* magic-link
+and password sign-in — a denial-of-service lever that the opaque token + rate
+limiter already make unnecessary. A **successful** magic-link sign-in, conversely,
+resets the failed-attempt count (a legitimate recovery path) and rotates the stamp.
+
+> **Delivery note — link prefetching:** because the link is verified on `GET`,
+> mail-security prefetchers (Outlook SafeLinks, AV scanners) may fetch the URL
+> before the user clicks and, with single-use tokens, consume it so the real click
+> fails. For the MVP the logging/dev sender makes this a non-issue; if you wire a
+> real email sender and see prefetch-consumed tokens, switch to a POST-confirm
+> landing page (render a page on `GET`, then `POST` the token to verify) so passive
+> fetches don't burn the token.
+
+The request endpoint always returns `202 Accepted` whether or not the account
+exists, so it can't be used to enumerate registered emails. It **never creates an
+account** for an unknown address — otherwise an unauthenticated caller could
+mass-create accounts for arbitrary/victim emails (resource exhaustion, email
+squatting) or pre-stage an account for an external-login hijack.
+
+### External-login account linking
+
+When an OAuth sign-in has no existing linked login, Cadence links it to a local
+account with the same email **only when both**: the provider asserts the email is
+verified (the OIDC `email_verified` claim) **and** the local account's own email
+is confirmed. Otherwise the user is redirected to an explicit, authenticated
+linking step (`?auth=error&reason=link-required`). This blocks a pre-account
+hijack where an attacker pre-registers the victim's address and waits for the
+victim's provider sign-in to be silently linked to the attacker's account.
+
+> **GitHub caveat:** GitHub's OAuth userinfo does not emit an `email_verified`
+> claim, so a GitHub sign-in will not auto-link to a pre-existing local account —
+> it requires the explicit linking step. New GitHub accounts are created normally.
+
+## Profiles, tiers & the entitlement seam
+
+Every account has a `UserProfile` (display name, bio, avatar URL) created on
+first sign-in and a **subscription tier** that defaults to `Free`. The tier is
+surfaced as a claim by `TierClaimsPrincipalFactory` and checked through the
+minimal `IEntitlementService` seam:
+
+```csharp
+// Cadence.Data/Entitlements/IEntitlementService.cs
+bool HasEntitlement(ClaimsPrincipal user, string entitlement);
+SubscriptionTier GetTier(ClaimsPrincipal user);
+```
+
+This is **scaffolding only** — there is no billing and no feature-gating yet.
+Effort #8 plugs real entitlement rules into this seam without touching the auth
+or persistence code.
+
+## Data & migrations
+
+`Cadence.Data` owns the EF Core model (`CadenceDbContext : IdentityDbContext`)
+and the Npgsql migrations. The API applies pending migrations at startup against
+the Aspire-wired Postgres database. To add a migration after changing an entity:
+
+```bash
+dotnet tool install --global dotnet-ef            # once, version 10.0.10
+dotnet ef migrations add <Name> \
+  --project src/Cadence.Data --startup-project src/Cadence.Data
+```
+
+The `Cadence.Data` project carries the EF Core **design-time** package and a
+`CadenceDbContextFactory`, so migrations are generated from it directly (no live
+database required). The API remains the runtime startup that applies them.
+
+## Related endpoints
+
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `POST /api/auth/register` | anon | Create a local account and sign in |
+| `POST /api/auth/login` | anon | Local sign in |
+| `POST /api/auth/logout` | user | Sign out |
+| `GET  /api/auth/me` | user | Current identity summary (id, email, display name, tier) |
+| `POST /api/auth/magic-link` | anon | Request a passwordless sign-in link |
+| `GET  /api/auth/magic-link/verify` | anon | Consume a link and sign in |
+| `GET  /api/auth/external/{provider}` | anon | Start an OAuth challenge |
+| `GET  /api/auth/external/callback` | anon | OAuth return leg |
+| `GET  /api/auth/providers` | anon | Names of the wired external providers |
+| `GET/PUT /api/profile` | user | Read / update the signed-in user's profile |
+| `GET/POST/PUT/DELETE /api/projects` | user | Owner-scoped project CRUD (see below) |
+
+### Projects authorization model
+
+Projects are **owned**: every `/api/projects` handler filters by the caller's
+user id, so a user can only list, read, update, or delete their **own** projects.
+Requesting another user's project id returns `404 Not Found` (not `403`, so the
+API doesn't leak the existence of other users' data). Project rows use a
+**composite `{OwnerId, Id}` primary key**, so a client-supplied project id is
+unique *per user* — two users may hold the same id without collision, and the
+create-time existence check is scoped to the owner (no cross-tenant existence
+oracle). This is covered by an integration test asserting user A cannot read or
+modify user B's project.
