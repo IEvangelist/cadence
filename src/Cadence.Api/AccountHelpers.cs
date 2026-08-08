@@ -1,0 +1,74 @@
+using Cadence.Data;
+using Cadence.Data.Entities;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+
+namespace Cadence.Api;
+
+/// <summary>Shared helpers for the auth/profile/project endpoints.</summary>
+internal static class AccountHelpers
+{
+    /// <summary>Token purpose for passwordless magic-link sign-in.</summary>
+    public const string MagicLinkPurpose = "cadence-magic-link";
+
+    /// <summary>Derive a friendly display name from an email local-part.</summary>
+    public static string DeriveDisplayName(string email)
+    {
+        var at = email.IndexOf('@');
+        var local = at > 0 ? email[..at] : email;
+        return string.IsNullOrWhiteSpace(local) ? "Musician" : local;
+    }
+
+    /// <summary>Create the 1:1 profile for a user if it does not yet exist.</summary>
+    public static async Task EnsureProfileAsync(CadenceDbContext db, ApplicationUser user, CancellationToken ct = default)
+    {
+        var exists = await db.Profiles.AnyAsync(p => p.UserId == user.Id, ct);
+        if (exists)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        db.Profiles.Add(new UserProfile
+        {
+            Id = user.Id,
+            UserId = user.Id,
+            DisplayName = string.IsNullOrWhiteSpace(user.DisplayName)
+                ? DeriveDisplayName(user.Email ?? user.UserName ?? user.Id)
+                : user.DisplayName,
+            Tier = SubscriptionTier.Free,
+            CreatedAt = now,
+            UpdatedAt = now,
+        });
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Build the identity summary for a signed-in user.</summary>
+    public static async Task<MeResponse> BuildMeAsync(CadenceDbContext db, ApplicationUser user, CancellationToken ct = default)
+    {
+        var profile = await db.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.UserId == user.Id, ct);
+        var tier = profile?.Tier ?? SubscriptionTier.Free;
+        var displayName = profile?.DisplayName ?? user.DisplayName;
+        return new MeResponse(user.Id, user.Email ?? string.Empty, displayName, tier.ToString());
+    }
+
+    /// <summary>Flatten Identity errors into a validation-problem dictionary.</summary>
+    public static Dictionary<string, string[]> ToValidationErrors(IdentityResult result) =>
+        new()
+        {
+            ["identity"] = result.Errors.Select(e => e.Description).ToArray(),
+        };
+
+    /// <summary>Base URL the SPA is served from, used for post-auth redirects.</summary>
+    public static string WebBaseUrl(IConfiguration configuration) =>
+        configuration["Authentication:Web:BaseUrl"]?.TrimEnd('/') ?? string.Empty;
+
+    /// <summary>Redirect target after a successful browser-based sign-in.</summary>
+    public static string SuccessUrl(IConfiguration configuration) =>
+        $"{WebBaseUrl(configuration)}/?auth=success";
+
+    /// <summary>Redirect target after a failed browser-based sign-in.</summary>
+    public static string FailureUrl(IConfiguration configuration) =>
+        $"{WebBaseUrl(configuration)}/?auth=error";
+}

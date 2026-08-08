@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Cadence.Api/Cadence.Api.csproj" />
     <Project Path="src/Cadence.AppHost/Cadence.AppHost.csproj" />
+    <Project Path="src/Cadence.Data/Cadence.Data.csproj" />
     <Project Path="src/Cadence.ServiceDefaults/Cadence.ServiceDefaults.csproj" />
   </Folder>
   <Folder Name="/tests/">

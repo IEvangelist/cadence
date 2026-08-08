@@ -48,5 +48,61 @@ public class AppHostIntegrationTests
         Assert.Contains("/api/info", document);
     }
 
+    [Fact]
+    public async Task Register_then_create_project_persists_against_real_postgres()
+    {
+        var appHost = await DistributedApplicationTestingBuilder
+            .CreateAsync<Projects.Cadence_AppHost>();
+
+        await using var app = await appHost.BuildAsync();
+        await app.StartAsync();
+
+        await app.ResourceNotifications
+            .WaitForResourceHealthyAsync("api")
+            .WaitAsync(ReadyTimeout);
+
+        // A cookie-aware client so the auth cookie set by /register flows into the
+        // subsequent authorized /projects calls. Reaching the DB proves the
+        // startup EF Core migrations applied to the real Postgres instance.
+        var baseAddress = app.GetEndpoint("api");
+        using var handler = new HttpClientHandler
+        {
+            UseCookies = true,
+            CookieContainer = new CookieContainer(),
+            AllowAutoRedirect = false,
+        };
+        using var client = new HttpClient(handler) { BaseAddress = baseAddress };
+
+        var register = await client.PostAsJsonAsync("/api/auth/register", new
+        {
+            email = "integration.user@example.com",
+            password = "Passw0rd!",
+            displayName = "Integration User",
+        });
+        Assert.Equal(HttpStatusCode.OK, register.StatusCode);
+
+        var create = await client.PostAsJsonAsync("/api/projects", new
+        {
+            name = "Persisted Song",
+            schemaVersion = 1,
+            data = "{\"tracks\":[]}",
+        });
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        var created = await create.Content.ReadFromJsonAsync<ProjectDto>();
+        Assert.Equal("Persisted Song", created!.Name);
+
+        // Read it back through a fresh request to confirm it round-tripped to Postgres.
+        var fetched = await client.GetFromJsonAsync<ProjectDto>($"/api/projects/{created.Id}");
+        Assert.Equal(created.Id, fetched!.Id);
+        Assert.Equal("Persisted Song", fetched.Name);
+
+        var list = await client.GetFromJsonAsync<List<ProjectSummaryDto>>("/api/projects");
+        Assert.Contains(list!, p => p.Id == created.Id);
+    }
+
     private sealed record ApiInfo(string Service, string Version);
+
+    private sealed record ProjectDto(string Id, string Name, int SchemaVersion, string Data);
+
+    private sealed record ProjectSummaryDto(string Id, string Name, int SchemaVersion);
 }

@@ -14,6 +14,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
@@ -21,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Cadence.Api\Cadence.Api.csproj" />
+    <ProjectReference Include="..\..\src\Cadence.Data\Cadence.Data.csproj" />
   </ItemGroup>
 
   <!--
@@ -28,14 +30,16 @@
     (the dotnet-coverage CI job / local `dotnet test /p:CollectCoverage=true`).
     .NET minimal-API endpoints are emitted by a source generator as
     [GeneratedCode]; excluding generated/compiler code makes the gate reflect
-    hand-written product code. Line+method coverage must stay >= 80% (currently
-    ~99%/100%); branch coverage on infrastructure conditionals is intentionally
-    not gated. See docs/testing.md.
+    hand-written product code. EF Core migrations are hand-written but represent
+    Postgres DDL that never executes under the SQLite unit-test provider, so they
+    are excluded from the gate (they are exercised by the integration tests
+    against real Postgres). Line+method coverage must stay >= 80%. See docs/testing.md.
   -->
   <PropertyGroup Condition="'$(CollectCoverage)' == 'true'">
     <CoverletOutputFormat>cobertura</CoverletOutputFormat>
     <CoverletOutput>./TestResults/</CoverletOutput>
     <ExcludeByAttribute>Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute</ExcludeByAttribute>
+    <Exclude>[*]Cadence.Data.Migrations.*</Exclude>
     <Threshold>80</Threshold>
     <ThresholdType>line,method</ThresholdType>
     <ThresholdStat>total</ThresholdStat>
