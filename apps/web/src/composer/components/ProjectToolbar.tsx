@@ -41,8 +41,12 @@ export function ProjectToolbar({ controller, download = defaultDownload }: Proje
 
   const handleImport = async (file: File | undefined): Promise<void> => {
     if (!file) return
-    const bytes = await file.arrayBuffer()
-    importMidi(bytes, file.name.replace(/\.midi?$/i, ''))
+    try {
+      const bytes = await file.arrayBuffer()
+      importMidi(bytes, file.name.replace(/\.midi?$/i, ''))
+    } catch {
+      // importMidi surfaces parse errors itself; this guards the file read.
+    }
   }
 
   const handleExport = (): void => {

@@ -67,11 +67,28 @@ describe('migrateProject', () => {
     })
     const note = project.tracks[0].notes[0]
     expect(project.tracks[0].instrumentId).toBe('poly-synth')
-    expect(note.pitch).toBe(999) // rounded but not clamped here; engine clamps at play
+    // Pitch is rounded but not range-clamped on load; only MIDI export clamps
+    // pitch to 0–127 (the synth path passes the raw pitch straight through).
+    expect(note.pitch).toBe(999)
     expect(note.start).toBe(0)
     expect(note.duration).toBeGreaterThan(0)
     expect(note.velocity).toBe(1)
     expect(project.tempo).toBe(DEFAULT_TEMPO)
+  })
+
+  it('clamps a corrupted tempo into the playable range', () => {
+    // Tempo 0 would make 60/bpm durations Infinity and freeze the playhead.
+    expect(migrateProject({ tempo: 0 }).tempo).toBe(20)
+    expect(migrateProject({ tempo: -40 }).tempo).toBe(20)
+    expect(migrateProject({ tempo: 5000 }).tempo).toBe(300)
+    // A valid stored tempo is preserved untouched.
+    expect(migrateProject({ tempo: 128 }).tempo).toBe(128)
+  })
+
+  it('replaces a non-positive ppq to avoid divide-by-zero tick math', () => {
+    expect(migrateProject({ ppq: 0 }).ppq).toBe(DEFAULT_PPQ)
+    expect(migrateProject({ ppq: -1 }).ppq).toBe(DEFAULT_PPQ)
+    expect(migrateProject({ ppq: 96 }).ppq).toBe(96)
   })
 
   it('supplies a default track when none exist', () => {

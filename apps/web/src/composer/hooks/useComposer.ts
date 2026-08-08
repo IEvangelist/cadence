@@ -290,9 +290,13 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     [store],
   )
   const importMidi = useCallback((bytes: ArrayBuffer, name?: string) => {
-    const project = midiBytesToProject(bytes, { id: newId('project'), name })
-    dispatch({ type: 'load-project', project })
-    setStatus('Imported MIDI')
+    try {
+      const project = midiBytesToProject(bytes, { id: newId('project'), name })
+      dispatch({ type: 'load-project', project })
+      setStatus('Imported MIDI')
+    } catch {
+      setStatus("Couldn't import that file — is it a valid MIDI file?")
+    }
   }, [])
   const exportMidi = useCallback(() => {
     setStatus('Exported MIDI')

@@ -31,6 +31,13 @@ const INSTRUMENT_IDS: InstrumentId[] = ['poly-synth', 'fm-synth', 'drum-kit']
 const num = (value: unknown, fallback: number): number =>
   typeof value === 'number' && Number.isFinite(value) ? value : fallback
 
+const clamp = (value: number, min: number, max: number): number =>
+  Math.min(max, Math.max(min, value))
+
+/** Playable tempo range (matches the reducer's `set-tempo` clamp). */
+const MIN_TEMPO = 20
+const MAX_TEMPO = 300
+
 const str = (value: unknown, fallback: string): string =>
   typeof value === 'string' ? value : fallback
 
@@ -92,12 +99,18 @@ export function migrateProject(data: unknown): Project {
     num(raw.lengthBeats, Math.ceil(noteEnd / BEATS_PER_BAR) * BEATS_PER_BAR),
   )
 
+  // Clamp tempo/ppq so a corrupted or hand-edited document can never produce
+  // Infinity durations (tempo 0) or divide-by-zero tick math (ppq 0) at play.
+  const tempo = clamp(num(raw.tempo, DEFAULT_TEMPO), MIN_TEMPO, MAX_TEMPO)
+  const rawPpq = num(raw.ppq, DEFAULT_PPQ)
+  const ppq = rawPpq > 0 ? rawPpq : DEFAULT_PPQ
+
   return {
     schemaVersion: SCHEMA_VERSION,
     id: str(raw.id, newId('project')),
     name: str(raw.name, 'Untitled'),
-    tempo: num(raw.tempo, DEFAULT_TEMPO),
-    ppq: num(raw.ppq, DEFAULT_PPQ),
+    tempo,
+    ppq,
     lengthBeats,
     loop: coerceLoop(raw.loop, lengthBeats),
     tracks: tracks.length > 0 ? tracks : coerceTrackless(),

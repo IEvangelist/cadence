@@ -202,6 +202,18 @@ describe('useComposer', () => {
     expect(hook.result.current.status).toBe('Imported MIDI')
   })
 
+  it('surfaces a friendly status when importing a non-MIDI file', () => {
+    const { hook } = setup()
+    const before = hook.result.current.project.id
+    const garbage = new Uint8Array([9, 9, 9, 9]).buffer as ArrayBuffer
+    // Must not throw / reject; instead it sets a visible status and keeps state.
+    act(() => hook.result.current.importMidi(garbage, 'bogus'))
+    expect(hook.result.current.status).toBe(
+      "Couldn't import that file — is it a valid MIDI file?",
+    )
+    expect(hook.result.current.project.id).toBe(before)
+  })
+
   it('saves explicitly on demand', async () => {
     const { store, hook } = setup()
     await act(async () => {

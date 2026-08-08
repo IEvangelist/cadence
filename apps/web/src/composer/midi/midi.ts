@@ -8,6 +8,7 @@
  */
 import { Midi } from '@tonejs/midi'
 import {
+  DEFAULT_PPQ,
   DEFAULT_TEMPO,
   SCHEMA_VERSION,
   type InstrumentId,
@@ -64,13 +65,28 @@ export interface MidiImportOptions {
   name?: string
 }
 
+/** Thrown when bytes cannot be parsed as a Standard MIDI File. */
+export class MidiImportError extends Error {
+  constructor(message = 'Could not parse the file as MIDI') {
+    super(message)
+    this.name = 'MidiImportError'
+  }
+}
+
 /** Parse Standard MIDI File bytes into a project. */
 export function midiBytesToProject(
   bytes: ArrayBuffer | Uint8Array,
   options: MidiImportOptions = {},
 ): Project {
-  const midi = new Midi(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes))
-  const ppq = midi.header.ppq
+  let midi: Midi
+  try {
+    midi = new Midi(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes))
+  } catch (cause) {
+    // @tonejs/midi throws synchronously on empty/truncated/non-MIDI input.
+    throw new MidiImportError(cause instanceof Error ? cause.message : undefined)
+  }
+  // Guard against pathological headers so downstream tick math never divides by 0.
+  const ppq = midi.header.ppq > 0 ? midi.header.ppq : DEFAULT_PPQ
   const tempo = midi.header.tempos[0]?.bpm
   const bpm = tempo && tempo > 0 ? Math.round(tempo) : DEFAULT_TEMPO
 

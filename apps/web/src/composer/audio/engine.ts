@@ -9,6 +9,7 @@
  */
 import * as Tone from 'tone'
 import {
+  type InstrumentId,
   type LoopRegion,
   type Note,
   type Project,
@@ -99,8 +100,11 @@ interface ScheduledEvent {
 
 export class ToneAudioEngine implements AudioEngine {
   private readonly master: ToneOutput
-  private voices: Voice[] = []
-  private parts: Tone.Part<ScheduledEvent>[] = []
+  // Voices and parts are keyed by track id so edits touch only what changed.
+  private readonly voices = new Map<string, Voice>()
+  private readonly parts = new Map<string, Tone.Part<ScheduledEvent>>()
+  // Last-seen instrument per track, to detect when a voice must be rebuilt.
+  private readonly trackInstruments = new Map<string, InstrumentId>()
   private tempo = 120
   private loop: LoopRegion = { enabled: false, start: 0, end: 16 }
   private _state: TransportState = 'stopped'
@@ -141,7 +145,7 @@ export class ToneAudioEngine implements AudioEngine {
       transport.loopStart = beatsToBarsBeatsSixteenths(loop.start)
       transport.loopEnd = beatsToBarsBeatsSixteenths(loop.end)
     }
-    for (const part of this.parts) {
+    for (const part of this.parts.values()) {
       part.loop = loop.enabled
       if (loop.enabled) {
         part.loopStart = beatsToBarsBeatsSixteenths(loop.start)
@@ -150,28 +154,73 @@ export class ToneAudioEngine implements AudioEngine {
     }
   }
 
+  /**
+   * Reconcile the engine with a new project. Instruments are only (re)built when
+   * a track is added or its `instrumentId` changes; when only note data changes
+   * (add/move/resize — potentially ~60×/s during a drag), the existing
+   * `Tone.Part` events are replaced in place so sounding voices are never
+   * disposed mid-play.
+   */
   setProject(project: Project): void {
-    this.disposeVoicesAndParts()
     this.setTempo(project.tempo)
+    const seen = new Set<string>()
 
-    project.tracks.forEach((track) => {
-      const voice = createVoice(track, this.master)
-      this.voices.push(voice)
-      if (track.muted || track.notes.length === 0) return
+    for (const track of project.tracks) {
+      seen.add(track.id)
+      const voiceIsStale =
+        !this.voices.has(track.id) ||
+        this.trackInstruments.get(track.id) !== track.instrumentId
 
-      const events: ScheduledEvent[] = track.notes.map((note) => ({
-        time: beatsToBarsBeatsSixteenths(note.start),
-        note,
-      }))
-      const part = new Tone.Part<ScheduledEvent>((time, event) => {
-        const duration = beatsToSeconds(event.note.duration, this.tempo)
-        voice.trigger(event.note.pitch, duration, time, event.note.velocity)
-      }, events)
-      part.start(0)
-      this.parts.push(part)
-    })
+      if (voiceIsStale) {
+        this.voices.get(track.id)?.dispose()
+        this.voices.set(track.id, createVoice(track, this.master))
+        this.trackInstruments.set(track.id, track.instrumentId)
+      }
+      // Rebuild the part only when the voice changed (so its callback binds the
+      // new voice); otherwise just replace the scheduled events.
+      this.reschedule(track, this.voices.get(track.id)!, voiceIsStale)
+    }
+
+    // Drop voices/parts for tracks that no longer exist.
+    for (const id of [...this.voices.keys()]) {
+      if (seen.has(id)) continue
+      this.parts.get(id)?.dispose()
+      this.parts.delete(id)
+      this.voices.get(id)?.dispose()
+      this.voices.delete(id)
+      this.trackInstruments.delete(id)
+    }
 
     this.setLoop(project.loop)
+  }
+
+  private reschedule(track: Track, voice: Voice, rebuild: boolean): void {
+    const existing = this.parts.get(track.id)
+    if (track.muted || track.notes.length === 0) {
+      existing?.dispose()
+      this.parts.delete(track.id)
+      return
+    }
+
+    const events: ScheduledEvent[] = track.notes.map((note) => ({
+      time: beatsToBarsBeatsSixteenths(note.start),
+      note,
+    }))
+
+    if (existing && !rebuild) {
+      // Only note data changed: swap the events without touching the instrument.
+      existing.clear()
+      for (const event of events) existing.add(event.time, event)
+      return
+    }
+
+    existing?.dispose()
+    const part = new Tone.Part<ScheduledEvent>((time, event) => {
+      const duration = beatsToSeconds(event.note.duration, this.tempo)
+      voice.trigger(event.note.pitch, duration, time, event.note.velocity)
+    }, events)
+    part.start(0)
+    this.parts.set(track.id, part)
   }
 
   async play(): Promise<void> {
@@ -205,6 +254,9 @@ export class ToneAudioEngine implements AudioEngine {
   }
 
   previewNote(track: Track, pitch: number, durationBeats = 0.5): void {
+    // Auditions come from a user gesture, so it is safe (and required on first
+    // interaction) to resume the audio context before triggering the voice.
+    void Tone.start()
     const voice = createVoice(track, this.master)
     const duration = beatsToSeconds(durationBeats, this.tempo)
     voice.trigger(pitch, duration, Tone.now(), 0.9)
@@ -213,10 +265,11 @@ export class ToneAudioEngine implements AudioEngine {
   }
 
   private disposeVoicesAndParts(): void {
-    for (const part of this.parts) part.dispose()
-    for (const voice of this.voices) voice.dispose()
-    this.parts = []
-    this.voices = []
+    for (const part of this.parts.values()) part.dispose()
+    for (const voice of this.voices.values()) voice.dispose()
+    this.parts.clear()
+    this.voices.clear()
+    this.trackInstruments.clear()
   }
 
   dispose(): void {

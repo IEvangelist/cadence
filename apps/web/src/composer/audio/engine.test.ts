@@ -26,6 +26,7 @@ const h = vi.hoisted(() => {
     partStart: vi.fn(),
     partDispose: vi.fn(),
     voiceDispose: vi.fn(),
+    synthCreate: vi.fn(),
     startAudio: vi.fn(() => Promise.resolve()),
     parts: [] as Array<{ callback: (time: number, event: unknown) => void; events: unknown[] }>,
   }
@@ -47,6 +48,7 @@ vi.mock('tone', () => {
     voice: unknown
     constructor(voice?: unknown) {
       this.voice = voice
+      h.synthCreate('poly')
     }
     connect() {
       return this
@@ -61,6 +63,9 @@ vi.mock('tone', () => {
   class Synth {}
   class FMSynth {}
   class MembraneSynth {
+    constructor() {
+      h.synthCreate('kick')
+    }
     connect() {
       return this
     }
@@ -72,6 +77,9 @@ vi.mock('tone', () => {
     }
   }
   class NoiseSynth {
+    constructor() {
+      h.synthCreate('noise')
+    }
     connect() {
       return this
     }
@@ -95,6 +103,14 @@ vi.mock('tone', () => {
     }
     start(...args: unknown[]) {
       h.partStart(...args)
+      return this
+    }
+    clear() {
+      this.events = []
+      return this
+    }
+    add(_time: unknown, value: unknown) {
+      this.events.push(value)
       return this
     }
     dispose() {
@@ -273,6 +289,46 @@ describe('ToneAudioEngine scheduling', () => {
     engine.setProject(createEmptyProject('p2'))
     expect(h.partDispose).toHaveBeenCalled()
   })
+
+  it('reuses instruments across note edits and only rebuilds on instrument change', () => {
+    const engine = new ToneAudioEngine()
+    const base = createEmptyProject('p')
+    base.tracks = [createTrack({ instrumentId: 'poly-synth', notes: [] }, 't1')]
+    engine.setProject(base)
+
+    // From here, only note data changes: add, move, then resize the same note.
+    h.synthCreate.mockClear()
+    h.voiceDispose.mockClear()
+
+    const withNote = {
+      ...base,
+      tracks: [{ ...base.tracks[0], notes: [createNote({ pitch: 60, start: 0, duration: 1 }, 'n1')] }],
+    }
+    engine.setProject(withNote)
+    const moved = {
+      ...withNote,
+      tracks: [{ ...withNote.tracks[0], notes: [createNote({ pitch: 62, start: 1, duration: 1 }, 'n1')] }],
+    }
+    engine.setProject(moved)
+    const resized = {
+      ...moved,
+      tracks: [{ ...moved.tracks[0], notes: [createNote({ pitch: 62, start: 1, duration: 2 }, 'n1')] }],
+    }
+    engine.setProject(resized)
+
+    // Note edits must NOT reallocate or dispose the instrument graph.
+    expect(h.synthCreate).not.toHaveBeenCalled()
+    expect(h.voiceDispose).not.toHaveBeenCalled()
+
+    // Changing the track's instrument DOES rebuild the voice.
+    const changed = {
+      ...resized,
+      tracks: [{ ...resized.tracks[0], instrumentId: 'drum-kit' as const }],
+    }
+    engine.setProject(changed)
+    expect(h.synthCreate).toHaveBeenCalled()
+    expect(h.voiceDispose).toHaveBeenCalled()
+  })
 })
 
 describe('ToneAudioEngine position', () => {
@@ -310,6 +366,15 @@ describe('ToneAudioEngine preview + dispose', () => {
     h.voiceDispose.mockClear()
     vi.runAllTimers()
     expect(h.voiceDispose).toHaveBeenCalled()
+  })
+
+  it('resumes the audio context before auditioning a preview', () => {
+    const engine = new ToneAudioEngine()
+    const track = createTrack({ instrumentId: 'poly-synth' }, 't')
+    engine.previewNote(track, 60)
+    // Previews come from a user gesture; the context must resume so first-run
+    // previews are audible without pressing play first.
+    expect(h.startAudio).toHaveBeenCalled()
   })
 
   it('tears everything down on dispose', () => {

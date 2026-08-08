@@ -6,7 +6,7 @@ import {
   createTrack,
   type Project,
 } from '../model/project'
-import { midiBytesToProject, projectToMidiBytes } from './midi'
+import { MidiImportError, midiBytesToProject, projectToMidiBytes } from './midi'
 
 function buildProject(): Project {
   const project = createEmptyProject('p1')
@@ -103,5 +103,16 @@ describe('midiBytesToProject options and edges', () => {
     expect(restored.tracks).toHaveLength(1)
     expect(restored.tracks[0].notes).toEqual([])
     expect(restored.tempo).toBe(empty.tempo)
+  })
+})
+
+describe('midiBytesToProject guards malformed input', () => {
+  it('throws a typed MidiImportError on non-MIDI bytes', () => {
+    const garbage = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(() => midiBytesToProject(garbage)).toThrow(MidiImportError)
+  })
+
+  it('throws a typed MidiImportError on an empty buffer', () => {
+    expect(() => midiBytesToProject(new Uint8Array())).toThrow(MidiImportError)
   })
 })
