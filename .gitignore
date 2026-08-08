@@ -1,0 +1,59 @@
+# ---- Node / web ----
+node_modules/
+dist/
+dist-ssr/
+build/
+.vite/
+*.local
+.eslintcache
+coverage/
+playwright-report/
+test-results/
+.npm/
+
+# ---- .NET ----
+bin/
+obj/
+*.user
+*.suo
+.vs/
+artifacts/
+[Tt]est[Rr]esults/
+*.trx
+*.coverage
+*.nupkg
+
+# ---- Rust / Tauri ----
+apps/desktop/target/
+apps/desktop/**/target/
+Cargo.lock
+
+# ---- Aspire / azd ----
+.azure/
+.aspire/
+aspire-manifest.json
+
+# ---- Env / secrets ----
+.env
+.env.*
+!.env.example
+*.pem
+appsettings.*.Local.json
+secrets.json
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+*.log
+# Squad: ignore runtime state (logs, inbox, sessions)
+# Note: .squad/casting/* is identity and MUST be committed to main, not ignored
+.squad/orchestration-log/
+.squad/log/
+.squad/decisions/inbox/
+.squad/sessions/
+.squad/.scratch/
+.squad/.cache/
+# Squad: SubSquad activation file (local to this machine)
+.squad-workstream

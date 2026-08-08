@@ -1,0 +1,14 @@
+{
+  "name": "cadence",
+  "private": true,
+  "version": "0.0.0",
+  "description": "AI-powered, cross-platform music creation studio (working codename).",
+  "license": "MIT",
+  "workspaces": [
+    "apps/web",
+    "apps/desktop"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}
