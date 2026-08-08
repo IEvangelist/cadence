@@ -3,6 +3,8 @@
   <!-- Lockfile-backed restore for reproducible, auditable .NET builds. -->
   <PropertyGroup>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- Fail CI restores if the committed lock files are out of sync. -->
+    <RestoreLockedMode Condition="'$(ContinuousIntegrationBuild)' == 'true'">true</RestoreLockedMode>
   </PropertyGroup>
 
 </Project>
