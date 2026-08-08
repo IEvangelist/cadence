@@ -1,0 +1,6 @@
+@Cadence.Api_HostAddress = http://localhost:5036
+
+GET {{Cadence.Api_HostAddress}}/api/info/
+Accept: application/json
+
+###
