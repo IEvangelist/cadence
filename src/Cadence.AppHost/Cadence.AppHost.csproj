@@ -6,6 +6,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UserSecretsId>3961be16-eb97-4a53-a5ba-f83676fcd284</UserSecretsId>
+    <!--
+      The Aspire AppHost SDK injects host-RID-specific Dashboard and
+      Orchestration packages (e.g. Aspire.Dashboard.Sdk.win-x64 vs
+      .linux-x64) into the base target of packages.lock.json, keyed to the
+      restoring machine's SDK runtime identifier. A single committed lock file
+      therefore cannot satisfy a locked restore on every OS, so this project
+      opts out of locked mode. Its dependencies remain exact-pinned via Central
+      Package Management, and the lock file is still committed for auditing.
+    -->
+    <RestoreLockedMode>false</RestoreLockedMode>
   </PropertyGroup>
 
   <ItemGroup>
