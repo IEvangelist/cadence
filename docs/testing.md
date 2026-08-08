@@ -140,14 +140,29 @@ The gitleaks ruleset is the built-in default (`[extend] useDefault = true` in
 docs, which intentionally list example secret *patterns* (e.g. the literal
 string `-----BEGIN PRIVATE KEY-----`) rather than real secrets.
 
-### Known, tracked advisory
+### Known, tracked advisories
 
-`npm audit` reports one pre-existing **high** advisory: `nanoid < 3.3.17`
-([GHSA-2v37-7h3g-55p8](https://github.com/advisories/GHSA-2v37-7h3g-55p8))
-pulled in transitively by `vite -> postcss`. `postcss` pins `nanoid ^3.3.16` and
-no patched `3.3.x` release exists, so there is no compatible fix. It is surfaced
-by the informational report and the gate is set at `critical`, so it does not
-block CI. Dependabot will bump it once a compatible fix ships.
+`npm audit` reports a set of pre-existing/tolerated **high** advisories. None is
+`critical`, so the `--audit-level=critical` gate stays green; all are surfaced by
+the informational report and tracked for a future compatible bump.
+
+- **`nanoid < 3.3.17`** ([GHSA-2v37-7h3g-55p8](https://github.com/advisories/GHSA-2v37-7h3g-55p8))
+  pulled in transitively by `vite -> postcss`. `postcss` pins `nanoid ^3.3.16`
+  and no patched `3.3.x` release exists, so there is no compatible fix.
+- **`@magenta/music` audio-resample chain** — `static-eval`, `static-module`,
+  `cwise`, `ndarray-fft`, `ndarray-resample`
+  ([GHSA-x9hc-rw35-f44h](https://github.com/advisories/GHSA-x9hc-rw35-f44h),
+  [GHSA-5mjw-6jrh-hvfq](https://github.com/advisories/GHSA-5mjw-6jrh-hvfq)).
+  `@magenta/music@1.23.1` (the latest release, and the one the in-browser AI
+  assistant depends on) drags these in through its **audio resampling** helpers.
+  The only "fix" `npm audit fix --force` offers is a downgrade to
+  `@magenta/music@1.1.13`, a breaking change — declined. Crucially, these
+  packages are reachable **only** from Magenta's audio path (`core/audio_utils`,
+  used by `Player`/`SoundFont`/DDSP); the assistant imports just
+  `@magenta/music/esm/music_rnn` (MusicRNN), which never loads that chain, so the
+  vulnerable code is not on any runtime path we ship. The `minimist`/`protobufjs`
+  criticals that Magenta would otherwise introduce are pinned out via root
+  `package.json` `overrides` (`minimist 1.2.8`, `protobufjs 7.6.5`).
 
 ## CI notes
 

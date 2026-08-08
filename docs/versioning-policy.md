@@ -39,6 +39,22 @@ Currently pinned (Phase 0):
 - Commit `package-lock.json`; CI uses `npm ci` (integrity hashes enforce the pin).
 - No `^`/`~` drift in production deps where avoidable.
 
+### Exception: `@tensorflow/tfjs` pinned to 2.8.6 (not latest 4.x)
+
+The in-browser AI assistant (`apps/web/src/composer/ai`) uses `@magenta/music`
+`1.23.1` — the **latest** published Magenta — which constrains its tfjs peer to
+`^2.7.0`. So `@tensorflow/tfjs@2.8.6` (+ `@tensorflow/tfjs-backend-webgl@2.8.6`)
+is the **latest tfjs that is compatible with the latest Magenta**; adopting
+tfjs 4.x would break Magenta's model loading. This is a deliberate, tracked
+deviation from "always latest".
+
+Magenta.js is effectively unmaintained, so this pin will not move on its own. The
+typed `CompositionAssistant` provider seam (`apps/web/src/composer/ai/types.ts`)
+exists precisely so we can migrate to a modern client-side model runtime, or add
+a server-side premium provider, later — without touching the assistant UI. Until
+then, `2.8.6` is intentional and Dependabot bumps of tfjs past the Magenta peer
+range should be declined.
+
 ## .NET (src, tests)
 
 - **Central Package Management**: versions live in `Directory.Packages.props`

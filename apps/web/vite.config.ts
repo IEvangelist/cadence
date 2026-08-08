@@ -1,10 +1,40 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
+
+/**
+ * Replace Magenta's `core/compat/global.js` with its already browser/worker-safe
+ * sibling `global_browser.js`.
+ *
+ * The stock `global.js` branches on a Node check and statically references
+ * `require('node-fetch')` and `window`, which breaks bundling (node-fetch is a
+ * dev-only dep) and the Web Worker (no `window`). `global_browser.js` reads the
+ * global object via `globalThis`/`self` fallback, so redirecting to it makes the
+ * MusicRNN import bundle cleanly for both the main thread and the worker.
+ */
+function magentaGlobalShim(): Plugin {
+  const target = '@magenta/music/esm/core/compat/global.js'
+  return {
+    name: 'cadence:magenta-global-shim',
+    enforce: 'pre',
+    load(id) {
+      const normalized = id.split('?')[0].replace(/\\/g, '/')
+      if (normalized.endsWith(target)) {
+        return "export { fetch, performance, navigator, isSafari, getOfflineAudioContext } from './global_browser'"
+      }
+      return null
+    },
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [magentaGlobalShim(), react()],
+  worker: {
+    format: 'es',
+    // The worker bundles Magenta/tfjs; it needs the same global shim.
+    plugins: () => [magentaGlobalShim()],
+  },
   test: {
     environment: 'jsdom',
     setupFiles: './src/setupTests.ts',
@@ -22,6 +52,11 @@ export default defineConfig({
         'src/setupTests.ts',
         'src/**/*.test.{ts,tsx}',
         'src/**/*.d.ts',
+        // Magenta/tfjs integration runs in a Web Worker and downloads real model
+        // checkpoints — it can't run under jsdom/coverage, so it's exercised via
+        // the deterministic mock provider + e2e instead.
+        'src/composer/ai/assistant.worker.ts',
+        'src/composer/ai/magentaProvider.ts',
       ],
       // CI-enforced gate: the run fails if coverage drops below these.
       thresholds: {

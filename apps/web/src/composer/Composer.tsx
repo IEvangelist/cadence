@@ -1,18 +1,23 @@
 import { type UseComposerOptions, useComposer } from './hooks/useComposer'
+import { type UseAssistantOptions, useAssistant } from './hooks/useAssistant'
 import { ProjectToolbar } from './components/ProjectToolbar'
 import { TransportBar } from './components/TransportBar'
 import { TrackPanel } from './components/TrackPanel'
+import { AssistantPanel } from './components/AssistantPanel'
 import { PianoRoll } from './components/PianoRoll'
 import './Composer.css'
 
 interface ComposerProps {
   /** Injectable engine/store/project — used by tests; defaults power the app. */
   options?: UseComposerOptions
+  /** Injectable AI provider — used by tests/e2e; defaults to the factory. */
+  assistantOptions?: UseAssistantOptions
 }
 
 /** The flagship composing surface: toolbar, transport, tracks, and piano roll. */
-export function Composer({ options }: ComposerProps = {}) {
+export function Composer({ options, assistantOptions }: ComposerProps = {}) {
   const controller = useComposer(options)
+  const assistant = useAssistant(controller, assistantOptions)
   const { project, audioReady, loadDemo } = controller
   const isEmpty = project.tracks.every((track) => track.notes.length === 0)
 
@@ -34,8 +39,11 @@ export function Composer({ options }: ComposerProps = {}) {
       )}
 
       <div className="composer-body">
-        <TrackPanel controller={controller} />
-        <PianoRoll controller={controller} />
+        <div className="composer-sidebar">
+          <TrackPanel controller={controller} />
+          <AssistantPanel assistant={assistant} />
+        </div>
+        <PianoRoll controller={controller} previewNotes={assistant.previewNotes} />
       </div>
 
       {!audioReady && (
