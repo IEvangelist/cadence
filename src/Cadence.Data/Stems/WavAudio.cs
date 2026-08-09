@@ -100,6 +100,64 @@ public static class WavAudio
         return Decode(buffer.GetBuffer().AsSpan(0, (int)buffer.Length));
     }
 
+    /// <summary>
+    /// Cheaply estimate a 16-bit PCM WAV's duration from its header chunks without
+    /// decoding any samples. Returns <see langword="false"/> for anything that is not
+    /// a parseable PCM WAV, so callers can fall back to the raw size cap.
+    /// </summary>
+    public static bool TryGetDurationSeconds(ReadOnlySpan<byte> wav, out double seconds)
+    {
+        seconds = 0;
+        if (wav.Length < 12 ||
+            !wav[..4].SequenceEqual("RIFF"u8) ||
+            !wav.Slice(8, 4).SequenceEqual("WAVE"u8))
+        {
+            return false;
+        }
+
+        int channels = 0, sampleRate = 0, bitsPerSample = 0;
+        long dataBytes = -1;
+        var pos = 12;
+        while (pos + 8 <= wav.Length)
+        {
+            var chunkId = wav.Slice(pos, 4);
+            var chunkSize = BinaryPrimitives.ReadInt32LittleEndian(wav.Slice(pos + 4, 4));
+            var body = pos + 8;
+            if (chunkSize < 0)
+            {
+                return false;
+            }
+
+            if (chunkId.SequenceEqual("fmt "u8) && body + 16 <= wav.Length)
+            {
+                channels = BinaryPrimitives.ReadInt16LittleEndian(wav.Slice(body + 2, 2));
+                sampleRate = BinaryPrimitives.ReadInt32LittleEndian(wav.Slice(body + 4, 4));
+                bitsPerSample = BinaryPrimitives.ReadInt16LittleEndian(wav.Slice(body + 14, 2));
+            }
+            else if (chunkId.SequenceEqual("data"u8))
+            {
+                // The declared size may overrun a truncated buffer; clamp to reality.
+                dataBytes = Math.Min(chunkSize, wav.Length - body);
+            }
+
+            pos = body + chunkSize + (chunkSize & 1);
+        }
+
+        if (channels <= 0 || sampleRate <= 0 || bitsPerSample <= 0 || dataBytes < 0)
+        {
+            return false;
+        }
+
+        var byteRate = (long)sampleRate * channels * (bitsPerSample / 8);
+        if (byteRate <= 0)
+        {
+            return false;
+        }
+
+        seconds = dataBytes / (double)byteRate;
+        return true;
+    }
+
     /// <summary>Encode <see cref="PcmAudio"/> as a 16-bit PCM WAV byte array.</summary>
     public static byte[] Encode(PcmAudio audio)
     {

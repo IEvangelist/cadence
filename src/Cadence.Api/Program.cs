@@ -43,6 +43,9 @@ builder.AddCadenceIdentity();
 // Entitlement catalog + Stripe billing seams (checkout, portal, webhook).
 builder.AddCadenceBilling();
 
+// Stem separation: options + (outside Testing) Blob-backed stem storage.
+builder.AddCadenceStems();
+
 var app = builder.Build();
 
 // Maps /health and /alive (Development only). See ServiceDefaults.
@@ -77,6 +80,7 @@ app.MapCadenceAuth();
 app.MapCadenceProfile();
 app.MapCadenceProjects();
 app.MapCadenceBilling();
+app.MapCadenceStems();
 
 app.Run();
 
