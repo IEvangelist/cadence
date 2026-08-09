@@ -36,3 +36,33 @@ Run from `apps/desktop`:
 
 - Exact crate versions pinned in `src-tauri/Cargo.toml`; `Cargo.lock` committed.
 - Toolchain channel pinned via `src-tauri/rust-toolchain.toml`.
+
+## Content Security Policy
+
+Issue #52 hardened the desktop webview, which previously shipped with CSP disabled.
+
+```text
+default-src 'self';
+script-src 'self' 'wasm-unsafe-eval';
+style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+img-src 'self' data: blob:;
+font-src 'self' https://fonts.gstatic.com data:;
+media-src 'self' blob: data:;
+connect-src 'self' ipc: http://ipc.localhost https://storage.googleapis.com;
+worker-src 'self' blob:;
+object-src 'none';
+base-uri 'self';
+frame-ancestors 'self'
+```
+
+- `default-src 'self'` — default to same-origin app assets.
+- `script-src` — same-origin scripts plus `wasm-unsafe-eval` for tfjs/Magenta WASM backends; no `unsafe-eval` needed.
+- `style-src` — React inline styles and the Google Fonts stylesheet.
+- `img-src` — same-origin icons plus `data:`/`blob:` generated images.
+- `font-src` — same-origin fonts, Google Fonts files, and `data:` fonts.
+- `media-src` — `blob:`/`data:` audio object URLs.
+- `connect-src` — same-origin API, Tauri IPC, and Magenta checkpoints on `storage.googleapis.com`.
+- `worker-src` — same-origin and `blob:` tfjs worker bundles.
+- `object-src`/`base-uri`/`frame-ancestors` — hardening: no plugins, same-origin base URLs, same-origin embedding.
+
+`devCsp` additionally allows `ws://localhost:5173`, `http://localhost:5173`, and inline scripts for the Vite dev server / HMR.
