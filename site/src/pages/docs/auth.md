@@ -102,9 +102,14 @@ bool HasEntitlement(ClaimsPrincipal user, string entitlement);
 SubscriptionTier GetTier(ClaimsPrincipal user);
 ```
 
-This is **scaffolding only** — there is no billing or feature-gating yet; a later
-effort plugs real entitlement rules into the seam without touching auth or
-persistence code.
+This is the seam **billing (effort #8) builds on**. The tier is now driven by a
+real **Stripe-backed subscription lifecycle**, and the seam returns a **typed
+entitlement set** per tier — enforced server-authoritatively on the API
+(over-limit or paid-only actions return `402`). Free WAV exports carry a subtle
+audible watermark; paid exports are byte-clean. See the repository's
+[`billing-setup.md`](https://github.com/IEvangelist/cadence/blob/main/docs/billing-setup.md)
+for the provider wiring, entitlements, and enforcement points, and
+[Features](../features/) for the tier-by-tier capability map.
 
 ## Projects authorization model
 

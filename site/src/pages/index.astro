@@ -1,7 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import Mark from '../components/Mark.astro';
 import Icon from '../components/Icon.astro';
+import AppPreview from '../components/AppPreview.astro';
 import { href } from '../lib/href';
 
 const repo = 'https://github.com/IEvangelist/cadence';
@@ -49,27 +49,27 @@ const plans = [
     cta: 'Download Cadence',
     ctaHref: releases,
     features: [
-      'In-browser AI assistant (offline)',
-      'Full composer + piano roll',
+      'Full composer, piano roll & playback',
+      'In-browser AI assistant — 50 generations/day',
       'MIDI & MusicXML import / export',
-      'Local projects, offline-first',
+      'Up to 10 projects, offline-first',
       'Audible watermark on exports',
       'Community support',
     ],
   },
   {
     name: 'Pro',
-    price: '$9',
+    price: '$12',
     cadence: 'per month',
     featured: true,
     cta: 'Start with Pro',
     ctaHref: href('/docs/getting-started/'),
     features: [
       'Everything in Free',
-      'No watermark, hi-fi WAV & MP3 export',
-      'Server-side AI generation',
+      'No watermark — hi-fi WAV & MP3 export',
+      'Unlimited projects & server-side AI',
       'Cloud sync + revision history',
-      'Live collaboration',
+      'Live collaboration (up to 5 seats)',
       'Priority updates',
     ],
   },
@@ -98,7 +98,6 @@ const description =
   <!-- Hero -->
   <section class="hero container">
     <p class="badge"><span class="dot"></span> Every idea, resolved.</p>
-    <Mark id="hero" class="hero-mark" />
     <h1>
       The music studio that helps you
       <span class="text-gradient">land the idea</span>.
@@ -116,6 +115,7 @@ const description =
         <Icon name="book" size={20} /> Read the docs
       </a>
     </div>
+    <AppPreview />
   </section>
 
   <!-- Features -->
