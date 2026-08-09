@@ -18,6 +18,16 @@ updates:
     groups:
       web:
         patterns: ["*"]
+    # Keep TensorFlow.js on the 2.x line. @magenta/music@1.23.1 (the latest
+    # published Magenta) constrains its peer to @tensorflow/tfjs ^2.7.0, so a
+    # major bump (4.x) breaks Magenta model loading in the AI assistant.
+    # Decline these per docs/versioning-policy.md ("Exception: @tensorflow/tfjs
+    # pinned to 2.8.6").
+    ignore:
+      - dependency-name: "@tensorflow/tfjs"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@tensorflow/tfjs-backend-webgl"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: nuget
     directory: /
