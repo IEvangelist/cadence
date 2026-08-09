@@ -29,6 +29,16 @@ updates:
       - dependency-name: "@tensorflow/tfjs-backend-webgl"
         update-types: ["version-update:semver-major"]
 
+  # Isolated landing + docs site (own lockfile, not in the root workspaces).
+  - package-ecosystem: npm
+    directory: /site
+    schedule:
+      interval: weekly
+    versioning-strategy: increase
+    groups:
+      site:
+        patterns: ["*"]
+
   - package-ecosystem: nuget
     directory: /
     schedule:

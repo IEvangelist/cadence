@@ -1,0 +1,79 @@
+# Deploy Cadence to Azure Container Apps via azd (Aspire integration).
+#
+# GATING — this workflow is intentionally isolated from CI so it never runs, and
+# cannot fail, on a pull request or without cloud credentials:
+#   * Trigger is workflow_dispatch ONLY (manual, on a chosen branch).
+#   * It runs in the protected `production` GitHub Environment, so it waits for a
+#     required reviewer and only then can read the Azure secrets/vars below.
+# Because it is never part of the PR check matrix, it can't turn a required check
+# red. See infra/README.md for setup (federated identity, secrets, enabling it).
+name: Deploy (Azure Container Apps)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment_name:
+        description: azd environment name (azd provisions/updates resources under this name)
+        required: false
+        default: cadence-prod
+      location:
+        description: Azure region for provisioning (e.g. eastus2)
+        required: false
+        default: eastus2
+
+# One deploy at a time; never cancel an in-flight provision/deploy.
+concurrency:
+  group: deploy-azure
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # Request the OIDC token used for passwordless (federated) login to Azure.
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Protected environment: configure a required reviewer + the secrets/vars
+    # below in Settings -> Environments -> production. This is the human gate.
+    environment: production
+    env:
+      # Federated identity — no client secret is stored (OIDC). Configure a
+      # federated credential on the app registration for this repo/environment.
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      # azd reads these to provision non-interactively.
+      AZURE_ENV_NAME: ${{ inputs.environment_name }}
+      AZURE_LOCATION: ${{ inputs.location }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # .NET 10 SDK to build the Aspire AppHost that azd packages into images.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install azd
+        uses: Azure/setup-azd@0b7e3a35ab00f2eee7080c845eb39c3f0ebfa553 # v2.4.0
+
+      - name: Sign in to Azure (OIDC federated credential)
+        run: |
+          azd auth login \
+            --client-id "$AZURE_CLIENT_ID" \
+            --federated-credential-provider "github" \
+            --tenant-id "$AZURE_TENANT_ID"
+
+      # Create/select the azd environment so provision/deploy run non-interactively.
+      - name: Select azd environment
+        run: |
+          azd env new "$AZURE_ENV_NAME" --no-prompt \
+            --subscription "$AZURE_SUBSCRIPTION_ID" \
+            --location "$AZURE_LOCATION" \
+          || azd env select "$AZURE_ENV_NAME"
+
+      - name: Provision infrastructure
+        run: azd provision --no-prompt
+
+      - name: Deploy application
+        run: azd deploy --no-prompt

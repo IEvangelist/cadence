@@ -1,0 +1,63 @@
+---
+import Mark from './Mark.astro';
+import { href } from '../lib/href';
+import { docsNav } from '../lib/nav';
+
+const repo = 'https://github.com/IEvangelist/cadence';
+const year = new Date().getFullYear();
+---
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="cols">
+      <div>
+        <a class="brand-link" href={href('/')} aria-label="Cadence home">
+          <Mark id="footer" class="brand-mark" />
+          <span class="brand-name">Cadence</span>
+        </a>
+        <p class="tagline">
+          Every idea, resolved. An AI-powered, cross-platform music creation
+          studio — stupid-easy for newcomers, endlessly extensible for pros.
+        </p>
+      </div>
+
+      <div>
+        <h4>Documentation</h4>
+        <ul>
+          {docsNav.slice(0, 5).map((item) => (
+            <li><a href={href(item.path)}>{item.title}</a></li>
+          ))}
+        </ul>
+      </div>
+
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href={repo} rel="noopener">GitHub repository</a></li>
+          <li><a href={`${repo}/releases`} rel="noopener">Releases</a></li>
+          <li><a href={`${repo}/issues`} rel="noopener">Issues</a></li>
+          <li><a href={href('/docs/self-hosting/')}>Self-hosting</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="legal">
+      &copy; {year} the Cadence authors. Licensed under the MIT License. Cadence
+      is a working codename. Built with a Squad team of teams.
+    </p>
+  </div>
+</footer>
+
+<style>
+  .brand-mark {
+    width: 1.75rem;
+    height: 1.75rem;
+    margin-right: var(--space-2);
+  }
+
+  .brand-name {
+    font-family: var(--font-display);
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-md);
+  }
+</style>

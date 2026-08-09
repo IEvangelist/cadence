@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+# azd project manifest for Cadence.
+#
+# Cadence deploys to Azure Container Apps via the Aspire azd integration: azd
+# reads the .NET Aspire AppHost below and generates the Container Apps
+# environment + one container app per project, provisioning the resources the
+# AppHost models (Postgres, Redis, Azure Blob Storage) — no hand-authored Bicep
+# to drift from the AppHost graph. See infra/README.md for the full flow, the
+# required secrets, and how the CI deploy workflow is gated.
+name: cadence
+services:
+  app:
+    language: dotnet
+    project: ./src/Cadence.AppHost/Cadence.AppHost.csproj
+    host: containerapp

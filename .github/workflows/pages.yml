@@ -1,0 +1,75 @@
+# Build and (conditionally) publish the Cadence landing + docs site to GitHub Pages.
+#
+# GATING — mirrors the repo's "always run, gate the sensitive step on visibility"
+# pattern (see the CodeQL jobs in ci.yml):
+#   * The `build` job ALWAYS runs on push-to-main / dispatch, so a broken site is
+#     caught here (the PR gate lives in ci.yml's `site` job).
+#   * The `deploy` job only runs when Pages is actually available — i.e. the repo
+#     is public OR the `ENABLE_PAGES` repository variable is set to 'true'. On the
+#     private repo with Pages off it is skipped (green), and it lights up
+#     automatically once Pages is enabled. So this never produces a failing check
+#     for lack of Pages.
+# To enable publishing: make the repo public (or set repo variable ENABLE_PAGES
+# = true) and turn on Pages (Settings -> Pages -> Source: GitHub Actions).
+name: Pages (landing + docs)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Allow one concurrent Pages deployment; don't cancel an in-flight publish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  # Always build the isolated site so breakage is caught, and stage the artifact
+  # for the (conditional) deploy job. No Pages permissions needed here.
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - run: npm ci
+      - name: Build site
+        run: npm run build
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site/dist
+
+  # Publish only when Pages is available (public repo OR ENABLE_PAGES=true) and
+  # only on a push to main / manual dispatch. Skipped -> green on the private repo.
+  deploy:
+    needs: build
+    if: >-
+      (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main')
+      && (github.event.repository.visibility == 'public' || vars.ENABLE_PAGES == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
