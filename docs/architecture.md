@@ -63,3 +63,21 @@ The web composer keeps its existing persistence seam: signed out it uses the
 versioned `localStorage` store (offline-first); on sign-in it syncs local-only
 projects up and switches to the remote store. See
 [`auth-setup.md`](auth-setup.md) and [`billing-setup.md`](billing-setup.md).
+
+## Live collaboration
+
+Effort #9 adds opt-in real-time co-editing. The composer project is bound to a
+Yjs (CRDT) document so concurrent edits from multiple clients merge
+deterministically and converge; remote updates are routed through the existing
+`localStorage` sanitize seam before reaching the reducer. Presence (live
+cursors/selections + roster) rides the Yjs awareness protocol.
+
+The relay is a **first-party ASP.NET Core WebSocket endpoint** inside
+`Cadence.Api` (`/api/collab/{projectId}`), not a container — authorization must
+tie each connection *and each message* to the cookie identity (#7) and the
+projects DB. Share links carry a server-persisted role (owner / editor /
+viewer); role is resolved server-side and **viewer document-writes are dropped
+at the message boundary** before fan-out, so read-only access is enforced
+server-authoritatively (fail closed), never by the client. Collaboration is
+inert unless a session is explicitly activated, so single-user behavior is
+unchanged. See [`collaboration.md`](collaboration.md).

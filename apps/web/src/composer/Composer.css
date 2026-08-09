@@ -619,3 +619,136 @@ select:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+
+/* Live-collaboration presence bar */
+.presence-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+}
+
+.presence-status {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.presence-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.presence-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.presence-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.presence-meta {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.presence-name {
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+.presence-cursor {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+.presence-role {
+  margin: 0;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+}
+
+/* Composer top bar: toolbar + share affordance */
+.composer-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.share-project {
+  position: relative;
+}
+
+.share-panel {
+  position: absolute;
+  right: 0;
+  z-index: 20;
+  margin-top: var(--space-2);
+  min-width: 16rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md, 0 8px 24px rgb(0 0 0 / 0.25));
+}
+
+.share-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.share-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.share-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.share-role {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  min-width: 3.5rem;
+}
+
+.share-error {
+  margin: 0;
+  color: var(--color-danger, #c0392b);
+  font-size: var(--font-size-sm);
+}

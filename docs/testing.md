@@ -278,3 +278,50 @@ the same way; the `site` job's `--audit-level=critical` gate stays green.
   packages a single committed lock can't satisfy cross-OS.
 - CodeQL for C# uses `build-mode: manual` (autobuild is unreliable on .NET 10)
   and compiles `Cadence.Api` explicitly so the extractor observes the assemblies.
+
+## Live collaboration (CRDT + presence + authz)
+
+Effort #9's collaboration feature is tested at every layer, security-sensitive
+paths first. See [`collaboration.md`](collaboration.md) for the design.
+
+**Web unit (Vitest)** — `apps/web/src/composer/model/collab/*.test.ts(x)`,
+`components/PresenceBar.test.tsx`, `ShareProjectButton.test.tsx`:
+
+- **Convergence**: two independent `Y.Doc`s apply interleaved/conflicting
+  edits (insert, move, delete notes and tracks) and read back byte-for-byte
+  identical projects — the core CRDT guarantee, asserted directly.
+- **Sanitization**: a crafted remote update carrying out-of-range/`NaN` values
+  is folded in and the reducer only ever sees values the `migrateProject` /
+  `coerceNote` seam permits (a hostile peer cannot inject illegal data).
+- **Offline replay**: updates buffered while "disconnected" exchange on
+  reconnect and both docs converge with no lost edits.
+- **Deferred single-seed**: only the first client to see an empty doc seeds it;
+  joiners adopt without duplicating tracks.
+- **Presence**: awareness add/remove reflects join/leave; the roster renders
+  accessible avatars with WCAG-contrast ink for both hex and `hsl` colors.
+
+**.NET authz (xUnit)** — `tests/Cadence.Api.Tests` (collaboration relay + share
+CRUD). These are the fail-closed access-control assertions:
+
+- A **viewer** connection's document-write frames are **rejected server-side**
+  (dropped in `RelayLoopAsync` via `YProtocol.IsWriteMessage`) and never reach
+  peers; an **editor**/owner write is relayed.
+- Malformed/undecodable frames are treated as writes and dropped for viewers.
+- Unauthenticated upgrades are refused; a share token for a different project
+  does not grant access (`ResolveRoleAsync` returns no role → connection denied).
+- Share CRUD is owner-only. Backend line + method coverage stays ≥ 80%.
+
+**E2E (Playwright + axe)** — `apps/web/e2e/collaboration.spec.ts`, backed by a
+throwaway Node relay fixture (`apps/web/e2e/collab-server.mjs`; a second
+`webServer` in `playwright.config.ts` on `VITE_COLLAB_URL`):
+
+- Two browser contexts edit the same project concurrently; both converge and
+  each sees the other's live presence.
+- A **viewer** link is read-only end-to-end: the viewer's attempted edit leaves
+  the editor's note count unchanged (proving the server gate, not just UI
+  gating).
+- The collaborative composer (presence bar + remote cursors) is **axe-clean**.
+
+Note-adds in the e2e specs use deterministic keyboard input (focus the note
+grid, arrow to an empty pitch row, `Enter`) rather than pixel clicks, and assert
+relative counts so they are robust to the seeded demo project.

@@ -21,6 +21,7 @@ export interface ComposerState {
 
 export type ComposerAction =
   | { type: 'load-project'; project: Project }
+  | { type: 'sync-remote'; project: Project }
   | { type: 'set-project-name'; name: string }
   | { type: 'set-tempo'; tempo: number }
   | { type: 'set-loop'; loop: Partial<LoopRegion> }
@@ -77,6 +78,26 @@ export function composerReducer(
         project: action.project,
         selectedTrackId: action.project.tracks[0]?.id ?? '',
         selectedNoteIds: [],
+      }
+    }
+
+    case 'sync-remote': {
+      // Adopt a converged project from a collaborator without disturbing this
+      // editor's cursor: keep the selected track/notes when they still exist,
+      // otherwise fall back to the first track / drop stale note ids.
+      const project = action.project
+      const selectedTrackId = project.tracks.some((t) => t.id === state.selectedTrackId)
+        ? state.selectedTrackId
+        : (project.tracks[0]?.id ?? '')
+      const liveNoteIds = new Set(
+        project.tracks
+          .find((t) => t.id === selectedTrackId)
+          ?.notes.map((n) => n.id) ?? [],
+      )
+      return {
+        project,
+        selectedTrackId,
+        selectedNoteIds: state.selectedNoteIds.filter((id) => liveNoteIds.has(id)),
       }
     }
 

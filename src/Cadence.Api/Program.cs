@@ -42,6 +42,9 @@ builder.AddCadenceIdentity();
 // Entitlement catalog + Stripe billing seams (checkout, portal, webhook).
 builder.AddCadenceBilling();
 
+// In-memory hub backing the collaboration WebSocket relay (per-project rooms).
+builder.Services.AddSingleton<Cadence.Api.Collaboration.CollabHub>();
+
 var app = builder.Build();
 
 // Maps /health and /alive (Development only). See ServiceDefaults.
@@ -60,6 +63,7 @@ if (!app.Environment.IsEnvironment("Testing"))
 }
 
 app.UseRateLimiter();
+app.UseWebSockets();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -69,6 +73,7 @@ app.MapGet("/api/info", () => new ApiInfo("Cadence.Api", "0.0.0"))
 app.MapCadenceAuth();
 app.MapCadenceProfile();
 app.MapCadenceProjects();
+app.MapCadenceCollaboration();
 app.MapCadenceBilling();
 
 app.Run();

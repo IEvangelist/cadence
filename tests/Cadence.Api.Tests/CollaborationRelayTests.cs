@@ -1,0 +1,176 @@
+using System.Net.Http.Json;
+using System.Net.WebSockets;
+
+namespace Cadence.Api.Tests;
+
+/// <summary>
+/// Server-side authorization tests for the collaboration WebSocket relay. These
+/// are the security-critical assertions for issue #9: the relay must derive each
+/// connection's role from server state and reject a viewer's document writes
+/// <em>server-side</em>, so a read-only collaborator cannot mutate the shared
+/// document even with a tampered client.
+/// </summary>
+public class CollaborationRelayTests(CadenceApiFactory factory) : IClassFixture<CadenceApiFactory>
+{
+    private readonly CadenceApiFactory _factory = factory;
+
+    private static readonly TimeSpan ReceiveTimeout = TimeSpan.FromSeconds(5);
+
+    // y-protocol frames. Awareness (type 1) is always allowed; a sync update
+    // (type 0, sub-type 2) is a document write that viewers must not be able to send.
+    private static byte[] Awareness(byte marker) => [0x01, marker];
+
+    private static byte[] SyncUpdate(byte marker) => [0x00, 0x02, 0x01, marker];
+
+    private static SaveProjectRequest NewProject(string id) =>
+        new(id, "Relay Song", SchemaVersion: 1, Data: "{\"tracks\":[]}");
+
+    private async Task<(HttpClient Client, string Cookie)> RegisterAsync(string email)
+    {
+        // HandleCookies=false so the auth cookie is visible in the response and can
+        // be forwarded onto the WebSocket upgrade request (TestHost has no jar).
+        var client = _factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
+        {
+            HandleCookies = false,
+        });
+        var response = await client.RegisterAsync(email);
+        response.EnsureSuccessStatusCode();
+        var cookie = string.Join("; ", response.Headers.GetValues("Set-Cookie").Select(c => c.Split(';')[0]));
+        client.DefaultRequestHeaders.Add("Cookie", cookie);
+        return (client, cookie);
+    }
+
+    private async Task<string> CreateShareAsync(HttpClient owner, string projectId, string role)
+    {
+        var response = await owner.PostAsJsonAsync(
+            $"/api/projects/{projectId}/shares",
+            new CreateShareLinkRequest(role));
+        response.EnsureSuccessStatusCode();
+        var link = await response.Content.ReadFromJsonAsync<ShareLinkResponse>();
+        return link!.Token;
+    }
+
+    private async Task<WebSocket> ConnectAsync(string cookie, string projectId, string? token)
+    {
+        var wsClient = _factory.Server.CreateWebSocketClient();
+        wsClient.ConfigureRequest = request => request.Headers["Cookie"] = cookie;
+        var uri = new UriBuilder(_factory.Server.BaseAddress)
+        {
+            Path = $"/api/collab/{projectId}",
+            Query = token is null ? string.Empty : $"token={token}",
+        }.Uri;
+        return await wsClient.ConnectAsync(uri, CancellationToken.None);
+    }
+
+    private static Task SendAsync(WebSocket socket, byte[] frame) =>
+        socket.SendAsync(frame, WebSocketMessageType.Binary, endOfMessage: true, CancellationToken.None);
+
+    private static async Task<byte[]> ReceiveAsync(WebSocket socket)
+    {
+        using var cts = new CancellationTokenSource(ReceiveTimeout);
+        var buffer = new byte[64 * 1024];
+        using var stream = new MemoryStream();
+        WebSocketReceiveResult result;
+        do
+        {
+            result = await socket.ReceiveAsync(buffer, cts.Token);
+            stream.Write(buffer, 0, result.Count);
+        }
+        while (!result.EndOfMessage);
+        return stream.ToArray();
+    }
+
+    // Confirm both peers are registered in the room and the broadcast path works,
+    // so subsequent per-frame assertions are deterministic (not racing the join).
+    private static async Task HandshakeAsync(WebSocket first, WebSocket second)
+    {
+        await SendAsync(first, Awareness(0xF1));
+        await SendAsync(second, Awareness(0xF2));
+        Assert.Equal(Awareness(0xF2), await ReceiveAsync(first));
+        Assert.Equal(Awareness(0xF1), await ReceiveAsync(second));
+    }
+
+    [Fact]
+    public async Task Editor_CanWrite_UpdateReachesOtherPeers()
+    {
+        var (owner, _) = await RegisterAsync("relay.owner.a@example.com");
+        await (await owner.PostAsJsonAsync("/api/projects", NewProject("relay-a"))).AssertOkAsync();
+        var editorToken = await CreateShareAsync(owner, "relay-a", "editor");
+        var viewerToken = await CreateShareAsync(owner, "relay-a", "viewer");
+
+        var (editorUser, editorCookie) = await RegisterAsync("relay.editor.a@example.com");
+        var (viewerUser, viewerCookie) = await RegisterAsync("relay.viewer.a@example.com");
+        _ = editorUser;
+        _ = viewerUser;
+
+        using var editor = await ConnectAsync(editorCookie, "relay-a", editorToken);
+        using var viewer = await ConnectAsync(viewerCookie, "relay-a", viewerToken);
+        await HandshakeAsync(editor, viewer);
+
+        // Editors may write: the update must be broadcast to the viewer verbatim.
+        var update = SyncUpdate(0xAB);
+        await SendAsync(editor, update);
+        Assert.Equal(update, await ReceiveAsync(viewer));
+    }
+
+    [Fact]
+    public async Task Viewer_CannotWrite_UpdateIsDroppedServerSide()
+    {
+        var (owner, _) = await RegisterAsync("relay.owner.b@example.com");
+        await (await owner.PostAsJsonAsync("/api/projects", NewProject("relay-b"))).AssertOkAsync();
+        var editorToken = await CreateShareAsync(owner, "relay-b", "editor");
+        var viewerToken = await CreateShareAsync(owner, "relay-b", "viewer");
+
+        var (_, editorCookie) = await RegisterAsync("relay.editor.b@example.com");
+        var (_, viewerCookie) = await RegisterAsync("relay.viewer.b@example.com");
+
+        using var editor = await ConnectAsync(editorCookie, "relay-b", editorToken);
+        using var viewer = await ConnectAsync(viewerCookie, "relay-b", viewerToken);
+        await HandshakeAsync(editor, viewer);
+
+        // The viewer attempts a document write, then an allowed awareness frame.
+        // The relay must DROP the write and forward only the awareness frame, so
+        // the first frame the editor sees is the marker — proving the write never
+        // left the server.
+        await SendAsync(viewer, SyncUpdate(0x66));
+        await SendAsync(viewer, Awareness(0x99));
+        Assert.Equal(Awareness(0x99), await ReceiveAsync(editor));
+    }
+
+    [Fact]
+    public async Task Unauthenticated_Connection_IsRejected()
+    {
+        var (owner, _) = await RegisterAsync("relay.owner.c@example.com");
+        await (await owner.PostAsJsonAsync("/api/projects", NewProject("relay-c"))).AssertOkAsync();
+
+        var wsClient = _factory.Server.CreateWebSocketClient();
+        var uri = new UriBuilder(_factory.Server.BaseAddress) { Path = "/api/collab/relay-c" }.Uri;
+
+        // No auth cookie → the authorization middleware rejects the upgrade (401),
+        // so the handshake never completes.
+        await Assert.ThrowsAnyAsync<Exception>(() => wsClient.ConnectAsync(uri, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Authenticated_NonOwner_WithoutToken_IsForbidden()
+    {
+        var (owner, _) = await RegisterAsync("relay.owner.d@example.com");
+        await (await owner.PostAsJsonAsync("/api/projects", NewProject("relay-d"))).AssertOkAsync();
+
+        var (_, intruderCookie) = await RegisterAsync("relay.intruder.d@example.com");
+
+        // Authenticated, but neither the owner nor a share-token holder → 403,
+        // so the socket is never accepted.
+        await Assert.ThrowsAnyAsync<Exception>(() => ConnectAsync(intruderCookie, "relay-d", token: null));
+    }
+}
+
+internal static class HttpResponseAssertions
+{
+    /// <summary>Ensure a 2xx and return the response, for fluent test setup.</summary>
+    public static Task<HttpResponseMessage> AssertOkAsync(this HttpResponseMessage response)
+    {
+        response.EnsureSuccessStatusCode();
+        return Task.FromResult(response);
+    }
+}

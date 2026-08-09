@@ -19,6 +19,9 @@ public sealed class CadenceDbContext(DbContextOptions<CadenceDbContext> options)
     /// <summary>Persisted composer projects.</summary>
     public DbSet<ProjectEntity> Projects => Set<ProjectEntity>();
 
+    /// <summary>Collaboration share links granting roles on projects.</summary>
+    public DbSet<ProjectShareLink> ProjectShareLinks => Set<ProjectShareLink>();
+
     /// <summary>Per-user billing subscriptions (1:1 with users).</summary>
     public DbSet<Subscription> Subscriptions => Set<Subscription>();
 
@@ -57,6 +60,24 @@ public sealed class CadenceDbContext(DbContextOptions<CadenceDbContext> options)
                 .HasOne(p => p.Owner)
                 .WithMany()
                 .HasForeignKey(p => p.OwnerId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<ProjectShareLink>(share =>
+        {
+            // The opaque token is the primary key (a bearer secret). Each link
+            // references an owner-scoped project via the composite FK and is
+            // cascade-deleted with it, so revoking a project revokes its shares.
+            share.HasKey(s => s.Token);
+            share.Property(s => s.Token).HasMaxLength(128);
+            share.Property(s => s.OwnerId).IsRequired();
+            share.Property(s => s.ProjectId).IsRequired();
+            share.Property(s => s.Role).HasConversion<string>().HasMaxLength(32);
+            share.HasIndex(s => new { s.OwnerId, s.ProjectId });
+            share
+                .HasOne(s => s.Project)
+                .WithMany()
+                .HasForeignKey(s => new { s.OwnerId, s.ProjectId })
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { appName, tagline } from './appInfo'
 import { Composer } from './composer/Composer'
 import { AuthProvider } from './auth/AuthProvider'
@@ -8,6 +8,7 @@ import { useAuth } from './auth/authContext'
 import { PricingPage } from './billing/PricingPage'
 import { useEntitlements } from './billing/useEntitlements'
 import { handleAuthChange, projectStore } from './appStores'
+import { buildCollabConfig } from './composer/model/collab/collabConfig'
 import './auth/auth.css'
 import './App.css'
 
@@ -22,6 +23,19 @@ function AppShell() {
   // Server-authoritative; the client gate is convenience only. Unknown/anonymous
   // defaults to watermarked (the safe free-tier default).
   const watermarkExports = entitlements?.watermarkExports ?? true
+
+  // Opt-in live collaboration parsed from the share link + signed-in identity.
+  // Null (the common case) keeps the composer single-user.
+  const collab = useMemo(
+    () =>
+      buildCollabConfig({
+        search: window.location.search,
+        location: window.location,
+        user: auth.user,
+        relayOverride: import.meta.env?.VITE_COLLAB_URL as string | undefined,
+      }),
+    [auth.user],
+  )
 
   const showProfile = view === 'profile' && authenticated
   const showPricing = view === 'pricing'
@@ -53,7 +67,11 @@ function AppShell() {
       ) : showProfile ? (
         <ProfilePage onClose={() => setView('composer')} />
       ) : (
-        <Composer options={{ store: projectStore, watermarkExports }} />
+        <Composer
+          options={{ store: projectStore, watermarkExports }}
+          collab={collab}
+          canShare={authenticated}
+        />
       )}
     </main>
   )

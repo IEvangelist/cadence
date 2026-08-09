@@ -61,6 +61,10 @@ export default defineConfig({
         // under jsdom. WAV export is covered via encodeWav + an injected mock
         // renderer; this thin Tone binding is exercised in the browser/e2e only.
         'src/composer/audio/offlineRender.ts',
+        // Thin y-websocket network glue (opens a real socket). The binding it
+        // feeds is fully covered via in-memory docs; this factory is exercised
+        // by the e2e collaboration spec against the Node relay harness.
+        'src/composer/model/collab/websocketProvider.ts',
       ],
       // CI-enforced gate: the run fails if coverage drops below these.
       thresholds: {
