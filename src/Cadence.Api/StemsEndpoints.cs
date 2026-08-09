@@ -93,14 +93,28 @@ public static class StemsEndpoints
                 statusCode: StatusCodes.Status400BadRequest);
         }
 
-        // Duration cap (best-effort): for a decodable PCM WAV we know the exact
-        // length; other formats are governed by the size cap and the worker.
-        if (WavAudio.TryGetDurationSeconds(bytes, out var seconds) && seconds > options.MaxDurationSeconds)
+        // A payload that presents as a RIFF/WAVE container must be a parseable PCM
+        // WAV: a malformed one is a client error (400), never an unhandled 500 from
+        // the header scan. For a decodable WAV we also know the exact length and can
+        // enforce the duration cap; other formats are governed by the size cap and
+        // decoded by the worker.
+        if (LooksLikeRiffWave(bytes))
         {
-            return Results.Problem(
-                title: "Audio too long",
-                detail: $"The maximum mix duration is {options.MaxDurationSeconds} seconds.",
-                statusCode: StatusCodes.Status413PayloadTooLarge);
+            if (!WavAudio.TryGetDurationSeconds(bytes, out var seconds))
+            {
+                return Results.Problem(
+                    title: "Malformed audio",
+                    detail: "The WAV upload could not be parsed.",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            if (seconds > options.MaxDurationSeconds)
+            {
+                return Results.Problem(
+                    title: "Audio too long",
+                    detail: $"The maximum mix duration is {options.MaxDurationSeconds} seconds.",
+                    statusCode: StatusCodes.Status413PayloadTooLarge);
+            }
         }
 
         var id = Guid.NewGuid().ToString("N");
@@ -190,6 +204,14 @@ public static class StemsEndpoints
             .Where(p => p.UserId == ownerId)
             .Select(p => (SubscriptionTier?)p.Tier)
             .FirstOrDefaultAsync() ?? SubscriptionTier.Free;
+
+    // A minimal RIFF/WAVE signature check (12-byte header). Used to decide whether an
+    // upload claims to be a WAV, so an unparseable one can be rejected as 400 instead
+    // of silently stored or surfaced as a 500 from the header scan.
+    private static bool LooksLikeRiffWave(ReadOnlySpan<byte> bytes) =>
+        bytes.Length >= 12 &&
+        bytes[..4].SequenceEqual("RIFF"u8) &&
+        bytes.Slice(8, 4).SequenceEqual("WAVE"u8);
 
     private static async Task<byte[]?> ReadCappedAsync(Stream body, long cap, CancellationToken cancellationToken)
     {

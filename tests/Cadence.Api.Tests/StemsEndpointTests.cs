@@ -137,6 +137,47 @@ public class StemsEndpointTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
+    // RIFF/WAVE payloads that present as WAV but cannot be parsed: an overflowing
+    // chunk size (the L1 repro), a truncated fmt chunk, and a missing fmt chunk.
+    public static TheoryData<byte[]> MalformedWavUploads()
+    {
+        byte[] overflowingChunk = [.. "RIFF"u8, 0, 0, 0, 0, .. "WAVE"u8, .. "JUNK"u8, 0xFF, 0xFF, 0xFF, 0x7F];
+        byte[] truncatedFmt = [.. "RIFF"u8, 0, 0, 0, 0, .. "WAVE"u8, .. "fmt "u8, 0x10, 0, 0, 0];
+        byte[] noFmtChunk = [.. "RIFF"u8, 0, 0, 0, 0, .. "WAVE"u8, .. "data"u8, 0x10, 0, 0, 0, 1, 2, 3, 4];
+        return new TheoryData<byte[]> { overflowingChunk, truncatedFmt, noFmtChunk };
+    }
+
+    [Theory]
+    [MemberData(nameof(MalformedWavUploads))]
+    public async Task Create_MalformedWav_Returns400(byte[] payload)
+    {
+        await using var factory = new CadenceApiFactory();
+        var client = factory.CreateClient();
+        var me = await client.RegisterAndReadMeAsync($"stems.malformed.{Guid.NewGuid():N}@example.com");
+        await PromoteToProAsync(factory, me.Id);
+
+        // A malformed WAV must be a 400, never an unhandled 500 from the header scan.
+        var response = await UploadAsync(client, payload);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Create_NonWavAllowedType_Returns202()
+    {
+        await using var factory = new CadenceApiFactory();
+        var client = factory.CreateClient();
+        var me = await client.RegisterAndReadMeAsync("stems.mp3@example.com");
+        await PromoteToProAsync(factory, me.Id);
+
+        // A non-WAV audio payload isn't parsed for duration; it must still be accepted
+        // (governed by the size cap and decoded by the worker), never rejected as 400.
+        byte[] fakeMp3 = [0xFF, 0xFB, 0x90, 0x00, 1, 2, 3, 4, 5, 6, 7, 8];
+        var response = await UploadAsync(client, fakeMp3, contentType: "audio/mpeg", name: "mix.mp3");
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+    }
+
     [Fact]
     public async Task FullLifecycle_UploadProcessListGetDownload()
     {

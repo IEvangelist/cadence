@@ -44,13 +44,14 @@ public static class WavAudio
             var chunkId = wav.Slice(pos, 4);
             var chunkSize = BinaryPrimitives.ReadInt32LittleEndian(wav.Slice(pos + 4, 4));
             var body = pos + 8;
-            if (chunkSize < 0 || body + chunkSize > wav.Length)
+            if (chunkSize < 0 || (long)body + chunkSize > wav.Length)
             {
-                // Tolerate a data chunk whose declared size overruns the buffer.
+                // Tolerate a chunk whose declared size overruns the buffer. The cast
+                // to long keeps a huge declared size from overflowing the comparison.
                 chunkSize = wav.Length - body;
             }
 
-            if (chunkId.SequenceEqual("fmt "u8))
+            if (chunkId.SequenceEqual("fmt "u8) && body + 16 <= wav.Length)
             {
                 var format = BinaryPrimitives.ReadInt16LittleEndian(wav.Slice(body, 2));
                 channels = BinaryPrimitives.ReadInt16LittleEndian(wav.Slice(body + 2, 2));
@@ -67,8 +68,17 @@ public static class WavAudio
                 data = wav.Slice(body, chunkSize);
             }
 
-            // Chunks are word-aligned: an odd size is padded with one byte.
-            pos = body + chunkSize + (chunkSize & 1);
+            // Chunks are word-aligned: an odd size is padded with one byte. Advance
+            // the cursor in long so a huge declared size can't overflow it, and stop
+            // if the next chunk would start past the buffer rather than walking off
+            // the end (which would slice a negative or out-of-range offset).
+            long next = (long)body + chunkSize + (chunkSize & 1);
+            if (next <= pos || next > wav.Length)
+            {
+                break;
+            }
+
+            pos = (int)next;
         }
 
         if (!hasFmt || channels <= 0 || sampleRate <= 0)
@@ -140,7 +150,16 @@ public static class WavAudio
                 dataBytes = Math.Min(chunkSize, wav.Length - body);
             }
 
-            pos = body + chunkSize + (chunkSize & 1);
+            // Advance the cursor in long so a huge declared size can't overflow it
+            // and send the scan slicing a negative or out-of-range offset; treat an
+            // overrunning chunk as end-of-stream.
+            long next = (long)body + chunkSize + (chunkSize & 1);
+            if (next <= pos || next > wav.Length)
+            {
+                break;
+            }
+
+            pos = (int)next;
         }
 
         if (channels <= 0 || sampleRate <= 0 || bitsPerSample <= 0 || dataBytes < 0)
