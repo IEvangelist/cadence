@@ -30,12 +30,22 @@ export interface Preferences {
   aiProviderId: string | null
 }
 
+/**
+ * A prototype-less string map. Preference maps are keyed by untrusted plugin /
+ * command / panel ids, so building them with a null prototype means an id that
+ * equals an `Object.prototype` member (`constructor`, `toString`, ...) can never
+ * read an inherited value and defeat a `map[id]` gate.
+ */
+function emptyIdMap<T>(): Record<string, T> {
+  return Object.create(null) as Record<string, T>
+}
+
 /** The out-of-the-box preferences. */
 export const DEFAULT_PREFERENCES: Preferences = {
   schemaVersion: PREFERENCES_SCHEMA_VERSION,
-  enabledPlugins: {},
-  keybindings: {},
-  panelVisibility: {},
+  enabledPlugins: emptyIdMap<boolean>(),
+  keybindings: emptyIdMap<string>(),
+  panelVisibility: emptyIdMap<boolean>(),
   aiProviderId: null,
 }
 
@@ -44,8 +54,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 /** Keep only `string → boolean` entries from an untrusted record. */
 function coerceBoolMap(value: unknown): Record<string, boolean> {
-  if (!isRecord(value)) return {}
-  const out: Record<string, boolean> = {}
+  const out = emptyIdMap<boolean>()
+  if (!isRecord(value)) return out
   for (const [key, v] of Object.entries(value)) {
     if (typeof v === 'boolean') out[key] = v
   }
@@ -54,8 +64,8 @@ function coerceBoolMap(value: unknown): Record<string, boolean> {
 
 /** Keep only `string → non-empty string` entries from an untrusted record. */
 function coerceStringMap(value: unknown): Record<string, string> {
-  if (!isRecord(value)) return {}
-  const out: Record<string, string> = {}
+  const out = emptyIdMap<string>()
+  if (!isRecord(value)) return out
   for (const [key, v] of Object.entries(value)) {
     if (typeof v === 'string' && v.length > 0) out[key] = v
   }

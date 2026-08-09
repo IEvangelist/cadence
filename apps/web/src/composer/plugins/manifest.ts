@@ -20,8 +20,43 @@ export class PluginManifestError extends Error {
 /** `MAJOR.MINOR.PATCH` with an optional `-prerelease` / `+build` suffix. */
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
 
+/**
+ * Safe id charset: a lowercase alphanumeric start, then up to 63 more lowercase
+ * alphanumerics, dots, dashes, or underscores. Ids are used as plain-object keys
+ * for the enable/keybinding/panel gates, so this deliberately excludes anything
+ * that could shadow an `Object.prototype` member or carry surprising characters.
+ */
+const SAFE_ID = /^[a-z0-9][a-z0-9._-]{0,63}$/
+
+/**
+ * Names that (case-insensitively) collide with `Object.prototype` members. The
+ * charset already blocks most of them, but `constructor`/`prototype` slip through
+ * as plain lowercase words, so they are rejected explicitly. Belt-and-suspenders:
+ * an id must never be usable to reach the prototype chain via `map[id]`.
+ */
+const RESERVED_IDS = new Set([
+  '__proto__',
+  'prototype',
+  'constructor',
+  'hasownproperty',
+  'isprototypeof',
+  'propertyisenumerable',
+  'tolocalestring',
+  'tostring',
+  'valueof',
+])
+
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0
+
+/**
+ * True when `value` is a safe id (see {@link SAFE_ID}) that does not collide with
+ * an `Object.prototype` member. Exported so other seams that key maps by an
+ * untrusted id can reject unsafe values the same way.
+ */
+export function isSafeId(value: unknown): value is string {
+  return typeof value === 'string' && SAFE_ID.test(value) && !RESERVED_IDS.has(value.toLowerCase())
+}
 
 /**
  * Validate an untrusted value into a {@link PluginManifest}. Returns a fresh,
@@ -33,8 +68,11 @@ export function validateManifest(raw: unknown): PluginManifest {
   }
   const m = raw as Record<string, unknown>
 
-  if (!isNonEmptyString(m.id)) {
-    throw new PluginManifestError('Manifest "id" must be a non-empty string')
+  if (!isSafeId(m.id)) {
+    throw new PluginManifestError(
+      'Manifest "id" must be a safe identifier: a lowercase alphanumeric start then ' +
+        'letters, digits, dots, dashes, or underscores (max 64 chars), and not a reserved name',
+    )
   }
   if (!isNonEmptyString(m.name)) {
     throw new PluginManifestError(`Plugin "${m.id}" manifest "name" must be a non-empty string`)

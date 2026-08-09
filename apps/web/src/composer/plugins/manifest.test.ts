@@ -64,4 +64,34 @@ describe('validateManifest', () => {
       /Plugin "acme.x"/,
     )
   })
+
+  // Security: a manifest id is used as a plain-object key for the enable/keybinding
+  // gates, so an id that collides with an Object.prototype member (or carries odd
+  // characters) must be rejected at the door — see isSafeId.
+  it('rejects ids that collide with Object.prototype members', () => {
+    for (const id of [
+      '__proto__',
+      'prototype',
+      'constructor',
+      'hasOwnProperty',
+      'toString',
+      'valueOf',
+    ]) {
+      expect(() => validateManifest({ id, name: 'X', version: '1.0.0' })).toThrow(
+        PluginManifestError,
+      )
+    }
+  })
+
+  it('rejects ids with illegal characters or shape', () => {
+    for (const id of ['Acme', 'a b', 'a/b', 'a:b', '.leading', '-leading', 'a'.repeat(65)]) {
+      expect(() => validateManifest({ id, name: 'X', version: '1.0.0' })).toThrow(/"id"/)
+    }
+  })
+
+  it('accepts safe lowercase, dotted, and dashed ids', () => {
+    for (const id of ['a', 'acme.demo', 'acme.extra-instruments', 'a1._-x']) {
+      expect(validateManifest({ id, name: 'X', version: '1.0.0' }).id).toBe(id)
+    }
+  })
 })
