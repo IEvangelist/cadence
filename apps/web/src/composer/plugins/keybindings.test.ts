@@ -68,3 +68,27 @@ describe('formatKeybinding', () => {
     expect(formatKeybinding('alt+mod+space')).toBe('Ctrl+Alt+Space')
   })
 })
+
+describe('resolveKeybindingMap prototype-safety', () => {
+  // The overrides object is a plain map keyed by untrusted command ids, so it
+  // inherits Object.prototype members. A command whose id equals such a member
+  // (e.g. `toString`) must not read the inherited *function* as a binding — that
+  // would crash `canonicalizeKeybinding` (`fn.split` is not a function).
+  it('does not read an inherited Object.prototype member as an override', () => {
+    const commands: CommandContribution[] = [
+      { id: 'toString', title: 'Danger', keybinding: 'mod+shift+t', run: noop },
+    ]
+    expect(() => resolveKeybindingMap(commands, {})).not.toThrow()
+    const map = resolveKeybindingMap(commands, {})
+    expect(map.get('mod+shift+t')).toBe('toString')
+  })
+
+  it('still honors an own override for a prototype-named command', () => {
+    const commands: CommandContribution[] = [
+      { id: 'toString', title: 'Danger', keybinding: 'mod+shift+t', run: noop },
+    ]
+    const map = resolveKeybindingMap(commands, { toString: 'mod+alt+z' })
+    expect(map.get('mod+alt+z')).toBe('toString')
+    expect(map.has('mod+shift+t')).toBe(false)
+  })
+})

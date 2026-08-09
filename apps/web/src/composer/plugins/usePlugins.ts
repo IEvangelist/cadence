@@ -106,9 +106,12 @@ export function usePlugins(
     const saved = store.load()
     for (const entry of host.list()) {
       if (entry.manifest.builtin) continue
-      const enabled = saved.enabledPlugins[entry.manifest.id] ?? false
-      if (enabled && entry.state !== 'active') host.activate(entry.manifest.id)
-      else if (!enabled && entry.state === 'active') host.dispose(entry.manifest.id)
+      const id = entry.manifest.id
+      // Trust only an own entry: a plugin id equal to an Object.prototype member
+      // must default to disabled rather than reading an inherited truthy value.
+      const enabled = Object.hasOwn(saved.enabledPlugins, id) ? saved.enabledPlugins[id] : false
+      if (enabled && entry.state !== 'active') host.activate(id)
+      else if (!enabled && entry.state === 'active') host.dispose(id)
     }
   }, [host, store])
 
@@ -163,7 +166,7 @@ export function usePlugins(
 
   const keybindingFor = useCallback(
     (commandId: string) =>
-      prefs.keybindings[commandId] ??
+      (Object.hasOwn(prefs.keybindings, commandId) ? prefs.keybindings[commandId] : undefined) ??
       host.commands().find((c) => c.id === commandId)?.keybinding,
     [host, prefs.keybindings],
   )
@@ -199,7 +202,7 @@ export function usePlugins(
   }, [commands, prefs.keybindings, runCommand])
 
   const isPanelVisible = useCallback(
-    (id: string) => prefs.panelVisibility[id] ?? true,
+    (id: string) => (Object.hasOwn(prefs.panelVisibility, id) ? prefs.panelVisibility[id] : true),
     [prefs.panelVisibility],
   )
 

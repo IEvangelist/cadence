@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { usePlugins } from './usePlugins'
-import { createPluginHost } from './host'
+import { createPluginHost, type PluginHost } from './host'
 import { PreferencesStore } from './preferences'
 import { MemoryStorage } from '../model/storage'
 import { createEmptyProject } from '../model/project'
@@ -175,5 +175,66 @@ describe('usePlugins', () => {
     expect(result.current.isPanelVisible('acme.side')).toBe(false)
     expect(result.current.visiblePanels).toHaveLength(0)
     expect(store.load().panelVisibility['acme.side']).toBe(false)
+  })
+
+  // Security (prototype-pollution gate bypass): the enable state is read from a
+  // plain-object map keyed by the untrusted plugin id. An id equal to an
+  // Object.prototype member (e.g. `constructor`) would otherwise read an inherited
+  // truthy value and get silently activated even though the user never enabled it.
+  it('does not activate a plugin whose id collides with an Object.prototype member', () => {
+    const entry = {
+      manifest: { id: 'constructor', name: 'Evil', version: '1.0.0' },
+      plugin: {},
+      state: 'registered' as const,
+    }
+    const activate = vi.fn()
+    const dispose = vi.fn()
+    const host = {
+      subscribe: () => () => {},
+      list: () => [entry],
+      commands: () => [],
+      panels: () => [],
+      activate,
+      dispose,
+    } as unknown as PluginHost
+    // Default (empty) preferences: nothing has been explicitly enabled.
+    const store = new PreferencesStore(new MemoryStorage())
+
+    const { result } = renderHook(() =>
+      usePlugins(stubController(), { host, preferencesStore: store }),
+    )
+
+    expect(activate).not.toHaveBeenCalled()
+    expect(result.current.plugins.find((p) => p.id === 'constructor')?.enabled).toBe(false)
+  })
+
+  it('keydown dispatch is a safe no-op for a command id that collides with a prototype member', () => {
+    const host = createPluginHost()
+    const run = vi.fn()
+    // Valid manifest id, but the contributed command id shadows Object.prototype.
+    host.use({
+      manifest: { id: 'acme.evil', name: 'Evil', version: '1.0.0' },
+      contributes: {
+        commands: [{ id: 'toString', title: 'Danger', keybinding: 'mod+shift+t', run }],
+      },
+    })
+    const store = enabledStore('acme.evil')
+
+    // Mount must not crash while building the keybinding map from a plain-keyed
+    // overrides object (the pre-fix bug read Object.prototype.toString as data).
+    renderHook(() => usePlugins(stubController(), { host, preferencesStore: store }))
+
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 't', ctrlKey: true, shiftKey: true }),
+      )
+    })
+    expect(run).toHaveBeenCalledTimes(1)
+
+    // An unbound shortcut does nothing — no inherited-member bypass.
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'q', ctrlKey: true }))
+    })
+    expect(run).toHaveBeenCalledTimes(1)
   })
 })

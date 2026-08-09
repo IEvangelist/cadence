@@ -54,7 +54,11 @@ export function resolveKeybindingMap(
 ): Map<string, string> {
   const map = new Map<string, string>()
   for (const command of commands) {
-    const raw = overrides[command.id] ?? command.keybinding
+    // `overrides` is a plain map keyed by untrusted command ids; only trust an
+    // own entry so a command id that shadows an Object.prototype member can't read
+    // an inherited value (which would be a function, not a binding string).
+    const override = Object.hasOwn(overrides, command.id) ? overrides[command.id] : undefined
+    const raw = override ?? command.keybinding
     if (!raw) continue
     map.set(canonicalizeKeybinding(raw), command.id)
   }

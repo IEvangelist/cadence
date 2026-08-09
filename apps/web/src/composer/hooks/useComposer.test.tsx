@@ -3,8 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useComposer } from './useComposer'
 import { type AudioEngine, type TransportState } from '../audio/engine'
 import { LocalStorageProjectStore, MemoryStorage } from '../model/storage'
-import { createEmptyProject } from '../model/project'
+import { createEmptyProject, type Project } from '../model/project'
 import { projectToMidiBytes } from '../midi/midi'
+import { defaultPluginHost } from '../plugins/defaultHost'
 
 class FakeEngine implements AudioEngine {
   state: TransportState = 'stopped'
@@ -290,6 +291,75 @@ describe('useComposer — format interop', () => {
     expect(hook.result.current.status).toBe(
       "Couldn't import that file — is it valid MusicXML?",
     )
+  })
+
+  it('routes a plugin importer through the sanitize seam (clamps hostile data)', () => {
+    const { hook } = setup()
+    // A malicious/buggy plugin importer that injects out-of-range and non-finite
+    // values. These must never reach live state unsanitized (mirrors the
+    // MusicXML/projectFile migrateProject clamp).
+    const hostile = {
+      schemaVersion: 999,
+      id: 'p_hostile',
+      name: 'Hostile',
+      tempo: 100000,
+      ppq: 0,
+      lengthBeats: 4,
+      loop: { enabled: false, start: -5, end: -1 },
+      tracks: [
+        {
+          id: 't_hostile',
+          name: 'T',
+          instrumentId: 'poly-synth',
+          muted: false,
+          color: '#ffffff',
+          notes: [
+            { id: 'n1', pitch: 999, start: -3, duration: Number.NaN, velocity: 5 },
+            { id: 'n2', pitch: -10, start: 2, duration: -2, velocity: -1 },
+          ],
+        },
+      ],
+    }
+    const pluginId = 'test.hostile-importer'
+    defaultPluginHost.use({
+      manifest: { id: pluginId, name: 'Hostile Importer', version: '1.0.0' },
+      contributes: {
+        formats: [
+          {
+            id: 'hostile',
+            name: 'Hostile',
+            extension: '.hostile',
+            mimeType: 'text/plain',
+            import: () => hostile as unknown as Project,
+          },
+        ],
+      },
+    })
+
+    try {
+      act(() => hook.result.current.importFormat('hostile', 'ignored', 'Hostile Import'))
+
+      const project = hook.result.current.project
+      const notes = project.tracks.flatMap((t) => t.notes)
+      expect(notes.length).toBeGreaterThan(0)
+      for (const note of notes) {
+        expect(note.pitch).toBeGreaterThanOrEqual(0)
+        expect(note.pitch).toBeLessThanOrEqual(127)
+        expect(Number.isFinite(note.duration)).toBe(true)
+        expect(note.duration).toBeGreaterThan(0)
+        expect(note.start).toBeGreaterThanOrEqual(0)
+        expect(note.velocity).toBeGreaterThanOrEqual(0)
+        expect(note.velocity).toBeLessThanOrEqual(1)
+      }
+      expect(project.tempo).toBeGreaterThanOrEqual(20)
+      expect(project.tempo).toBeLessThanOrEqual(300)
+      expect(project.ppq).toBeGreaterThan(0)
+      expect(project.loop.start).toBeGreaterThanOrEqual(0)
+      expect(project.loop.end).toBeGreaterThanOrEqual(project.loop.start)
+      expect(hook.result.current.status).toBe('Imported Hostile')
+    } finally {
+      defaultPluginHost.unregister(pluginId)
+    }
   })
 
   it('renders WAV bytes via an injected offline renderer', async () => {

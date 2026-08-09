@@ -28,6 +28,7 @@ import {
   type StoredProjectMeta,
   createProjectStore,
 } from '../model/storage'
+import { migrateProject } from '../model/persistence'
 import { midiBytesToProject, projectToMidiBytes } from '../midi/midi'
 import { fileToProject, projectToFile } from '../formats/projectFile'
 import { musicXmlToProject, projectToMusicXml } from '../formats/musicxml'
@@ -454,7 +455,12 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     const format = defaultPluginHost.formats().find((f) => f.id === id)
     if (!format?.import) return
     try {
-      const project = format.import(data, { id: newId('project'), name })
+      const imported = format.import(data, { id: newId('project'), name })
+      // Plugin importers are untrusted: route the result through the same
+      // migrateProject sanitize seam as projectFile/MusicXML/share imports so a
+      // malicious or buggy importer can't inject out-of-range pitches, NaN/negative
+      // durations, or unbounded loop/tempo/ppq values into live state.
+      const project = migrateProject(imported)
       dispatch({ type: 'load-project', project })
       setStatus(`Imported ${format.name}`)
     } catch {
