@@ -33,6 +33,8 @@ Keep tests **meaningful, not tautological**: assert observable behavior
 | .NET unit | xUnit | `tests/Cadence.Api.Tests` | `dotnet` |
 | .NET coverage gate | coverlet.msbuild | `tests/Cadence.Api.Tests` | `dotnet-coverage` |
 | .NET integration | Aspire.Hosting.Testing | `tests/Cadence.Api.IntegrationTests` | `dotnet-integration` |
+| Site accessibility | Playwright + axe-core | `site/tests/a11y.spec.ts` | `site` |
+| Site responsive + links | Playwright | `site/tests/responsive.spec.ts`, `links.spec.ts` | `site` |
 | SAST | CodeQL (js-ts, csharp) | — | `codeql-web`, `codeql-dotnet` |
 | Dependency review | dependency-review-action | — | `dependency-review` |
 | Secret scan | gitleaks | — | `secret-scan` |
@@ -114,6 +116,38 @@ Freemium UI and the free-tier watermark (issue #8) are covered by:
   entitlement-driven UI state and the checkout CTA calling the API (mocked).
 - `e2e/pricing.spec.ts` — Playwright + axe on the pricing page with **mocked**
   billing calls (no live Stripe). See [`billing-setup.md`](billing-setup.md).
+
+### Plugin SDK & extensibility
+
+The Plugin SDK (`apps/web/src/composer/plugins`) generalizes the composer's
+built-in registries (instruments, formats, AI providers, effects) behind one
+typed, in-process host. It is **test-first and adds zero runtime dependencies** —
+manifest validation is hand-rolled in the `persistence.ts` style, so the audit
+surface and `package-lock.json` are unchanged. See [`plugins.md`](plugins.md) for
+the authoring guide and the reference plugin.
+
+- `manifest.test.ts` — `validateManifest` accepts well-formed manifests and throws
+  a typed `PluginManifestError` for each malformed shape (mirrors `MidiImportError`
+  / `ProjectFileError`).
+- `host.test.ts` — register / activate / dispose lifecycle, duplicate-id rejection,
+  `{ override: true }` last-wins, and active-only contribution aggregation.
+- `preferences.test.ts` — versioned localStorage round-trip + migration/coercion of
+  enabled plugins, keybindings, and panel visibility.
+- `builtins/*.test.ts` + `resolveAssistant.test.ts` — the dogfooded built-ins
+  (instruments, formats, AI providers, one effect) resolve **through** the host.
+- `engineEffect.test.ts` — an enabled effect contribution is inserted into the
+  engine's master chain; disabled effects leave the signal path untouched.
+- `keybindings.test.ts`, `usePlugins.test.tsx`, `PluginsPanel.test.tsx` — the React
+  glue: prefs-driven enable/disable, global shortcut dispatch, and the accessible
+  Extensions UI.
+- `examples/helloPlugin.test.tsx` — the reference plugin end to end (instrument +
+  text exporter + command + panel).
+
+`plugins.spec.ts` (Playwright) enables the reference plugin from the production
+build, runs its contributed command, asserts persistence across reload, and scans
+the new UI with axe. The AI worker code-split is preserved: the SDK and its
+built-ins import only `tone` (already in the main chunk), never `@magenta/music`
+or `@tensorflow/tfjs`, so those stay in the worker-loaded chunks.
 
 ## .NET
 
@@ -226,6 +260,11 @@ the informational report and tracked for a future compatible bump.
   vulnerable code is not on any runtime path we ship. The `minimist`/`protobufjs`
   criticals that Magenta would otherwise introduce are pinned out via root
   `package.json` `overrides` (`minimist 1.2.8`, `protobufjs 7.6.5`).
+
+The isolated landing + docs site (`site/`, own lockfile) surfaces the **same**
+`nanoid` advisory through `astro -> vite -> postcss -> nanoid` (5 high, 0
+critical). The only offered fix is a breaking Astro downgrade, so it is tracked
+the same way; the `site` job's `--audit-level=critical` gate stays green.
 
 ## CI notes
 

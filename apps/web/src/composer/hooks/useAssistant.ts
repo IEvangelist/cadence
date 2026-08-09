@@ -12,6 +12,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ComposerController } from './useComposer'
 import { selectedTrack as selectSelectedTrack } from '../model/reducer'
 import { createAssistant } from '../ai/provider'
+import { resolveAssistant } from '../plugins/resolveAssistant'
+import { shouldUseMock } from '../ai/provider'
 import {
   type AssistantAction,
   type AssistantParams,
@@ -26,6 +28,8 @@ import {
 export interface UseAssistantOptions {
   /** Inject a provider (tests/e2e); defaults to the factory-resolved one. */
   provider?: CompositionAssistant
+  /** Preferred provider id (from preferences); ignored when `provider` is set. */
+  preferredProviderId?: string | null
 }
 
 export interface AssistantController {
@@ -75,9 +79,18 @@ export function useAssistant(
   controller: ComposerController,
   options: UseAssistantOptions = {},
 ): AssistantController {
-  const [provider] = useState<CompositionAssistant>(
-    () => options.provider ?? createAssistant(),
-  )
+  const [provider] = useState<CompositionAssistant>(() => {
+    if (options.provider) return options.provider
+    // Honor an explicit provider preference; otherwise fall back to the
+    // environment default (mock in e2e/tests, Magenta in the app).
+    if (options.preferredProviderId) {
+      return resolveAssistant({
+        preferredId: options.preferredProviderId,
+        useMock: shouldUseMock(),
+      })
+    }
+    return createAssistant()
+  })
 
   const [action, setAction] = useState<AssistantAction>('continue')
   const [params, setParams] = useState<AssistantParams>(DEFAULT_PARAMS)

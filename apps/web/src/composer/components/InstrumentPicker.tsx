@@ -1,15 +1,22 @@
 import { useId } from 'react'
 import { type InstrumentId } from '../model/project'
-import { INSTRUMENTS } from '../instruments/registry'
+import { type InstrumentDefinition, listInstruments } from '../instruments/registry'
 
 interface InstrumentPickerProps {
   value: InstrumentId
   onChange: (id: InstrumentId) => void
   label?: string
+  /** Selectable instruments; defaults to the live host list (built-in + plugins). */
+  instruments?: readonly InstrumentDefinition[]
 }
 
 /** A labelled dropdown for choosing a track's instrument from the registry. */
-export function InstrumentPicker({ value, onChange, label = 'Instrument' }: InstrumentPickerProps) {
+export function InstrumentPicker({
+  value,
+  onChange,
+  label = 'Instrument',
+  instruments = listInstruments(),
+}: InstrumentPickerProps) {
   const id = useId()
   return (
     <span className="instrument-picker">
@@ -22,7 +29,7 @@ export function InstrumentPicker({ value, onChange, label = 'Instrument' }: Inst
         value={value}
         onChange={(event) => onChange(event.target.value as InstrumentId)}
       >
-        {INSTRUMENTS.map((instrument) => (
+        {instruments.map((instrument) => (
           <option key={instrument.id} value={instrument.id}>
             {instrument.name}
           </option>

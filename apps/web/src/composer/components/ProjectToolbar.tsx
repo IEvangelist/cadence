@@ -57,6 +57,12 @@ function isProjectFileImport(filename: string, text: string): boolean {
   }
 }
 
+/** Built-in formats handled by the toolbar's own structural import routing. */
+const BUILTIN_FORMAT_IDS = new Set(['musicxml', 'project'])
+
+const fileMatchesExtension = (extension: string, filename: string): boolean =>
+  filename.toLowerCase().endsWith(extension.toLowerCase())
+
 /** Project name + New/Demo/Save/Open plus multi-format import/export and share. */
 export function ProjectToolbar({
   controller,
@@ -73,16 +79,32 @@ export function ProjectToolbar({
     savedProjects,
     importMidi,
     exportMidi,
-    exportMusicXml,
     importMusicXml,
-    exportProjectFile,
     importProjectFile,
     exportWav,
     shareSnapshot,
+    formats,
+    exportFormat,
+    importFormat,
     status,
   } = controller
   const midiRef = useRef<HTMLInputElement>(null)
   const importRef = useRef<HTMLInputElement>(null)
+
+  const exportableFormats = formats.filter((f) => f.export)
+  const pluginImportFormats = formats.filter(
+    (f) => f.import && !BUILTIN_FORMAT_IDS.has(f.id),
+  )
+  const importAccept = [
+    '.cadence',
+    '.cadence.json',
+    '.json',
+    '.xml',
+    '.musicxml',
+    'application/json',
+    'application/xml',
+    ...pluginImportFormats.map((f) => f.extension),
+  ].join(',')
 
   const exportName = (ext: string): string => `${slug(project.name)}${ext}`
 
@@ -101,18 +123,15 @@ export function ProjectToolbar({
   }
 
   const handleExportFormat = async (value: string): Promise<void> => {
-    if (value === 'musicxml') {
-      download(
-        exportMusicXml(),
-        exportName('.musicxml'),
-        'application/vnd.recordare.musicxml+xml',
-      )
-    } else if (value === 'project') {
-      download(exportProjectFile(), exportName('.cadence.json'), 'application/json')
-    } else if (value === 'wav') {
+    if (value === 'wav') {
       const bytes = await exportWav()
       if (bytes) download(bytes, exportName('.wav'), 'audio/wav')
+      return
     }
+    const format = formats.find((f) => f.id === value)
+    if (!format?.export) return
+    const data = exportFormat(value)
+    if (data != null) download(data, exportName(format.extension), format.mimeType)
   }
 
   const handleImportFile = async (file: File | undefined): Promise<void> => {
@@ -121,6 +140,15 @@ export function ProjectToolbar({
     try {
       text = await file.text()
     } catch {
+      return
+    }
+    // Plugin-contributed formats route by file extension; the built-in
+    // project/MusicXML importers keep their structural JSON sniffing below.
+    const pluginFormat = pluginImportFormats.find((f) =>
+      fileMatchesExtension(f.extension, file.name),
+    )
+    if (pluginFormat) {
+      importFormat(pluginFormat.id, text, baseName(file.name))
       return
     }
     if (isProjectFileImport(file.name, text)) importProjectFile(text, baseName(file.name))
@@ -132,7 +160,8 @@ export function ProjectToolbar({
     if (snapshot.kind === 'url') {
       void copyText(snapshot.url)
     } else {
-      download(exportProjectFile(), exportName('.cadence.json'), 'application/json')
+      const data = exportFormat('project')
+      if (data != null) download(data, exportName('.cadence.json'), 'application/json')
     }
   }
 
@@ -187,7 +216,7 @@ export function ProjectToolbar({
       <input
         ref={importRef}
         type="file"
-        accept=".cadence,.cadence.json,.json,.xml,.musicxml,application/json,application/xml"
+        accept={importAccept}
         className="visually-hidden"
         aria-label="Import project or MusicXML file"
         onChange={(event) => {
@@ -209,9 +238,12 @@ export function ProjectToolbar({
           }}
         >
           <option value="">Export…</option>
-          <option value="musicxml">MusicXML (.musicxml)</option>
+          {exportableFormats.map((format) => (
+            <option key={format.id} value={format.id}>
+              {format.name}
+            </option>
+          ))}
           <option value="wav">Audio (.wav)</option>
-          <option value="project">Project file (.cadence.json)</option>
         </select>
       </label>
 

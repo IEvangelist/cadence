@@ -1,0 +1,15 @@
+# Astro build output + cache
+dist/
+.astro/
+
+# Dependencies
+node_modules/
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Env
+.env
+.env.production

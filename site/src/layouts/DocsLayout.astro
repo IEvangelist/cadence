@@ -1,0 +1,48 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import { href } from '../lib/href';
+import { docsNav } from '../lib/nav';
+
+// Markdown pages pass their data under `frontmatter`; .astro pages pass props
+// directly. Support both so the docs index and the Markdown pages share one shell.
+const data = (Astro.props.frontmatter ?? Astro.props) as {
+  title: string;
+  description: string;
+};
+
+const normalize = (p: string) => (p.endsWith('/') ? p : `${p}/`);
+const current = normalize(Astro.url.pathname);
+const isCurrent = (path: string) => normalize(href(path)) === current;
+---
+
+<BaseLayout title={data.title} description={data.description}>
+  <div class="container docs-shell">
+    <aside class="docs-sidebar">
+      <nav aria-label="Documentation">
+        <h4>Documentation</h4>
+        <ul>
+          {docsNav.map((item) => (
+            <li>
+              <a
+                href={href(item.path)}
+                aria-current={isCurrent(item.path) ? 'page' : undefined}
+              >
+                {item.title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </aside>
+
+    <article class="prose">
+      <slot />
+      <p class="doc-footer">
+        Found an issue in these docs?
+        <a href="https://github.com/IEvangelist/cadence/issues" rel="noopener">
+          Open an issue on GitHub</a
+        >.
+      </p>
+    </article>
+  </div>
+</BaseLayout>

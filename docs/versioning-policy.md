@@ -23,9 +23,13 @@ Currently pinned (Phase 0):
 | actions/github-script | v9.0.0 | `3a2844b7e9c422d3c10d287c895573f7108da1b3` |
 | actions/setup-dotnet | v6.0.0 | `a98b56852c35b8e3190ac28c8c2271da59106c68` |
 | actions/upload-artifact | v7.0.1 | `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` |
+| actions/configure-pages | v6.0.0 | `45bfe0192ca1faeb007ade9deae92b16b8254a0d` |
+| actions/upload-pages-artifact | v5.0.0 | `fc324d3547104276b827a68afc52ff2a11cc49c9` |
+| actions/deploy-pages | v5.0.0 | `cd2ce8fcbc39b97be8ca5fce6e763baed58fa128` |
 | actions/cache | v6.1.0 | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` |
 | github/codeql-action | v4.37.6 | `5595ccaf912efad79be6eef63a5619ff05969be3` |
 | actions/dependency-review-action | v5.0.0 | `a1d282b36b6f3519aa1f3fc636f609c47dddb294` |
+| Azure/setup-azd | v2.4.0 | `0b7e3a35ab00f2eee7080c845eb39c3f0ebfa553` |
 | dtolnay/rust-toolchain | v1 (stable) | `e97e2d8cc328f1b50210efc529dca0028893a2d9` |
 
 > Non-action pinned tools: gitleaks `v8.30.1` (secret scan) is downloaded as a

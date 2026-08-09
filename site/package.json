@@ -1,0 +1,27 @@
+{
+  "name": "@cadence/site",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Cadence marketing landing page + documentation site. Standalone Astro project — NOT part of the root npm workspaces, so it never touches the apps/web dependency tree or the root lockfile. Deployed to GitHub Pages.",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "test": "playwright test",
+    "test:install": "playwright install --with-deps chromium",
+    "verify": "astro build && playwright test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "astro": "7.1.6"
+  },
+  "devDependencies": {
+    "@astrojs/markdown-remark": "7.2.2",
+    "@axe-core/playwright": "4.12.1",
+    "@playwright/test": "1.62.1",
+    "axe-core": "4.12.1"
+  }
+}
