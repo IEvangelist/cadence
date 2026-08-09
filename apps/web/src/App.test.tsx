@@ -28,4 +28,15 @@ describe('<App />', () => {
       screen.getAllByRole('button', { name: 'Back to composer' }).length,
     ).toBeGreaterThanOrEqual(1)
   })
+
+  it('toggles the standalone stems view from the nav', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Stems' }))
+    expect(
+      screen.getByRole('heading', { name: 'Stem separation' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getAllByRole('button', { name: 'Back to composer' }).length,
+    ).toBeGreaterThanOrEqual(1)
+  })
 })
