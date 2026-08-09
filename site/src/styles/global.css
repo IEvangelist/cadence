@@ -282,11 +282,8 @@ section {
   margin-top: var(--space-8);
 }
 
-.hero .hero-mark {
-  width: clamp(9rem, 22vw, 15rem);
-  height: auto;
-  margin: 0 auto var(--space-8);
-  filter: drop-shadow(var(--shadow-lg));
+.hero .app-preview {
+  margin-top: clamp(var(--space-10), 6vw, var(--space-16));
 }
 
 .text-gradient {
