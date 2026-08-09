@@ -59,13 +59,23 @@ public sealed class SubscriptionService(CadenceDbContext db)
                     billingEvent.SubscriptionId, billingEvent.CurrentPeriodEnd, cancellationToken);
                 break;
 
-            case BillingEventKind.PaymentFailed:
-                await UpdateStatusAsync(billingEvent.CustomerId, SubscriptionStatus.PastDue,
-                    subscriptionId: null, currentPeriodEnd: null, cancellationToken);
+            case BillingEventKind.PaymentSucceeded:
+                // Invoice payment-succeeded is a SECONDARY signal: Stripe does not
+                // guarantee its ordering and retries it for ~3 days, so a stale
+                // one redelivered after a customer.subscription.deleted (or a
+                // past-due) could otherwise flip a non-paying user back to
+                // Active -> Pro. It is therefore NOT authoritative for granting a
+                // tier — upgrades come solely from the customer.subscription.*
+                // lifecycle events, which fire for every activation (created,
+                // trial->active, past_due->active recovery, reactivation). The
+                // event is still recorded in the idempotency ledger by ApplyAsync.
+                // (Payment-failed below stays fail-closed: a downgrade is always
+                // safe to apply, only upgrades must be gated on the authoritative
+                // source.)
                 break;
 
-            case BillingEventKind.PaymentSucceeded:
-                await UpdateStatusAsync(billingEvent.CustomerId, SubscriptionStatus.Active,
+            case BillingEventKind.PaymentFailed:
+                await UpdateStatusAsync(billingEvent.CustomerId, SubscriptionStatus.PastDue,
                     subscriptionId: null, currentPeriodEnd: null, cancellationToken);
                 break;
 

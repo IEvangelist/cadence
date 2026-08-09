@@ -43,7 +43,7 @@ public enum BillingEventKind
     /// <summary>A subscription was deleted/ended — reverts the user to free.</summary>
     SubscriptionDeleted = 3,
 
-    /// <summary>An invoice payment succeeded — keeps/returns the subscription to active.</summary>
+    /// <summary>An invoice payment succeeded — informational only; not authoritative for tiering (upgrades come from <c>customer.subscription.*</c>).</summary>
     PaymentSucceeded = 4,
 
     /// <summary>An invoice payment failed — marks the subscription past-due.</summary>

@@ -112,6 +112,34 @@ public sealed class SubscriptionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Apply_StaleInvoicePaymentSucceeded_AfterCancel_DoesNotResurrectPro()
+    {
+        await SeedUserAsync("user-6", "cus_6");
+
+        // Active -> Canceled through the authoritative subscription lifecycle.
+        await using (var db = NewContext())
+            await new SubscriptionService(db).ApplyAsync(SubChanged("evt_active", "cus_6", SubscriptionStatus.Active));
+        await using (var db = NewContext())
+            await new SubscriptionService(db).ApplyAsync(new BillingEvent(
+                "evt_cancel", "customer.subscription.deleted", BillingEventKind.SubscriptionDeleted,
+                "cus_6", "sub_1", null, SubscriptionStatus.Canceled, null));
+
+        // A stale invoice.payment_succeeded (distinct event id, so the idempotency
+        // ledger does not suppress it) redelivered AFTER cancellation must NOT flip
+        // the now non-paying user back to Active -> Pro.
+        await using (var db = NewContext())
+            await new SubscriptionService(db).ApplyAsync(new BillingEvent(
+                "evt_stale_paid", "invoice.payment_succeeded", BillingEventKind.PaymentSucceeded,
+                "cus_6", null, null, SubscriptionStatus.None, null));
+
+        await using var verify = NewContext();
+        var sub = await verify.Subscriptions.FirstAsync(s => s.UserId == "user-6");
+        Assert.Equal(SubscriptionStatus.Canceled, sub.Status);
+        Assert.Equal(SubscriptionTier.Free, sub.Tier);
+        Assert.Equal(SubscriptionTier.Free, (await verify.Profiles.FirstAsync(p => p.UserId == "user-6")).Tier);
+    }
+
+    [Fact]
     public async Task Apply_CheckoutCompleted_LinksCustomerToUser()
     {
         await SeedUserAsync("user-4", customerId: null);
