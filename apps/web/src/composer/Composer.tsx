@@ -1,9 +1,11 @@
 import { type UseComposerOptions, useComposer } from './hooks/useComposer'
 import { type UseAssistantOptions, useAssistant } from './hooks/useAssistant'
+import { usePlugins } from './plugins/usePlugins'
 import { ProjectToolbar } from './components/ProjectToolbar'
 import { TransportBar } from './components/TransportBar'
 import { TrackPanel } from './components/TrackPanel'
 import { AssistantPanel } from './components/AssistantPanel'
+import { PluginsPanel } from './components/PluginsPanel'
 import { PianoRoll } from './components/PianoRoll'
 import './Composer.css'
 
@@ -18,6 +20,7 @@ interface ComposerProps {
 export function Composer({ options, assistantOptions }: ComposerProps = {}) {
   const controller = useComposer(options)
   const assistant = useAssistant(controller, assistantOptions)
+  const plugins = usePlugins(controller)
   const { project, audioReady, loadDemo } = controller
   const isEmpty = project.tracks.every((track) => track.notes.length === 0)
 
@@ -42,6 +45,12 @@ export function Composer({ options, assistantOptions }: ComposerProps = {}) {
         <div className="composer-sidebar">
           <TrackPanel controller={controller} />
           <AssistantPanel assistant={assistant} />
+          <PluginsPanel plugins={plugins} />
+          {plugins.visiblePanels.map((panel) => (
+            <section key={panel.id} className="plugin-surface" aria-label={panel.title}>
+              {panel.render(plugins.panelContext)}
+            </section>
+          ))}
         </div>
         <PianoRoll controller={controller} previewNotes={assistant.previewNotes} />
       </div>

@@ -103,6 +103,38 @@ browser/e2e, not jsdom. The `composer.spec.ts` e2e adds export → re-import and
 share-link round-trips. **No new runtime dependencies were added**, so the npm-audit
 surface and `package-lock.json` are unchanged.
 
+### Plugin SDK & extensibility
+
+The Plugin SDK (`apps/web/src/composer/plugins`) generalizes the composer's
+built-in registries (instruments, formats, AI providers, effects) behind one
+typed, in-process host. It is **test-first and adds zero runtime dependencies** —
+manifest validation is hand-rolled in the `persistence.ts` style, so the audit
+surface and `package-lock.json` are unchanged. See [`plugins.md`](plugins.md) for
+the authoring guide and the reference plugin.
+
+- `manifest.test.ts` — `validateManifest` accepts well-formed manifests and throws
+  a typed `PluginManifestError` for each malformed shape (mirrors `MidiImportError`
+  / `ProjectFileError`).
+- `host.test.ts` — register / activate / dispose lifecycle, duplicate-id rejection,
+  `{ override: true }` last-wins, and active-only contribution aggregation.
+- `preferences.test.ts` — versioned localStorage round-trip + migration/coercion of
+  enabled plugins, keybindings, and panel visibility.
+- `builtins/*.test.ts` + `resolveAssistant.test.ts` — the dogfooded built-ins
+  (instruments, formats, AI providers, one effect) resolve **through** the host.
+- `engineEffect.test.ts` — an enabled effect contribution is inserted into the
+  engine's master chain; disabled effects leave the signal path untouched.
+- `keybindings.test.ts`, `usePlugins.test.tsx`, `PluginsPanel.test.tsx` — the React
+  glue: prefs-driven enable/disable, global shortcut dispatch, and the accessible
+  Extensions UI.
+- `examples/helloPlugin.test.tsx` — the reference plugin end to end (instrument +
+  text exporter + command + panel).
+
+`plugins.spec.ts` (Playwright) enables the reference plugin from the production
+build, runs its contributed command, asserts persistence across reload, and scans
+the new UI with axe. The AI worker code-split is preserved: the SDK and its
+built-ins import only `tone` (already in the main chunk), never `@magenta/music`
+or `@tensorflow/tfjs`, so those stay in the worker-loaded chunks.
+
 ## .NET
 
 ```bash
