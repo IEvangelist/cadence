@@ -1,0 +1,226 @@
+/**
+ * Cadence design tokens — CSS custom properties.
+ *
+ * Copied verbatim from apps/web/src/theme/tokens.css so the landing/docs site
+ * reuses the exact brand palette, type, and motion — no colors are invented here.
+ * Single source of truth: docs/brand/color/tokens.json (keep this file in sync).
+ *
+ * Generated companion to docs/brand/color/tokens.json (single source of truth).
+ * Light theme is the default (:root). Dark theme applies automatically via
+ * prefers-color-scheme, or explicitly with [data-theme="dark"] / [data-theme="light"].
+ *
+ * All semantic text/background pairs meet WCAG 2.1 AA — see
+ * docs/brand/color/contrast-report.md for the measured ratios.
+ */
+
+:root {
+  /* ---- Core palette: violet (primary) ---- */
+  --color-violet-50: #f4efff;
+  --color-violet-100: #e9dbff;
+  --color-violet-200: #d3b8ff;
+  --color-violet-300: #bb92ff;
+  --color-violet-400: #a26bff;
+  --color-violet-500: #8a47ff;
+  --color-violet-600: #7a2ff0;
+  --color-violet-700: #6620cf;
+  --color-violet-800: #4e1aa0;
+  --color-violet-900: #371372;
+  --color-violet-950: #220c49;
+
+  /* ---- Core palette: blue (secondary) ---- */
+  --color-blue-300: #93b4fb;
+  --color-blue-400: #5b96f8;
+  --color-blue-500: #3b82f6;
+  --color-blue-600: #2563eb;
+  --color-blue-700: #1d4ed8;
+
+  /* ---- Core palette: cyan (accent) ---- */
+  --color-cyan-200: #a5f3fc;
+  --color-cyan-300: #67e8f9;
+  --color-cyan-400: #38d6ee;
+  --color-cyan-500: #12bddc;
+  --color-cyan-600: #0e9db8;
+  --color-cyan-700: #0b6377;
+
+  /* ---- Core palette: neutral (violet-tinted) ---- */
+  --color-neutral-0: #ffffff;
+  --color-neutral-50: #f7f5fc;
+  --color-neutral-100: #efebf7;
+  --color-neutral-200: #e2dcf0;
+  --color-neutral-300: #cbc4dd;
+  --color-neutral-400: #9a92b2;
+  --color-neutral-500: #6e6886;
+  --color-neutral-600: #5a5470;
+  --color-neutral-700: #443f58;
+  --color-neutral-800: #2b2740;
+  --color-neutral-900: #171126;
+  --color-neutral-950: #0e0a1a;
+  --color-ink: #1b1430;
+
+  /* ---- Signature gradients ---- */
+  --gradient-brand: linear-gradient(120deg, #7a2ff0 0%, #4361f0 55%, #12bddc 100%);
+  --gradient-brand-soft: linear-gradient(120deg, #8a47ff 0%, #3b82f6 100%);
+
+  /* ---- Typography ---- */
+  --font-display: 'Space Grotesk', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-body: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-md: 1.125rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.5rem;
+  --font-size-2xl: 1.875rem;
+  --font-size-3xl: 2.25rem;
+  --font-size-4xl: 3rem;
+  --font-size-5xl: 3.75rem;
+  --font-size-6xl: 4.5rem;
+
+  --line-height-tight: 1.1;
+  --line-height-snug: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.65;
+
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0em;
+  --tracking-wide: 0.04em;
+
+  /* ---- Spacing (4px base) ---- */
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+
+  /* ---- Radius ---- */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-pill: 999px;
+
+  /* ---- Elevation ---- */
+  --shadow-sm: 0 1px 2px rgba(27, 20, 48, 0.08);
+  --shadow-md: 0 6px 20px rgba(27, 20, 48, 0.12);
+  --shadow-lg: 0 18px 48px rgba(27, 20, 48, 0.18);
+  --shadow-glow: 0 0 0 4px rgba(122, 47, 240, 0.28);
+
+  /* ---- Motion ---- */
+  --duration-instant: 100ms;
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 300ms;
+  --duration-slower: 500ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ---- Semantic tokens: LIGHT (default) ---- */
+  --color-bg: var(--color-neutral-0);
+  --color-surface: var(--color-neutral-50);
+  --color-surface-raised: var(--color-neutral-0);
+  --color-surface-sunken: var(--color-neutral-100);
+  --color-border: var(--color-neutral-200);
+  --color-border-strong: var(--color-neutral-300);
+  --color-text: var(--color-ink);
+  --color-text-muted: var(--color-neutral-600);
+  --color-text-subtle: var(--color-neutral-500);
+  --color-primary: var(--color-violet-600);
+  --color-primary-hover: var(--color-violet-700);
+  --color-primary-text: var(--color-violet-700);
+  --color-on-primary: var(--color-neutral-0);
+  --color-secondary: var(--color-blue-600);
+  --color-on-secondary: var(--color-neutral-0);
+  --color-accent: var(--color-cyan-500);
+  --color-accent-text: var(--color-cyan-700);
+  --color-on-accent: var(--color-ink);
+  --color-focus: var(--color-violet-600);
+  --color-success: #0f7a4b;
+  --color-warning: #8a5300;
+  --color-danger: #c4123b;
+  --color-info: #1d66c9;
+
+  color-scheme: light dark;
+}
+
+/* ---- Semantic tokens: DARK ---- */
+:root[data-theme='dark'] {
+  --color-bg: var(--color-neutral-950);
+  --color-surface: var(--color-neutral-900);
+  --color-surface-raised: #211934;
+  --color-surface-sunken: #0a0715;
+  --color-border: var(--color-neutral-800);
+  --color-border-strong: var(--color-neutral-700);
+  --color-text: #f4f1fb;
+  --color-text-muted: #b7afcc;
+  --color-text-subtle: #9a92b2;
+  --color-primary: var(--color-violet-400);
+  --color-primary-hover: var(--color-violet-300);
+  --color-primary-text: var(--color-violet-300);
+  --color-on-primary: var(--color-neutral-950);
+  --color-secondary: var(--color-blue-400);
+  --color-on-secondary: var(--color-neutral-950);
+  --color-accent: var(--color-cyan-400);
+  --color-accent-text: var(--color-cyan-300);
+  --color-on-accent: var(--color-neutral-950);
+  --color-focus: var(--color-violet-400);
+  --color-success: #4ade9a;
+  --color-warning: #f4c152;
+  --color-danger: #ff7a93;
+  --color-info: #7bb8ff;
+}
+
+/* Follow the OS when no explicit [data-theme] is set. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-bg: var(--color-neutral-950);
+    --color-surface: var(--color-neutral-900);
+    --color-surface-raised: #211934;
+    --color-surface-sunken: #0a0715;
+    --color-border: var(--color-neutral-800);
+    --color-border-strong: var(--color-neutral-700);
+    --color-text: #f4f1fb;
+    --color-text-muted: #b7afcc;
+    --color-text-subtle: #9a92b2;
+    --color-primary: var(--color-violet-400);
+    --color-primary-hover: var(--color-violet-300);
+    --color-primary-text: var(--color-violet-300);
+    --color-on-primary: var(--color-neutral-950);
+    --color-secondary: var(--color-blue-400);
+    --color-on-secondary: var(--color-neutral-950);
+    --color-accent: var(--color-cyan-400);
+    --color-accent-text: var(--color-cyan-300);
+    --color-on-accent: var(--color-neutral-950);
+    --color-focus: var(--color-violet-400);
+    --color-success: #4ade9a;
+    --color-warning: #f4c152;
+    --color-danger: #ff7a93;
+    --color-info: #7bb8ff;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-instant: 0ms;
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+    --duration-slower: 0ms;
+  }
+}

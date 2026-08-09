@@ -33,6 +33,8 @@ Keep tests **meaningful, not tautological**: assert observable behavior
 | .NET unit | xUnit | `tests/Cadence.Api.Tests` | `dotnet` |
 | .NET coverage gate | coverlet.msbuild | `tests/Cadence.Api.Tests` | `dotnet-coverage` |
 | .NET integration | Aspire.Hosting.Testing | `tests/Cadence.Api.IntegrationTests` | `dotnet-integration` |
+| Site accessibility | Playwright + axe-core | `site/tests/a11y.spec.ts` | `site` |
+| Site responsive + links | Playwright | `site/tests/responsive.spec.ts`, `links.spec.ts` | `site` |
 | SAST | CodeQL (js-ts, csharp) | — | `codeql-web`, `codeql-dotnet` |
 | Dependency review | dependency-review-action | — | `dependency-review` |
 | Secret scan | gitleaks | — | `secret-scan` |
@@ -204,6 +206,11 @@ the informational report and tracked for a future compatible bump.
   vulnerable code is not on any runtime path we ship. The `minimist`/`protobufjs`
   criticals that Magenta would otherwise introduce are pinned out via root
   `package.json` `overrides` (`minimist 1.2.8`, `protobufjs 7.6.5`).
+
+The isolated landing + docs site (`site/`, own lockfile) surfaces the **same**
+`nanoid` advisory through `astro -> vite -> postcss -> nanoid` (5 high, 0
+critical). The only offered fix is a breaking Astro downgrade, so it is tracked
+the same way; the `site` job's `--audit-level=critical` gate stays green.
 
 ## CI notes
 

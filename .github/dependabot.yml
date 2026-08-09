@@ -19,6 +19,16 @@ updates:
       web:
         patterns: ["*"]
 
+  # Isolated landing + docs site (own lockfile, not in the root workspaces).
+  - package-ecosystem: npm
+    directory: /site
+    schedule:
+      interval: weekly
+    versioning-strategy: increase
+    groups:
+      site:
+        patterns: ["*"]
+
   - package-ecosystem: nuget
     directory: /
     schedule:

@@ -1,0 +1,59 @@
+---
+import Mark from './Mark.astro';
+import Icon from './Icon.astro';
+import { href } from '../lib/href';
+
+const repo = 'https://github.com/IEvangelist/cadence';
+---
+
+<header class="site-header">
+  <div class="container inner">
+    <a class="brand-link" href={href('/')} aria-label="Cadence home">
+      <Mark id="header" class="brand-mark" />
+      <span class="brand-name">Cadence</span>
+    </a>
+
+    <nav class="nav-desktop" aria-label="Primary">
+      <a href={href('/#features')}>Features</a>
+      <a href={href('/#pricing')}>Pricing</a>
+      <a href={href('/docs/')}>Docs</a>
+      <a href={repo} rel="noopener">GitHub</a>
+      <a class="btn btn-primary btn-sm" href={href('/#download')}>
+        <Icon name="download" size={18} />
+        Download
+      </a>
+    </nav>
+
+    <a class="btn btn-primary btn-sm nav-mobile-cta" href={href('/docs/')}>Docs</a>
+  </div>
+</header>
+
+<style>
+  .brand-mark {
+    width: 2rem;
+    height: 2rem;
+    margin-right: var(--space-2);
+  }
+
+  .brand-name {
+    font-family: var(--font-display);
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-lg);
+    letter-spacing: var(--tracking-tight);
+  }
+
+  .btn-sm {
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--font-size-sm);
+  }
+
+  .nav-mobile-cta {
+    display: inline-flex;
+  }
+
+  @media (min-width: 48rem) {
+    .nav-mobile-cta {
+      display: none;
+    }
+  }
+</style>

@@ -1,0 +1,228 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Mark from '../components/Mark.astro';
+import Icon from '../components/Icon.astro';
+import { href } from '../lib/href';
+
+const repo = 'https://github.com/IEvangelist/cadence';
+const releases = `${repo}/releases`;
+
+const features = [
+  {
+    icon: 'sparkles',
+    title: 'AI composition assistant',
+    body: 'Suggest chords, harmonize a line, or continue a phrase. Runs in your browser offline on the free tier; premium taps larger server-side models.',
+  },
+  {
+    icon: 'waveform',
+    title: 'A composer that feels instant',
+    body: 'Piano-roll editing, transport, metronome, and a rich instrument set on a low-latency Web Audio engine — 60fps canvas, keyboard-first.',
+  },
+  {
+    icon: 'layers',
+    title: 'Stem separation',
+    body: 'Split any track into bass, drums, vocals, guitar, keys, and synth. Each stem lands as an editable track with its own solo, mute, and gain.',
+  },
+  {
+    icon: 'users',
+    title: 'Live collaboration',
+    body: 'Edit the same project together in real time with presence and conflict-free CRDT sync. Share with owner, editor, or viewer roles.',
+  },
+  {
+    icon: 'interop',
+    title: 'Import, export & share',
+    body: 'MIDI and MusicXML round-trip, WAV and MP3 export, portable .cadence.json projects, and shareable listen links.',
+  },
+  {
+    icon: 'shield',
+    title: 'Accounts done right',
+    body: 'ASP.NET Core Identity with GitHub, Google, and Microsoft OAuth plus passwordless magic links. Hardened cookies, no secrets in the repo.',
+  },
+];
+
+const plans = [
+  {
+    name: 'Free',
+    price: '$0',
+    cadence: 'forever',
+    featured: false,
+    cta: 'Download Cadence',
+    ctaHref: releases,
+    features: [
+      'In-browser AI assistant (offline)',
+      'Full composer + piano roll',
+      'MIDI & MusicXML import / export',
+      'Local projects, offline-first',
+      'Audible watermark on exports',
+      'Community support',
+    ],
+  },
+  {
+    name: 'Pro',
+    price: '$9',
+    cadence: 'per month',
+    featured: true,
+    cta: 'Start with Pro',
+    ctaHref: href('/docs/getting-started/'),
+    features: [
+      'Everything in Free',
+      'No watermark, hi-fi WAV & MP3 export',
+      'Server-side AI generation',
+      'Cloud sync + revision history',
+      'Live collaboration',
+      'Priority updates',
+    ],
+  },
+  {
+    name: 'Studio',
+    price: '$19',
+    cadence: 'per month',
+    featured: false,
+    cta: 'Go Studio',
+    ctaHref: href('/docs/getting-started/'),
+    features: [
+      'Everything in Pro',
+      'Stem separation (all sources)',
+      'Priority server AI queue',
+      'Team collaboration & share roles',
+      'Priority support',
+    ],
+  },
+];
+
+const description =
+  'Cadence is an AI-powered, cross-platform music creation studio. Compose with an AI assistant, split songs into stems, collaborate live, and export anywhere.';
+---
+
+<BaseLayout title="Cadence" description={description}>
+  <!-- Hero -->
+  <section class="hero container">
+    <p class="badge"><span class="dot"></span> Every idea, resolved.</p>
+    <Mark id="hero" class="hero-mark" />
+    <h1>
+      The music studio that helps you
+      <span class="text-gradient">land the idea</span>.
+    </h1>
+    <p class="lede">
+      An AI-powered, cross-platform creation studio — stupid-easy for newcomers,
+      endlessly extensible for pros. Compose, separate stems, and collaborate in
+      real time.
+    </p>
+    <div class="cta">
+      <a class="btn btn-primary" href="#download">
+        <Icon name="download" size={20} /> Download for desktop
+      </a>
+      <a class="btn btn-secondary" href={href('/docs/')}>
+        <Icon name="book" size={20} /> Read the docs
+      </a>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section id="features" class="container">
+    <div class="section-head">
+      <p class="eyebrow">Everything in one canvas</p>
+      <h2>From first idea to finished track</h2>
+      <p>
+        A focused desktop app backed by a .NET Aspire service graph. The hard
+        parts — AI, audio, collaboration, export — already fit together.
+      </p>
+    </div>
+    <div class="grid grid-2 grid-3">
+      {
+        features.map((f) => (
+          <div class="card feature">
+            <span class="icon"><Icon name={f.icon as any} /></span>
+            <h3>{f.title}</h3>
+            <p>{f.body}</p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section id="pricing" class="container">
+    <div class="section-head">
+      <p class="eyebrow">Simple, honest pricing</p>
+      <h2>Start free. Upgrade when you ship.</h2>
+      <p>
+        The free tier is a real music studio — with an audible watermark on
+        exports and a few limits. Paid tiers remove the watermark and unlock
+        server-side AI, hi-fi export, and stems.
+      </p>
+    </div>
+    <div class="grid grid-3 pricing-grid">
+      {
+        plans.map((plan) => (
+          <div class={`card plan${plan.featured ? ' featured' : ''}`}>
+            {plan.featured && <span class="tag">Most popular</span>}
+            <h3>{plan.name}</h3>
+            <p class="price">
+              {plan.price} <span>{plan.cadence}</span>
+            </p>
+            <ul>
+              {plan.features.map((item) => (
+                <li>
+                  <Icon name="check" size={18} />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+            <a
+              class={`btn ${plan.featured ? 'btn-primary' : 'btn-secondary'}`}
+              href={plan.ctaHref}
+            >
+              {plan.cta}
+            </a>
+          </div>
+        ))
+      }
+    </div>
+    <p class="pricing-note">
+      Pricing is indicative for the preview and not final. The free tier is
+      always free.
+    </p>
+  </section>
+
+  <!-- Download / CTA -->
+  <section id="download" class="cta-band container">
+    <div class="inner">
+      <h2>Get Cadence</h2>
+      <p>
+        Signed installers for macOS, Windows, and Linux ship with every tagged
+        release. Grab the latest build and start composing.
+      </p>
+      <div class="cta" style="justify-content:center;display:flex;gap:var(--space-4);flex-wrap:wrap;">
+        <a class="btn btn-on-brand" href={releases} rel="noopener">
+          <Icon name="download" size={20} /> Download the latest release
+        </a>
+        <a class="btn btn-secondary btn-on-brand-outline" href={repo} rel="noopener">
+          <Icon name="github" size={20} /> View source
+        </a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .pricing-note {
+    text-align: center;
+    margin-top: var(--space-8);
+    color: var(--color-text-subtle);
+    font-size: var(--font-size-sm);
+  }
+
+  /* Solid deep-violet so white label clears WCAG-AA anywhere on the
+     violet->cyan gradient band (a transparent fill over the cyan end fails). */
+  .btn-on-brand-outline {
+    background: var(--color-violet-700);
+    color: var(--color-neutral-0);
+    border-color: color-mix(in srgb, var(--color-neutral-0) 45%, transparent);
+  }
+
+  .btn-on-brand-outline:hover {
+    background: var(--color-violet-800);
+    border-color: var(--color-neutral-0);
+  }
+</style>
