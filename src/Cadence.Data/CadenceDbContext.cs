@@ -1,4 +1,5 @@
 using Cadence.Data.Entities;
+using Cadence.Data.Stems;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -24,6 +25,12 @@ public sealed class CadenceDbContext(DbContextOptions<CadenceDbContext> options)
 
     /// <summary>Idempotency ledger of processed Stripe webhook events.</summary>
     public DbSet<ProcessedBillingEvent> ProcessedBillingEvents => Set<ProcessedBillingEvent>();
+
+    /// <summary>Owner-scoped stem-separation jobs.</summary>
+    public DbSet<SeparationJob> SeparationJobs => Set<SeparationJob>();
+
+    /// <summary>Separated stems produced by <see cref="SeparationJobs"/>.</summary>
+    public DbSet<SeparationStem> SeparationStems => Set<SeparationStem>();
 
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder builder)
@@ -82,6 +89,39 @@ public sealed class CadenceDbContext(DbContextOptions<CadenceDbContext> options)
             processed.HasKey(e => e.EventId);
             processed.Property(e => e.EventId).HasMaxLength(256);
             processed.Property(e => e.EventType).HasMaxLength(128);
+        });
+
+        builder.Entity<SeparationJob>(job =>
+        {
+            // Composite, owner-scoped key mirroring ProjectEntity: a job id is
+            // unique per user, not globally, so another user's job is a 404 rather
+            // than a leak (no cross-tenant existence oracle, no IDOR).
+            job.HasKey(j => new { j.OwnerId, j.Id });
+            job.Property(j => j.Status).HasConversion<string>().HasMaxLength(32);
+            job.Property(j => j.OriginalFileName).HasMaxLength(512).IsRequired();
+            job.Property(j => j.ContentType).HasMaxLength(128).IsRequired();
+            job.Property(j => j.MixBlobPath).HasMaxLength(1024).IsRequired();
+            job.Property(j => j.ErrorMessage).HasMaxLength(1024);
+            job.HasIndex(j => j.Status);
+            job
+                .HasOne(j => j.Owner)
+                .WithMany()
+                .HasForeignKey(j => j.OwnerId)
+                .OnDelete(DeleteBehavior.Cascade);
+            job
+                .HasMany(j => j.Stems)
+                .WithOne(s => s.Job)
+                .HasForeignKey(s => new { s.OwnerId, s.JobId })
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<SeparationStem>(stem =>
+        {
+            // Owner id travels on every stem row so reads stay owner-scoped without
+            // a join back to the job.
+            stem.HasKey(s => new { s.OwnerId, s.JobId, s.Label });
+            stem.Property(s => s.Label).HasConversion<string>().HasMaxLength(32);
+            stem.Property(s => s.BlobPath).HasMaxLength(1024).IsRequired();
         });
     }
 }
