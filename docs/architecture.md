@@ -26,6 +26,12 @@ Condensed view. The authoritative roadmap is [`plan.md`](plan.md).
       +-------------------------+
 ```
 
+> **Shipped vs planned.** The API, Postgres, Redis, and Blob storage run today under
+> the Aspire AppHost. The **premium AI service**, the **stem-separation worker**, and
+> the **Yjs collaboration relay** shown above are planned/in-progress (see
+> [`plan.md`](plan.md) → Phases 6–7) — they are not yet in `src/`. The shipped AI
+> assistant runs **in the browser** (Magenta.js / TF.js), not server-side.
+
 ## Projects
 
 | Path | Role |
@@ -36,8 +42,8 @@ Condensed view. The authoritative roadmap is [`plan.md`](plan.md).
 | `src/*.ServiceDefaults` | Shared telemetry/resilience/health |
 | `src/*.Api` | REST + OpenAPI, Identity, entitlements |
 | `src/*.Data` | EF Core model, `CadenceDbContext`, migrations, entitlement seam |
-| `src/*.AiService` | Premium symbolic AI (Python/ONNX) |
-| `src/*.Separation` | Demucs/ONNX stem-separation worker |
+| `src/*.AiService` *(planned)* | Premium symbolic AI (Python/ONNX) |
+| `src/*.Separation` *(planned)* | Demucs/ONNX stem-separation worker |
 | `tests/*` | unit / integration / e2e / a11y / security |
 | `infra` | `azd` + IaC |
 

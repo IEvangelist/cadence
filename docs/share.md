@@ -87,25 +87,26 @@ The **Share** button produces a portable snapshot with no backend
 This satisfies the "portable sharing" requirement without any server, auth, or
 storage.
 
-## Deferred: hosted share links (#7)
+## Follow-up: hosted share links
 
 A **hosted, server-backed share link** (a short URL that opens a read-only view of a
-project stored on the server) depends on the projects API and server storage being
-built in **#7**, which is not merged yet. It is intentionally **deferred** to avoid
-coupling this PR to unmerged work.
+project stored on the server) builds on the projects API and server storage delivered by
+identity/persistence ([#7](https://github.com/IEvangelist/cadence/issues/7), now
+shipped). The hosted variant itself is a **follow-up** and is not built yet — the
+client-side share above is the complete, shipped behavior.
 
-### Intended contract (for when #7 lands)
+### Intended contract (when it's built)
 
 The client already has a clean seam: `createShareSnapshot` returns a discriminated
 union today (`{ kind: 'url' }` | `{ kind: 'file' }`). Hosted links add a third arm
 without changing existing callers:
 
 ```ts
-// Future addition once #7's projects API exists — NOT implemented here.
+// Future addition on top of the projects API — NOT implemented here.
 type HostedShareSnapshot = { kind: 'hosted'; url: string; id: string }
 ```
 
-Proposed API surface (owned by #7):
+Proposed API surface:
 
 | Method & path | Purpose | Auth |
 |---|---|---|
@@ -113,7 +114,7 @@ Proposed API surface (owned by #7):
 | `GET /api/shares/{id}` → project | Fetch a shared snapshot | Public/read-only |
 | `DELETE /api/shares/{id}` | Revoke a share | Owner |
 
-Client work when #7 is ready (small, additive):
+Client work when it's built (small, additive):
 
 - Add a `publishShare(project)` method to the controller that calls `POST /api/shares`
   and returns a `HostedShareSnapshot`.
