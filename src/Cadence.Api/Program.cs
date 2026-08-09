@@ -1,4 +1,5 @@
 using Cadence.Api;
+using Scalar.AspNetCore;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -47,9 +48,15 @@ var app = builder.Build();
 // Maps /health and /alive (Development only). See ServiceDefaults.
 app.MapDefaultEndpoints();
 
-if (app.Environment.IsDevelopment())
+// API reference documentation: the OpenAPI document plus the human-facing Scalar
+// reference UI. Cadence APIs ship with Scalar, so this is enabled in every
+// environment by default; operators can turn it off (for example in production)
+// by setting ApiDocs:Enabled=false. Scalar reads the app's OpenAPI JSON at
+// /openapi/v1.json and renders the interactive reference at /scalar.
+if (app.Configuration.GetValue("ApiDocs:Enabled", true))
 {
     app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 // Apply EF Core migrations at startup outside tests (the API waits for Postgres
