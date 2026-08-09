@@ -149,6 +149,25 @@ the new UI with axe. The AI worker code-split is preserved: the SDK and its
 built-ins import only `tone` (already in the main chunk), never `@magenta/music`
 or `@tensorflow/tfjs`, so those stay in the worker-loaded chunks.
 
+### Stem separation (web)
+
+The standalone stems UI (`apps/web/src/stems`, issue #10 Phase 1 — **not** the
+composer) is covered by:
+
+- `stems/stemsClient.test.ts` — the typed client over an injected `fetch`:
+  raw-body upload, the `402/413/415/401` → `StemsError` mapping, job read/list,
+  and download-URL resolution against the base URL.
+- `stems/StemsPage.test.tsx` — entitlement-gated UI state (anonymous sign-in
+  prompt, free-tier upgrade CTA, entitled uploader), the upload flow, **polling an
+  in-flight job to completion**, completed-stem preview/download rendering, and
+  failed-job + load-error alerts.
+- `e2e/stems.spec.ts` — Playwright + axe on both the **gated** free-tier surface
+  and the **entitled** upload → downloadable-stems surface, with all `/api/**`
+  calls mocked (no worker/model in e2e).
+
+No new runtime dependencies were added (the UI uses `fetch` and the native
+`<audio>` element), so the npm-audit surface and `package-lock.json` are unchanged.
+
 ## .NET
 
 ```bash
@@ -213,6 +232,45 @@ The EF migrations, design-time factory, and the startup migrator are excluded
 from the coverage denominator (`[*]Cadence.Data.Migrations.*` + `[ExcludeFromCodeCoverage]`)
 because they only execute under Postgres and are exercised by the integration
 suite, not the SQLite unit suite.
+
+### Stem separation (.NET + Aspire integration)
+
+Stem separation (issue #10 Phase 1) is test-first across the pipeline. The
+`dotnet` unit suite (`tests/Cadence.Api.Tests`) covers the pure `Cadence.Data`
+pieces and the `/api/stems` endpoints over `WebApplicationFactory` + SQLite:
+
+- **State machine** — every legal `Queued → Processing → Completed | Failed`
+  transition and rejection of illegal ones.
+- **Stem catalog + labeling** — the fixed 7-label catalog (`bass`, `drums`,
+  `vocals`, `guitar`, `keys`, `synth`, `other`) and slug ordering.
+- **WAV codec + band-split** — PCM16 read/write round-trip and the deterministic
+  `BandSplitStemSeparator` (the hermetic default engine).
+- **Job processor** — happy path, failure capture (`Failed` + error message), and
+  claim semantics.
+- **Endpoints** — free-tier **`402`** (tier read from the DB, not the cookie),
+  Pro **`202`**, `415`/`413` (size + duration)/`400` validation, list/get/download,
+  **IDOR** (cross-owner read → `404`), and anonymous → `401`.
+
+The Aspire integration suite (`tests/Cadence.Api.IntegrationTests`, Docker) boots
+the **real** AppHost graph including the `separation` worker and drives the full
+lifecycle against real Postgres + Azurite: register → promote to Pro via a signed
+Stripe webhook → upload a WAV mix → poll the job to `Completed` → assert the
+7-stem catalog → download each stem from Blob. It uses the band-split engine (no
+`Stems:ModelUri`), so it needs **no model download**; the real model inference is
+isolated behind the `IStemSeparator` seam. `Cadence.SeparationWorker` and the
+Azure/ONNX I/O classes are `[ExcludeFromCodeCoverage]` (network/GPU glue) and the
+worker is not referenced by the coverage-gated unit project.
+
+`Cadence.SeparationWorker` uses a plain `Microsoft.NET.Sdk` with a
+`FrameworkReference` to `Microsoft.AspNetCore.App` (for `IHost`/`BackgroundService`)
+and a single `net10.0` target — so its committed `packages.lock.json` is
+RID-agnostic. As with `Cadence.AppHost`, adding the `Azure.Storage.Blobs` central
+pin can surface as a `win-x64`/`linux-x64` flip in the **non-locked** AppHost and
+IntegrationTests locks on a full-solution restore; those two are reverted to
+`origin/main` (they set `RestoreLockedMode=false`), and only real dependency
+additions are committed to the four locked-mode locks (`Cadence.Data`,
+`Cadence.Api`, `Cadence.Api.Tests`, `Cadence.SeparationWorker`). See
+[`stems.md`](stems.md).
 
 ## Security & supply-chain gates
 

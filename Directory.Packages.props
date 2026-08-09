@@ -11,6 +11,12 @@
     <PackageVersion Include="Aspire.Hosting.Azure.Storage" Version="13.4.6" />
   </ItemGroup>
 
+  <ItemGroup Label="Stem separation (Blob storage, ONNX Runtime)">
+    <PackageVersion Include="Azure.Storage.Blobs" Version="12.29.1" />
+    <PackageVersion Include="Aspire.Azure.Storage.Blobs" Version="13.4.6" />
+    <PackageVersion Include="Microsoft.ML.OnnxRuntime" Version="1.28.0" />
+  </ItemGroup>
+
   <ItemGroup Label="Data &amp; persistence (EF Core, Identity, Npgsql)">
     <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.10" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" />
