@@ -48,6 +48,30 @@ composer is extensible through a typed, in-process **Plugin SDK** — instrument
 effects, formats, AI providers, commands, and panels all register through one host
 (see [`plugins.md`](plugins.md)).
 
+## API reference (OpenAPI + Scalar)
+
+`src/*.Api` exposes its REST surface as an OpenAPI document
+(`Microsoft.AspNetCore.OpenApi`) and ships with an interactive
+[**Scalar**](https://scalar.com/) reference UI rendered over it — the standard for
+Cadence APIs.
+
+| Route | Serves |
+|---|---|
+| `/openapi/v1.json` | The generated OpenAPI document |
+| `/scalar` | The Scalar interactive API reference UI |
+
+Both are enabled in **all environments by default** so the API always "ships with"
+its reference. A single flag, **`ApiDocs:Enabled`** (bound from configuration,
+default `true`), gates them. Operators set `ApiDocs__Enabled=false` (env var) or
+`"ApiDocs": { "Enabled": false }` (config) to turn the docs off — for example in
+production. Development works out of the box.
+
+> **Production exposure tradeoff:** because the reference ships enabled everywhere,
+> a public deployment exposes the full API surface at `/scalar` and
+> `/openapi/v1.json` unless `ApiDocs:Enabled` is set to `false`. Leave it on where
+> discoverability helps (internal/staging); turn it off on hardened public
+> deployments that should not advertise their schema.
+
 ## Identity & persistence
 
 Accounts use ASP.NET Core Identity (local password, passwordless magic link, and

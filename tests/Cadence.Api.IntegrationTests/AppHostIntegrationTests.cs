@@ -46,6 +46,11 @@ public class AppHostIntegrationTests
 
         var document = await openApi.Content.ReadAsStringAsync();
         Assert.Contains("/api/info", document);
+
+        // Cadence APIs ship with the Scalar reference UI (ApiDocs:Enabled, default
+        // true) served in every environment; confirm it renders over the document.
+        var scalar = await client.GetAsync("/scalar");
+        Assert.Equal(HttpStatusCode.OK, scalar.StatusCode);
     }
 
     [Fact]
