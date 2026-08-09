@@ -26,6 +26,12 @@ Condensed view. The authoritative roadmap is [`plan.md`](plan.md).
       +-------------------------+
 ```
 
+> **Shipped vs planned.** The API, Postgres, Redis, and Blob storage run today under
+> the Aspire AppHost. The **premium AI service**, the **stem-separation worker**, and
+> the **Yjs collaboration relay** shown above are planned/in-progress (see
+> [`plan.md`](plan.md) → Phases 6–7) — they are not yet in `src/`. The shipped AI
+> assistant runs **in the browser** (Magenta.js / TF.js), not server-side.
+
 ## Projects
 
 | Path | Role |
@@ -36,8 +42,8 @@ Condensed view. The authoritative roadmap is [`plan.md`](plan.md).
 | `src/*.ServiceDefaults` | Shared telemetry/resilience/health |
 | `src/*.Api` | REST + OpenAPI, Identity, entitlements |
 | `src/*.Data` | EF Core model, `CadenceDbContext`, migrations, entitlement seam |
-| `src/*.AiService` | Premium symbolic AI (Python/ONNX) |
-| `src/*.Separation` | Demucs/ONNX stem-separation worker |
+| `src/*.AiService` *(planned)* | Premium symbolic AI (Python/ONNX) |
+| `src/*.Separation` *(planned)* | Demucs/ONNX stem-separation worker |
 | `tests/*` | unit / integration / e2e / a11y / security |
 | `infra` | `azd` + IaC |
 
@@ -47,6 +53,30 @@ GitHub Actions CI with SHA-pinned actions (see `versioning-policy.md`). The web
 composer is extensible through a typed, in-process **Plugin SDK** — instruments,
 effects, formats, AI providers, commands, and panels all register through one host
 (see [`plugins.md`](plugins.md)).
+
+## API reference (OpenAPI + Scalar)
+
+`src/*.Api` exposes its REST surface as an OpenAPI document
+(`Microsoft.AspNetCore.OpenApi`) and ships with an interactive
+[**Scalar**](https://scalar.com/) reference UI rendered over it — the standard for
+Cadence APIs.
+
+| Route | Serves |
+|---|---|
+| `/openapi/v1.json` | The generated OpenAPI document |
+| `/scalar` | The Scalar interactive API reference UI |
+
+Both are enabled in **all environments by default** so the API always "ships with"
+its reference. A single flag, **`ApiDocs:Enabled`** (bound from configuration,
+default `true`), gates them. Operators set `ApiDocs__Enabled=false` (env var) or
+`"ApiDocs": { "Enabled": false }` (config) to turn the docs off — for example in
+production. Development works out of the box.
+
+> **Production exposure tradeoff:** because the reference ships enabled everywhere,
+> a public deployment exposes the full API surface at `/scalar` and
+> `/openapi/v1.json` unless `ApiDocs:Enabled` is set to `false`. Leave it on where
+> discoverability helps (internal/staging); turn it off on hardened public
+> deployments that should not advertise their schema.
 
 ## Identity & persistence
 

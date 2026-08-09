@@ -67,6 +67,26 @@ graph of resources the API depends on:
 Because the topology lives in the AppHost, the same model drives both local
 development and cloud deployment — see [Self-hosting & deploy](../self-hosting/).
 
+## API reference (OpenAPI + Scalar)
+
+The API (`src/Cadence.Api`) publishes its REST surface as an OpenAPI document and
+ships with an interactive [**Scalar**](https://scalar.com/) reference UI rendered
+over it — the standard for Cadence APIs.
+
+| Route | Serves |
+|---|---|
+| `/openapi/v1.json` | The generated OpenAPI document |
+| `/scalar` | The Scalar interactive API reference UI |
+
+Both are enabled in **all environments by default** and gated by a single flag,
+**`ApiDocs:Enabled`** (bound from configuration, default `true`). Operators set
+`ApiDocs__Enabled=false` (env var) or `"ApiDocs": { "Enabled": false }` (config) to
+turn the docs off — for example in production. Development works out of the box.
+
+Because the reference ships enabled everywhere, a public deployment exposes the
+full API surface at `/scalar` and `/openapi/v1.json` unless `ApiDocs:Enabled` is
+set to `false` — a deliberate discoverability-vs-exposure tradeoff operators own.
+
 ## Cross-cutting concerns
 
 Test-first (TDD) throughout · OpenTelemetry via Aspire ServiceDefaults · OAuth

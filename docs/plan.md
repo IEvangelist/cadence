@@ -1,6 +1,28 @@
-# AI-Powered Music App — Implementation Plan
+# Cadence — Implementation Plan
 
-> Working title: **"Composer"** (placeholder — rename before public launch).
+> **Name resolved:** the product is **Cadence** (Brand & Design squad decision; see
+> [`brand/naming.md`](brand/naming.md)). Final trademark clearance remains a
+> founder/legal call before public launch.
+
+## Delivery status
+
+This plan is the original roadmap; the table below tracks where each phase actually
+stands. Efforts don't complete in strict phase order — formats (#11) and the plugin
+SDK (#12) shipped while collaboration (#9) and stems (#10) are still in progress.
+
+| Phase | Effort | Issue | Status |
+|---|---|---|---|
+| 0 — Foundations & scaffolding | monorepo, Aspire, TDD harness, CI | — | ✅ Done |
+| 1 — Brand kit & visual identity | brand kit, tokens, sonic logo | [#4](https://github.com/IEvangelist/cadence/issues/4) | ✅ Done |
+| 2 — Composer MVP | engine, piano roll, instruments, MIDI | — | ✅ Done |
+| 3 — In-browser AI assistant | Magenta.js / TF.js suggestions | [#6](https://github.com/IEvangelist/cadence/issues/6) | ✅ Done |
+| 4 — Identity, profiles & persistence | Identity + OAuth + magic-link, projects | [#7](https://github.com/IEvangelist/cadence/issues/7) | ✅ Done |
+| 5 — Freemium, billing & entitlements | Stripe, entitlements, audio watermark | [#8](https://github.com/IEvangelist/cadence/issues/8) | ✅ Done |
+| 6 — Live collaboration | Yjs CRDT, presence, share | [#9](https://github.com/IEvangelist/cadence/issues/9) | 🚧 In progress |
+| 7 — Track isolation / stem separation | Demucs/ONNX stems | [#10](https://github.com/IEvangelist/cadence/issues/10) | 🚧 In progress |
+| 8 — Import/export/share & format interop | MIDI · MusicXML · WAV, client share | [#11](https://github.com/IEvangelist/cadence/issues/11) | ✅ Done |
+| 9 — Extensibility & customization | Plugin SDK | [#12](https://github.com/IEvangelist/cadence/issues/12) | ✅ Done |
+| 10 — Deploy, landing page & docs | azd/ACA, landing + docs site | [#13](https://github.com/IEvangelist/cadence/issues/13) | ✅ Done |
 
 ## Problem & Vision
 
@@ -138,7 +160,7 @@ and pass, and the CI gates below are green.
 
 > Every phase is executed test-first; each "Verify" implies the tests were authored before the implementation.
 
-### Phase 0 — Foundations & scaffolding
+### Phase 0 — Foundations & scaffolding ✅
 - Bootstrap monorepo + `.editorconfig`, licenses, README, CODEOWNERS.
 - **Install & init Squad** (`@bradygaster/squad-cli`, `squad init --preset default`); stand up the team of teams (`squad link`), routing rules, human approval gates, and Ralph watch config.
 - Aspire AppHost + ServiceDefaults; wire Postgres, Redis, Blob (Azurite), API.
@@ -147,7 +169,7 @@ and pass, and the CI gates below are green.
 - CI baseline: build/lint/test (all suites) for .NET + web + Rust on GitHub Actions with coverage gates.
 - Verify: `aspire run` boots API + deps; Tauri renders the SPA; empty test suites run green in CI.
 
-### Phase 1 — Brand kit, logo & visual identity
+### Phase 1 — Brand kit, logo & visual identity ✅
 - Discovery: finalize name, positioning, tone, moodboards; define the **hook**.
 - Logo + wordmark (responsive/adaptive marks), color palette, typography scale, iconography.
 - **Sonic identity / audio logo** — a short signature sound (fitting for a music brand).
@@ -155,57 +177,57 @@ and pass, and the CI gates below are green.
 - Export **design tokens** consumed by the app theme + landing page; publish brand guidelines doc.
 - Verify: versioned brand kit delivered; tokens render in the app theme and a landing preview.
 
-### Phase 2 — Composer MVP (no AI, no auth)
+### Phase 2 — Composer MVP (no AI, no auth) ✅
 - Audio engine wrapper (Tone.js), transport (play/pause/tempo/metronome).
 - Piano-roll editor + basic instruments (synths + one sampled instrument via soundfont).
 - Project model (in-memory + local file); MIDI import/export (`@tonejs/midi`).
 - Verify: create a few bars, play back, export MIDI, re-import round-trips.
 
-### Phase 3 — In-browser AI assistant (free/basic)
+### Phase 3 — In-browser AI assistant (free/basic) ✅
 - Integrate Magenta.js + TF.js; load MelodyRNN/MusicVAE/Coconet models.
 - "Continue melody", "harmonize", "suggest chords" actions on selection.
 - Offline-capable; runs entirely client-side; graceful model loading UX.
 - Verify: generate suggestions offline, insert into project, undo/redo works.
 
-### Phase 4 — Identity, profiles & persistence
+### Phase 4 — Identity, profiles & persistence ✅
 - ASP.NET Core Identity + OAuth (GitHub/Google/Microsoft) + email magic-link.
 - User profile; project CRUD persisted to Postgres; assets to Blob.
 - Autosave + revision history; "my projects" library.
 - Verify: sign in via each provider, save/load a project across sessions.
 
-### Phase 5 — Freemium, billing & entitlements
+### Phase 5 — Freemium, billing & entitlements ✅
 - Entitlement claims model (free/pro/studio) surfaced to SPA + enforced in API.
 - Stripe integration (checkout, webhooks, customer portal).
 - Free-tier limits (project count, export length/quality) + **audible audio watermark** on free exports.
 - Premium **server-side AI** inference service (Python/ONNX) gated by entitlement.
 - Verify: free export is watermarked + limited; upgrade unlocks clean export + server AI.
 
-### Phase 6 — Live collaboration
+### Phase 6 — Live collaboration 🚧
 - Yjs CRDT document model for projects; Aspire-orchestrated y-websocket relay.
 - Presence/awareness (cursors, selection, who's editing); conflict-free multi-edit.
 - Share links with role-based access (owner/editor/viewer).
 - Verify: two clients edit the same project concurrently, converge, show presence.
 
-### Phase 7 — Track isolation / stem separation
+### Phase 7 — Track isolation / stem separation 🚧
 - Server-side separation service (Demucs/ONNX), Aspire-orchestrated, GPU-optional.
 - Upload/import an audio file → isolate into stems: **bass, drums, vocals, guitar, keyboards, synth** (+ "other").
 - Each stem lands as an individual editable track in the mixer; per-stem solo/mute/gain/effects.
 - Async job pipeline (queue + progress), results cached in Blob; entitlement-gated (premium; free tier limited/watermarked).
 - Verify: import a mixed track, receive labeled stems, edit/mute each independently.
 
-### Phase 8 — Import/export/share & format interop
+### Phase 8 — Import/export/share & format interop ✅
 - MusicXML import/export + notation view (OpenSheetMusicDisplay + VexFlow).
 - Audio export: WAV (offline render) + MP3; stems export (pro).
 - Shareable public "view/listen" links; embeddable player.
 - Verify: MusicXML round-trips; audio + stems export; share link plays for anon user.
 
-### Phase 9 — Extensibility & customization
+### Phase 9 — Extensibility & customization ✅
 - Plugin SDK: custom instruments, effects, and AI providers (typed contracts).
 - Theming (brand tokens) + layout customization; keyboard-shortcut + workspace config.
 - Settings sync (per-user) + import/export of configuration.
 - Verify: sample third-party instrument plugin loads and plays end-to-end.
 
-### Phase 10 — Deploy, landing page & docs
+### Phase 10 — Deploy, landing page & docs ✅
 - `azd` infra for Azure Container Apps; GitHub Actions deploy pipeline (self-deploying).
 - Tauri release pipeline: signed cross-platform installers as GitHub Releases.
 - GitHub Pages landing page (brand-driven; downloads, features, pricing) + docs site.
@@ -219,9 +241,12 @@ and pass, and the CI gates below are green.
 - **Docs:** architecture, brand guidelines, plugin SDK, self-host guide, API reference from OpenAPI.
 
 ## Notes / open micro-decisions
-- **React vs SolidJS:** plan assumes **React + Vite** for the deepest audio/notation/CRDT ecosystem and hiring/DX. SolidJS is a valid lighter alternative if bundle size/perf trumps ecosystem — decide at Phase 0.
+- **React vs SolidJS:** the app ships on **React + Vite** for the deepest
+  audio/notation/CRDT ecosystem and hiring/DX. SolidJS was the lighter alternative
+  considered at Phase 0 and not adopted.
 - **Premium AI models:** exact model set (e.g., larger Coconet/Transformer, or a hosted API) chosen at Phase 4; interface abstracted so provider is swappable.
-- **Repo:** this is a chat session with no repo yet. Implementation begins by creating a new project/repository (monorepo) — first Phase 0 action.
+- **Repo:** the monorepo exists and Phase 0 scaffolding is complete — Aspire AppHost,
+  the TypeScript SPA, the Tauri shell, the TDD harness, and CI are all in place.
 - **Watermark strategy:** audible + metadata watermark on free-tier audio; enforce clean render server-side for entitled users to prevent client bypass.
 - **Brand deliverables:** logo/wordmark (SVG), color + type tokens, iconography, motion + a short **sonic logo**, and a guidelines doc — versioned in-repo and consumed by both app theme and landing page. The "hook" (memorable core idea) is defined in Phase 1 discovery and drives visual + sonic direction.
 - **Stem separation model:** Demucs (htdemucs) or equivalent via ONNX; GPU speeds it up but CPU fallback supported. Async job pipeline keeps the UI responsive; provider abstracted for future models.

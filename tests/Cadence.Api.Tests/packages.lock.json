@@ -801,6 +801,7 @@
           "Microsoft.AspNetCore.Authentication.Google": "[10.0.10, )",
           "Microsoft.AspNetCore.Authentication.MicrosoftAccount": "[10.0.10, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.10, )",
+          "Scalar.AspNetCore": "[2.16.18, )",
           "Stripe.net": "[52.2.0, )"
         }
       },
@@ -968,6 +969,12 @@
         "dependencies": {
           "OpenTelemetry.Api": "[1.17.0, 2.0.0)"
         }
+      },
+      "Scalar.AspNetCore": {
+        "type": "CentralTransitive",
+        "requested": "[2.16.18, )",
+        "resolved": "2.16.18",
+        "contentHash": "R/S9FSpMLjdd75uOe22YPNnfDtPYygK31feG6XJ9BLjX/y4WM8cGRzwT49iEBKhnJB2CnWUnfLlWGV7TsVDk+Q=="
       },
       "SQLitePCLRaw.lib.e_sqlite3": {
         "type": "CentralTransitive",
