@@ -47,3 +47,16 @@ public sealed record SaveProjectRequest(string? Id, string Name, int SchemaVersi
 
 /// <summary>The external providers currently wired (for rendering sign-in buttons).</summary>
 public sealed record ProvidersResponse(IReadOnlyList<string> Providers);
+
+/// <summary>The caller's current tier and the typed entitlements it grants.</summary>
+public sealed record EntitlementsResponse(
+    string Tier,
+    bool WatermarkExports,
+    int MaxProjects,
+    int AiGenerationsPerDay,
+    bool AdvancedFormats,
+    bool StemSeparation,
+    int CollaborationSeats);
+
+/// <summary>A URL to redirect the browser to (checkout or customer portal).</summary>
+public sealed record BillingUrlResponse(string Url);

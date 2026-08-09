@@ -29,7 +29,7 @@ Keep tests **meaningful, not tautological**: assert observable behavior
 | Web unit + coverage gate | Vitest + v8 | `apps/web/src/**/*.test.tsx` | `web` |
 | Web e2e smoke | Playwright | `apps/web/e2e/smoke.spec.ts` | `web-e2e` |
 | Web auth e2e | Playwright | `apps/web/e2e/auth.spec.ts` | `web-e2e` |
-| Web accessibility | Playwright + axe-core | `apps/web/e2e/a11y.spec.ts`, `auth.spec.ts` | `web-e2e` |
+| Web accessibility | Playwright + axe-core | `apps/web/e2e/a11y.spec.ts`, `auth.spec.ts`, `pricing.spec.ts` | `web-e2e` |
 | .NET unit | xUnit | `tests/Cadence.Api.Tests` | `dotnet` |
 | .NET coverage gate | coverlet.msbuild | `tests/Cadence.Api.Tests` | `dotnet-coverage` |
 | .NET integration | Aspire.Hosting.Testing | `tests/Cadence.Api.IntegrationTests` | `dotnet-integration` |
@@ -103,6 +103,20 @@ browser/e2e, not jsdom. The `composer.spec.ts` e2e adds export → re-import and
 share-link round-trips. **No new runtime dependencies were added**, so the npm-audit
 surface and `package-lock.json` are unchanged.
 
+### Billing & entitlements (web)
+
+Freemium UI and the free-tier watermark (issue #8) are covered by:
+
+- `composer/formats/audioWatermark.test.ts` — the pure watermark function:
+  asserts added energy at the watermark spec for **free** exports and
+  **byte-identical passthrough** (same references) for **paid**.
+- `billing/entitlementsClient.test.ts` — the typed billing client
+  (`getEntitlements`, `startCheckout`, `openPortal`) over an injected `fetch`.
+- `billing/PricingPage.test.tsx` + `billing/useEntitlements.test.ts` —
+  entitlement-driven UI state and the checkout CTA calling the API (mocked).
+- `e2e/pricing.spec.ts` — Playwright + axe on the pricing page with **mocked**
+  billing calls (no live Stripe). See [`billing-setup.md`](billing-setup.md).
+
 ### Plugin SDK & extensibility
 
 The Plugin SDK (`apps/web/src/composer/plugins`) generalizes the composer's
@@ -166,8 +180,11 @@ real AppHost graph (API + Postgres + Redis + Azurite blob) and asserts the API's
 contract surface — `/health`, `/alive`, `/api/info`, and the OpenAPI document at
 `/openapi/v1.json`. It also drives a **register → sign in → create project**
 round-trip that proves EF Core migrations apply and a project persists in
-Postgres. It **requires a container runtime (Docker)** and is tagged
-`[Trait("Category", "Integration")]`.
+Postgres. A **billing** integration test drives a signed Stripe webhook
+(`checkout.session.completed` → `customer.subscription.updated`) end-to-end and
+asserts the user's entitlements **flip Free → Pro** against real Postgres, then
+replays the event to prove **idempotency**. It **requires a container runtime
+(Docker)** and is tagged `[Trait("Category", "Integration")]`.
 
 ```bash
 # Docker must be running
@@ -185,7 +202,12 @@ container), including:
 - external OAuth via a **mock provider handler** registered only in the `Testing`
   environment (no live OAuth secrets), and
 - Projects CRUD **plus an authorization test that user A cannot read or modify
-  user B's projects** (non-owner access returns `404`).
+  user B's projects** (non-owner access returns `404`), and
+- **billing & entitlements** — entitlement mapping per subscription status, gate
+  enforcement (free over-limit → `402`, paid-only → `402`, paid allowed), Stripe
+  webhook signature verification (valid/invalid) and idempotency (same event id
+  twice = one state change), and the tier claim updating on subscription change.
+  Tests construct Stripe test signatures/events locally — **no live API call**.
 
 The EF migrations, design-time factory, and the startup migrator are excluded
 from the coverage denominator (`[*]Cadence.Data.Migrations.*` + `[ExcludeFromCodeCoverage]`)

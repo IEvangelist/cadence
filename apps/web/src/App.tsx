@@ -5,14 +5,26 @@ import { AuthProvider } from './auth/AuthProvider'
 import { AuthBar } from './auth/AuthBar'
 import { ProfilePage } from './auth/ProfilePage'
 import { useAuth } from './auth/authContext'
+import { PricingPage } from './billing/PricingPage'
+import { useEntitlements } from './billing/useEntitlements'
 import { handleAuthChange, projectStore } from './appStores'
 import './auth/auth.css'
 import './App.css'
 
+type View = 'composer' | 'profile' | 'pricing'
+
 function AppShell() {
   const auth = useAuth()
-  const [showProfile, setShowProfile] = useState(false)
-  const onProfile = showProfile && auth.status === 'authenticated'
+  const [view, setView] = useState<View>('composer')
+  const authenticated = auth.status === 'authenticated'
+  const entitlements = useEntitlements(authenticated)
+
+  // Server-authoritative; the client gate is convenience only. Unknown/anonymous
+  // defaults to watermarked (the safe free-tier default).
+  const watermarkExports = entitlements?.watermarkExports ?? true
+
+  const showProfile = view === 'profile' && authenticated
+  const showPricing = view === 'pricing'
 
   return (
     <main className="app">
@@ -23,13 +35,25 @@ function AppShell() {
         </div>
         <p className="tagline">{tagline}</p>
         <p className="hook">Every idea, resolved.</p>
-        <AuthBar onShowProfile={() => setShowProfile(true)} profileActive={onProfile} />
+        <AuthBar onShowProfile={() => setView('profile')} profileActive={showProfile} />
+        <nav className="app-nav" aria-label="Primary">
+          <button
+            type="button"
+            className="app-nav-link"
+            onClick={() => setView(showPricing ? 'composer' : 'pricing')}
+            aria-pressed={showPricing}
+          >
+            {showPricing ? 'Back to composer' : 'Pricing'}
+          </button>
+        </nav>
       </header>
 
-      {onProfile ? (
-        <ProfilePage onClose={() => setShowProfile(false)} />
+      {showPricing ? (
+        <PricingPage onClose={() => setView('composer')} />
+      ) : showProfile ? (
+        <ProfilePage onClose={() => setView('composer')} />
       ) : (
-        <Composer options={{ store: projectStore }} />
+        <Composer options={{ store: projectStore, watermarkExports }} />
       )}
     </main>
   )

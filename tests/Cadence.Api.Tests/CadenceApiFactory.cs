@@ -1,9 +1,12 @@
+using Cadence.Api.Billing;
 using Cadence.Data;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Cadence.Api.Tests;
 
@@ -28,10 +31,28 @@ public sealed class CadenceApiFactory : WebApplicationFactory<Program>
     /// </summary>
     public TimeSpan? MagicLinkTokenLifespan { get; init; }
 
+    /// <summary>
+    /// Extra in-memory configuration applied on top of the app's settings, so a
+    /// test can tune billing/entitlement options (e.g. a small project cap) without
+    /// touching the shared class-fixture factory.
+    /// </summary>
+    public IReadOnlyDictionary<string, string?>? ConfigOverrides { get; init; }
+
+    /// <summary>
+    /// Optional replacement for the Stripe billing gateway, so endpoint tests can
+    /// return canned checkout/portal URLs and never call the live Stripe API.
+    /// </summary>
+    public IBillingGateway? BillingGateway { get; init; }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
         _connection.Open();
+
+        if (ConfigOverrides is { Count: > 0 } overrides)
+        {
+            builder.ConfigureAppConfiguration(config => config.AddInMemoryCollection(overrides));
+        }
 
         builder.ConfigureServices(services =>
         {
@@ -41,6 +62,12 @@ public sealed class CadenceApiFactory : WebApplicationFactory<Program>
             if (MagicLinkTokenLifespan is { } lifespan)
             {
                 services.Configure<MagicLinkTokenProviderOptions>(o => o.TokenLifespan = lifespan);
+            }
+
+            if (BillingGateway is { } gateway)
+            {
+                services.RemoveAll<IBillingGateway>();
+                services.AddSingleton(gateway);
             }
 
             using var provider = services.BuildServiceProvider();
