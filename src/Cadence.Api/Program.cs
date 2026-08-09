@@ -39,6 +39,9 @@ builder.AddCadencePersistence();
 // ASP.NET Core Identity, cookie auth, external OAuth, magic-link, tier claims.
 builder.AddCadenceIdentity();
 
+// Entitlement catalog + Stripe billing seams (checkout, portal, webhook).
+builder.AddCadenceBilling();
+
 var app = builder.Build();
 
 // Maps /health and /alive (Development only). See ServiceDefaults.
@@ -66,6 +69,7 @@ app.MapGet("/api/info", () => new ApiInfo("Cadence.Api", "0.0.0"))
 app.MapCadenceAuth();
 app.MapCadenceProfile();
 app.MapCadenceProjects();
+app.MapCadenceBilling();
 
 app.Run();
 

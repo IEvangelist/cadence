@@ -47,6 +47,12 @@ export interface UseComposerOptions {
   autosaveDelay?: number
   /** Injected offline audio renderer for WAV export (mockable in tests). */
   audioRenderer?: OfflineRenderer
+  /**
+   * Whether the current user's entitlements watermark audio exports. Defaults to
+   * `true` (the safe, free-tier default); paid entitlements set it to `false` for
+   * byte-clean exports. Server-authoritative — this only drives the export.
+   */
+  watermarkExports?: boolean
 }
 
 export interface ComposerController {
@@ -392,6 +398,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     try {
       const { bytes } = await renderProjectToWav(projectRef.current, {
         renderOffline: options.audioRenderer,
+        watermark: options.watermarkExports ?? true,
       })
       setStatus('Exported WAV')
       return bytes
@@ -399,7 +406,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
       setStatus("Couldn't render audio in this environment")
       return null
     }
-  }, [options.audioRenderer])
+  }, [options.audioRenderer, options.watermarkExports])
   const shareSnapshot = useCallback((): ShareSnapshot => {
     const snapshot = createShareSnapshot(projectRef.current)
     setStatus(

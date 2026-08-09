@@ -1,5 +1,6 @@
 using Cadence.Data;
 using Cadence.Data.Entities;
+using Cadence.Data.Entitlements;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -51,7 +52,8 @@ public static class ProjectsEndpoints
         SaveProjectRequest request,
         ClaimsPrincipal principal,
         UserManager<ApplicationUser> users,
-        CadenceDbContext db)
+        CadenceDbContext db,
+        IEntitlementService entitlements)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
         {
@@ -62,6 +64,27 @@ public static class ProjectsEndpoints
         }
 
         var ownerId = users.GetUserId(principal)!;
+
+        // Server-authoritative entitlement gate. Resolve the tier from the profile
+        // (kept fresh by billing webhooks), not the cookie claim, then enforce the
+        // per-tier project cap. Over-limit free users get 402 Payment Required with
+        // a typed problem body pointing at the upgrade.
+        var tier = await db.Profiles
+            .AsNoTracking()
+            .Where(p => p.UserId == ownerId)
+            .Select(p => (SubscriptionTier?)p.Tier)
+            .FirstOrDefaultAsync() ?? SubscriptionTier.Free;
+        var entitlement = entitlements.GetEntitlements(tier);
+        var projectCount = await db.Projects.CountAsync(p => p.OwnerId == ownerId);
+        if (!entitlement.AllowsProjectCount(projectCount))
+        {
+            return Results.Problem(
+                title: "Upgrade required",
+                detail: $"The {tier} plan allows up to {entitlement.MaxProjects} projects. Upgrade to Pro for unlimited projects.",
+                statusCode: StatusCodes.Status402PaymentRequired,
+                type: BillingEndpoints.UpgradeRequiredType);
+        }
+
         var id = string.IsNullOrWhiteSpace(request.Id) ? Guid.NewGuid().ToString("N") : request.Id!;
 
         // Owner-scoped existence check: ids are unique per user (composite key), so

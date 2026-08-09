@@ -51,10 +51,12 @@ Accounts use ASP.NET Core Identity (local password, passwordless magic link, and
 GitHub/Google/Microsoft OAuth) backed by Postgres via EF Core (`src/*.Data`).
 Sessions ride a hardened `HttpOnly` cookie; the API replies with status codes so
 the SPA can react. Each user has a profile and a subscription **tier** claim
-(default `Free`) exposed through a minimal entitlement seam that effort #8 will
-build on — no billing or feature-gating yet. Projects are **owner-scoped**: the
+(default `Free`). Effort #8 makes the entitlement seam real: a Stripe-backed
+subscription lifecycle drives the tier, which maps to a typed entitlement set
+enforced server-authoritatively (over-limit/paid-only → `402`). Projects are
+**owner-scoped**: the
 `/api/projects` CRUD API filters by the caller's id (non-owner access → `404`).
 The web composer keeps its existing persistence seam: signed out it uses the
 versioned `localStorage` store (offline-first); on sign-in it syncs local-only
 projects up and switches to the remote store. See
-[`auth-setup.md`](auth-setup.md).
+[`auth-setup.md`](auth-setup.md) and [`billing-setup.md`](billing-setup.md).

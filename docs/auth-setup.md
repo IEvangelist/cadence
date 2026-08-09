@@ -139,9 +139,10 @@ bool HasEntitlement(ClaimsPrincipal user, string entitlement);
 SubscriptionTier GetTier(ClaimsPrincipal user);
 ```
 
-This is **scaffolding only** — there is no billing and no feature-gating yet.
-Effort #8 plugs real entitlement rules into this seam without touching the auth
-or persistence code.
+This is the seam **effort #8 builds on**. The tier is now driven by a real
+subscription lifecycle (Stripe) and the seam returns a **typed entitlement set**
+per tier — see **[billing-setup.md](./billing-setup.md)** for the provider wiring,
+entitlements, enforcement points, and the free-tier audio watermark.
 
 ## Data & migrations
 

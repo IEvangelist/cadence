@@ -19,6 +19,12 @@ public sealed class CadenceDbContext(DbContextOptions<CadenceDbContext> options)
     /// <summary>Persisted composer projects.</summary>
     public DbSet<ProjectEntity> Projects => Set<ProjectEntity>();
 
+    /// <summary>Per-user billing subscriptions (1:1 with users).</summary>
+    public DbSet<Subscription> Subscriptions => Set<Subscription>();
+
+    /// <summary>Idempotency ledger of processed Stripe webhook events.</summary>
+    public DbSet<ProcessedBillingEvent> ProcessedBillingEvents => Set<ProcessedBillingEvent>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -52,6 +58,30 @@ public sealed class CadenceDbContext(DbContextOptions<CadenceDbContext> options)
                 .WithMany()
                 .HasForeignKey(p => p.OwnerId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<Subscription>(subscription =>
+        {
+            // Owner-scoped 1:1: the user id is the primary key, so a user has at
+            // most one subscription record and it is addressable only by its owner.
+            subscription.HasKey(s => s.UserId);
+            subscription.Property(s => s.StripeCustomerId).HasMaxLength(256);
+            subscription.Property(s => s.StripeSubscriptionId).HasMaxLength(256);
+            subscription.Property(s => s.Status).HasConversion<string>().HasMaxLength(32);
+            subscription.Property(s => s.Tier).HasConversion<string>().HasMaxLength(32);
+            subscription.HasIndex(s => s.StripeCustomerId);
+            subscription
+                .HasOne(s => s.User)
+                .WithOne()
+                .HasForeignKey<Subscription>(s => s.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<ProcessedBillingEvent>(processed =>
+        {
+            processed.HasKey(e => e.EventId);
+            processed.Property(e => e.EventId).HasMaxLength(256);
+            processed.Property(e => e.EventType).HasMaxLength(128);
         });
     }
 }

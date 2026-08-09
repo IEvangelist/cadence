@@ -15,6 +15,7 @@
  */
 import { type Project } from '../model/project'
 import { beatsToSeconds } from '../timing/timing'
+import { applyAudioWatermark } from './audioWatermark'
 
 /** Rendered audio: one Float32Array of samples (-1..1) per channel. */
 export interface RenderedAudio {
@@ -96,6 +97,12 @@ export interface RenderWavOptions {
   tailSeconds?: number
   /** Injected offline renderer; defaults to the Tone.Offline implementation. */
   renderOffline?: OfflineRenderer
+  /**
+   * Whether to apply the free-tier audio watermark. Defaults to `true` (the safe
+   * default: free unless a paid entitlement explicitly clears it). Paid callers
+   * pass `false` for a byte-clean export.
+   */
+  watermark?: boolean
 }
 
 /**
@@ -113,7 +120,13 @@ export async function renderProjectToWav(
     beatsToSeconds(projectEndBeats(project), project.tempo) + tailSeconds
 
   const rendered = await renderOffline(project, durationSeconds, sampleRate)
-  const bytes = encodeWav(rendered.channels, rendered.sampleRate)
+  // Free-tier watermark is a self-contained post-process applied at the
+  // render → encode boundary, gated purely on the entitlement flag. Paid
+  // exports (watermark:false) pass through byte-identically.
+  const channels = applyAudioWatermark(rendered.channels, {
+    enabled: options.watermark ?? true,
+  })
+  const bytes = encodeWav(channels, rendered.sampleRate)
   return { bytes, durationSeconds, sampleRate: rendered.sampleRate }
 }
 
