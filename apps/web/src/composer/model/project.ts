@@ -9,8 +9,14 @@
 /** MIDI note number, 0–127. Middle C (C4) is 60. */
 export type Pitch = number
 
-/** Identifier of a selectable instrument in the registry. */
-export type InstrumentId = 'poly-synth' | 'fm-synth' | 'drum-kit'
+/**
+ * Identifier of a selectable instrument.
+ *
+ * This is an open set (`string`) so plugins can contribute new instruments
+ * through the Plugin SDK. The built-in ids are `poly-synth`, `fm-synth`, and
+ * `drum-kit`; persistence coerces unknown ids back to a built-in on load.
+ */
+export type InstrumentId = string
 
 /** A single note event. Times are in beats (quarter notes) from the timeline start. */
 export interface Note {

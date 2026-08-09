@@ -43,7 +43,10 @@ Condensed view. The authoritative roadmap is [`plan.md`](plan.md).
 
 ## Cross-cutting
 Test-first (TDD) everywhere · OpenTelemetry via Aspire · OAuth + secret hygiene ·
-GitHub Actions CI with SHA-pinned actions (see `versioning-policy.md`).
+GitHub Actions CI with SHA-pinned actions (see `versioning-policy.md`). The web
+composer is extensible through a typed, in-process **Plugin SDK** — instruments,
+effects, formats, AI providers, commands, and panels all register through one host
+(see [`plugins.md`](plugins.md)).
 
 ## Identity & persistence
 

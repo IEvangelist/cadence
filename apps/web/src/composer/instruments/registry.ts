@@ -1,57 +1,61 @@
 /**
- * Instrument registry — pure metadata describing the selectable instruments.
+ * Instrument registry — a thin facade over the Plugin SDK host.
  *
- * Only descriptive data lives here so the registry stays trivially testable and
- * free of any audio dependency. The audio engine reads these ids to build the
- * matching Tone.js voices. Adding an instrument later is a two-step change:
- * append an entry here, then handle its id in the engine's voice factory.
+ * Instruments used to live here as a hard-coded array. They are now contributed
+ * by the core plugin (see `plugins/builtins/instruments.ts`) and resolved
+ * through {@link defaultPluginHost}, so plugin-provided instruments appear here
+ * automatically. This module keeps the small, audio-free metadata API the rest
+ * of the UI already imports, plus the drum-map helpers.
  */
-import { type InstrumentId } from '../model/project'
+import { defaultPluginHost } from '../plugins/defaultHost'
+import type {
+  InstrumentContribution,
+  InstrumentDefinition,
+  InstrumentKind,
+} from '../plugins/types'
 
-/** How an instrument interprets pitch: melodic (pitched) or a drum map. */
-export type InstrumentKind = 'synth' | 'drum'
+export type { InstrumentDefinition, InstrumentKind }
 
-export interface InstrumentDefinition {
-  id: InstrumentId
-  name: string
-  kind: InstrumentKind
-  description: string
-  /** True when the instrument plays multiple simultaneous notes. */
-  polyphonic: boolean
+const FALLBACK_ID = 'poly-synth'
+
+function toDefinition(c: InstrumentContribution): InstrumentDefinition {
+  return {
+    id: c.id,
+    name: c.name,
+    kind: c.kind,
+    description: c.description,
+    polyphonic: c.polyphonic,
+  }
 }
 
-export const INSTRUMENTS: readonly InstrumentDefinition[] = [
-  {
-    id: 'poly-synth',
-    name: 'Poly Synth',
-    kind: 'synth',
-    description: 'A warm polyphonic subtractive synth — chords and pads.',
-    polyphonic: true,
-  },
-  {
-    id: 'fm-synth',
-    name: 'FM Synth',
-    kind: 'synth',
-    description: 'A bright FM voice for leads, bells, and plucks.',
-    polyphonic: true,
-  },
-  {
-    id: 'drum-kit',
-    name: 'Drum Kit',
-    kind: 'drum',
-    description: 'A basic sampler-style kit: kick, snare, and hats.',
-    polyphonic: true,
-  },
-] as const
-
-const BY_ID = new Map<InstrumentId, InstrumentDefinition>(
-  INSTRUMENTS.map((i) => [i.id, i]),
-)
-
-/** Look up an instrument definition, falling back to the poly synth. */
-export function getInstrument(id: InstrumentId): InstrumentDefinition {
-  return BY_ID.get(id) ?? INSTRUMENTS[0]
+/** All currently selectable instruments (built-in + active plugins). */
+export function listInstruments(): InstrumentDefinition[] {
+  return defaultPluginHost.instruments().map(toDefinition)
 }
+
+/**
+ * Resolve an instrument's full contribution (metadata + voice factory), falling
+ * back to the poly synth when the id is unknown.
+ */
+export function getInstrumentContribution(id: string): InstrumentContribution {
+  const all = defaultPluginHost.instruments()
+  return (
+    all.find((c) => c.id === id) ??
+    all.find((c) => c.id === FALLBACK_ID) ??
+    all[0]
+  )
+}
+
+/** Look up an instrument's metadata, falling back to the poly synth. */
+export function getInstrument(id: string): InstrumentDefinition {
+  return toDefinition(getInstrumentContribution(id))
+}
+
+/**
+ * Snapshot of the built-in instruments at load time. Prefer
+ * {@link listInstruments} for a live view that includes plugin instruments.
+ */
+export const INSTRUMENTS: readonly InstrumentDefinition[] = listInstruments()
 
 /** General-MIDI-style names for the drum map pitches the kit responds to. */
 export const DRUM_MAP: Readonly<Record<number, string>> = {

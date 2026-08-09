@@ -7,8 +7,7 @@
  * {@link MagentaAssistant} otherwise. A future premium provider would slot in
  * here behind the same interface.
  */
-import { MagentaAssistant } from './magentaProvider'
-import { MockAssistant } from './mockProvider'
+import { resolveAssistant } from '../plugins/resolveAssistant'
 import type { CompositionAssistant } from './types'
 
 declare global {
@@ -23,7 +22,7 @@ export function shouldUseMock(): boolean {
   return typeof window !== 'undefined' && window.__CADENCE_AI_MOCK__ === true
 }
 
-/** Resolve the assistant provider for the current environment. */
+/** Resolve the assistant provider for the current environment (via the host). */
 export function createAssistant(): CompositionAssistant {
-  return shouldUseMock() ? new MockAssistant() : new MagentaAssistant()
+  return resolveAssistant({ useMock: shouldUseMock() })
 }

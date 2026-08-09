@@ -14,9 +14,11 @@ import {
   type Note,
   type Project,
   type Track,
-  pitchToName,
 } from '../model/project'
-import { getInstrument } from '../instruments/registry'
+import { getInstrumentContribution } from '../instruments/registry'
+import { defaultPluginHost } from '../plugins/defaultHost'
+import { connectEffectChain } from '../plugins/effectChain'
+import type { EffectNode, InstrumentVoice } from '../plugins/types'
 import {
   beatsToBarsBeatsSixteenths,
   beatsToSeconds,
@@ -45,53 +47,9 @@ export interface AudioEngine {
 }
 
 /** A playable voice for one track. Times are absolute audio-context seconds. */
-interface Voice {
-  trigger(pitch: number, durationSeconds: number, time: number, velocity: number): void
-  dispose(): void
-}
+type Voice = InstrumentVoice
 
 type ToneOutput = Tone.Gain
-
-function createSynthVoice(track: Track, output: ToneOutput): Voice {
-  // Each branch constructs a concrete voice so Tone can infer the correct
-  // PolySynth type (FMSynth is not a Synth subclass, so a union would not type).
-  const synth =
-    track.instrumentId === 'fm-synth'
-      ? new Tone.PolySynth(Tone.FMSynth).connect(output)
-      : new Tone.PolySynth(Tone.Synth).connect(output)
-  synth.volume.value = -8
-  return {
-    trigger: (pitch, duration, time, velocity) => {
-      synth.triggerAttackRelease(pitchToName(pitch), duration, time, velocity)
-    },
-    dispose: () => synth.dispose(),
-  }
-}
-
-function createDrumVoice(output: ToneOutput): Voice {
-  const kick = new Tone.MembraneSynth().connect(output)
-  const noise = new Tone.NoiseSynth().connect(output)
-  return {
-    trigger: (pitch, duration, time, velocity) => {
-      if (pitch <= 36) {
-        kick.triggerAttackRelease('C1', duration, time, velocity)
-      } else {
-        // snares, claps, and hats all use the noise voice in the MVP kit.
-        noise.triggerAttackRelease(duration, time, velocity)
-      }
-    },
-    dispose: () => {
-      kick.dispose()
-      noise.dispose()
-    },
-  }
-}
-
-function createVoice(track: Track, output: ToneOutput): Voice {
-  const def = getInstrument(track.instrumentId)
-  if (def.kind === 'drum') return createDrumVoice(output)
-  return createSynthVoice(track, output)
-}
 
 interface ScheduledEvent {
   time: string
@@ -100,6 +58,9 @@ interface ScheduledEvent {
 
 export class ToneAudioEngine implements AudioEngine {
   private readonly master: ToneOutput
+  // Voices connect to this bus; the bus routes through the master effect chain.
+  private readonly voiceBus: ToneOutput
+  private readonly effectNodes: EffectNode[] = []
   // Voices and parts are keyed by track id so edits touch only what changed.
   private readonly voices = new Map<string, Voice>()
   private readonly parts = new Map<string, Tone.Part<ScheduledEvent>>()
@@ -112,11 +73,36 @@ export class ToneAudioEngine implements AudioEngine {
 
   constructor() {
     this.master = new Tone.Gain(0.9).toDestination()
+    this.voiceBus = new Tone.Gain(1)
+    this.buildEffectChain()
     Tone.getTransport().bpm.value = this.tempo
+  }
+
+  /**
+   * Build the master effect chain from the plugin host's active effects
+   * (`enabledByDefault`) and route `voiceBus → effects → master`. With no active
+   * effects the bus connects straight to master, so the default path is unchanged.
+   * Runtime enable/disable of effects is a documented follow-up (see docs/plugins.md).
+   */
+  private buildEffectChain(): void {
+    const active = defaultPluginHost.effects().filter((e) => e.enabledByDefault)
+    for (const contribution of active) {
+      this.effectNodes.push(contribution.createNode({ tempo: this.tempo }))
+    }
+    connectEffectChain(this.voiceBus, this.effectNodes, this.master)
   }
 
   get state(): TransportState {
     return this._state
+  }
+
+  /** Resolve and build the voice for a track through the plugin host. */
+  private buildVoice(track: Track): Voice {
+    return getInstrumentContribution(track.instrumentId).createVoice({
+      output: this.voiceBus,
+      track,
+      tempo: this.tempo,
+    })
   }
 
   private setState(state: TransportState): void {
@@ -173,7 +159,7 @@ export class ToneAudioEngine implements AudioEngine {
 
       if (voiceIsStale) {
         this.voices.get(track.id)?.dispose()
-        this.voices.set(track.id, createVoice(track, this.master))
+        this.voices.set(track.id, this.buildVoice(track))
         this.trackInstruments.set(track.id, track.instrumentId)
       }
       // Rebuild the part only when the voice changed (so its callback binds the
@@ -257,7 +243,7 @@ export class ToneAudioEngine implements AudioEngine {
     // Auditions come from a user gesture, so it is safe (and required on first
     // interaction) to resume the audio context before triggering the voice.
     void Tone.start()
-    const voice = createVoice(track, this.master)
+    const voice = this.buildVoice(track)
     const duration = beatsToSeconds(durationBeats, this.tempo)
     voice.trigger(pitch, duration, Tone.now(), 0.9)
     // Free the one-shot preview voice after it has rung out.
@@ -276,6 +262,9 @@ export class ToneAudioEngine implements AudioEngine {
     this.stop()
     Tone.getTransport().cancel()
     this.disposeVoicesAndParts()
+    for (const effect of this.effectNodes) effect.dispose()
+    this.effectNodes.length = 0
+    this.voiceBus.dispose()
     this.master.dispose()
     this.listeners.clear()
   }

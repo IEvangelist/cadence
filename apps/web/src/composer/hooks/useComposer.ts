@@ -32,6 +32,8 @@ import { midiBytesToProject, projectToMidiBytes } from '../midi/midi'
 import { fileToProject, projectToFile } from '../formats/projectFile'
 import { musicXmlToProject, projectToMusicXml } from '../formats/musicxml'
 import { type OfflineRenderer, renderProjectToWav } from '../formats/audioExport'
+import { defaultPluginHost } from '../plugins/defaultHost'
+import type { FormatContribution } from '../plugins/types'
 import {
   type ShareSnapshot,
   createShareSnapshot,
@@ -60,6 +62,8 @@ export interface ComposerController {
   savedProjects: StoredProjectMeta[]
   status: string
   audioReady: boolean
+  /** Show a transient status message (used by the CommandApi `notify`). */
+  notify: (message: string) => void
 
   play: () => void
   pause: () => void
@@ -98,6 +102,12 @@ export interface ComposerController {
   importProjectFile: (text: string, name?: string) => void
   exportWav: () => Promise<Uint8Array | null>
   shareSnapshot: () => ShareSnapshot
+  /** File formats contributed through the plugin host (built-in + plugins). */
+  formats: FormatContribution[]
+  /** Export via a host-registered format; returns its bytes/text (or null). */
+  exportFormat: (id: string) => string | Uint8Array | null
+  /** Import via a host-registered format id. */
+  importFormat: (id: string, data: string, name?: string) => void
 }
 
 function defaultProject(options: UseComposerOptions): Project {
@@ -118,6 +128,16 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   const [positionBeats, setPositionBeats] = useState(0)
   const [savedProjects, setSavedProjects] = useState<StoredProjectMeta[]>([])
   const [status, setStatus] = useState('Ready')
+
+  // Formats come from the plugin host so plugin-contributed exporters/importers
+  // appear alongside the built-ins; re-read on any host lifecycle change.
+  const [formats, setFormats] = useState<FormatContribution[]>(() =>
+    defaultPluginHost.formats(),
+  )
+  useEffect(
+    () => defaultPluginHost.subscribe(() => setFormats(defaultPluginHost.formats())),
+    [],
+  )
 
   const [engine] = useState<AudioEngine>(() => (options.createEngine ?? createAudioEngine)())
   const audioReady = useMemo(() => engine.constructor.name !== 'SilentAudioEngine', [engine])
@@ -288,6 +308,8 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     [engine, state],
   )
 
+  const notify = useCallback((message: string) => setStatus(message), [])
+
   const addTrack = useCallback(() => {
     const index = projectRef.current.tracks.length
     dispatch({
@@ -410,6 +432,29 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     return snapshot
   }, [])
 
+  // Generic export/import through the plugin host, keyed by format id. These let
+  // the toolbar drive plugin-contributed formats with no per-format code.
+  const exportFormat = useCallback(
+    (id: string): string | Uint8Array | null => {
+      const format = defaultPluginHost.formats().find((f) => f.id === id)
+      if (!format?.export) return null
+      setStatus(`Exported ${format.name}`)
+      return format.export(projectRef.current)
+    },
+    [],
+  )
+  const importFormat = useCallback((id: string, data: string, name?: string) => {
+    const format = defaultPluginHost.formats().find((f) => f.id === id)
+    if (!format?.import) return
+    try {
+      const project = format.import(data, { id: newId('project'), name })
+      dispatch({ type: 'load-project', project })
+      setStatus(`Imported ${format.name}`)
+    } catch {
+      setStatus(`Couldn't import that ${format.name} file`)
+    }
+  }, [])
+
   return {
     state,
     project: state.project,
@@ -421,6 +466,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     savedProjects,
     status,
     audioReady,
+    notify,
     play,
     pause,
     stop,
@@ -452,5 +498,8 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     importProjectFile,
     exportWav,
     shareSnapshot,
+    formats,
+    exportFormat,
+    importFormat,
   }
 }
