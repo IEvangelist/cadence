@@ -160,6 +160,36 @@ describe('useComposer', () => {
     expect(hook.result.current.project.tracks[0].notes).toHaveLength(0)
   })
 
+  it('inserts a batch, selects every note, and bumps the reveal token', () => {
+    const { hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+    const tokenBefore = hook.result.current.revealRequest.token
+    act(() =>
+      hook.result.current.insertNotes(trackId, [
+        { pitch: 60, start: 0, duration: 1, velocity: 0.8 },
+        { pitch: 64, start: 1, duration: 1, velocity: 0.8 },
+        { pitch: 67, start: 2, duration: 1, velocity: 0.8 },
+      ]),
+    )
+    const track = hook.result.current.project.tracks.find((t) => t.id === trackId)
+    expect(track?.notes).toHaveLength(3)
+    // Every inserted note is selected (not just the last), and the reveal token
+    // advanced so the piano roll scrolls the region into view.
+    const insertedIds = track!.notes.map((n) => n.id)
+    expect(hook.result.current.state.selectedNoteIds).toEqual(insertedIds)
+    expect(hook.result.current.revealRequest.noteIds).toEqual(insertedIds)
+    expect(hook.result.current.revealRequest.token).toBe(tokenBefore + 1)
+  })
+
+  it('ignores an empty insert batch without bumping the reveal token', () => {
+    const { hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+    const tokenBefore = hook.result.current.revealRequest.token
+    act(() => hook.result.current.insertNotes(trackId, []))
+    expect(hook.result.current.project.tracks[0].notes).toHaveLength(0)
+    expect(hook.result.current.revealRequest.token).toBe(tokenBefore)
+  })
+
   it('creates new projects, loads the demo, and renames', () => {
     const { hook } = setup()
     act(() => hook.result.current.setProjectName('My Song'))

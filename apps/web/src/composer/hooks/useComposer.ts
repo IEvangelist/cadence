@@ -59,6 +59,16 @@ export interface UseComposerOptions {
   watermarkExports?: boolean
 }
 
+/**
+ * A request to scroll a set of just-inserted notes into view. `token` increases
+ * on every insert so consumers can react to *repeat* inserts of the same notes;
+ * `noteIds` is empty until the first insert of the session.
+ */
+export interface NoteRevealRequest {
+  noteIds: string[]
+  token: number
+}
+
 export interface ComposerController {
   state: ComposerState
   project: Project
@@ -89,6 +99,14 @@ export interface ComposerController {
   removeNote: (trackId: string, noteId: string) => void
   selectNote: (noteId: string | null) => void
   previewNote: (pitch: number) => void
+  /**
+   * Latest "reveal these notes" request, bumped whenever a batch is inserted
+   * (e.g. an accepted AI suggestion). The `token` monotonically increases so the
+   * piano roll can scroll the freshly inserted region into view exactly once per
+   * insert — without fighting the user's own scrolling. INTERNAL to the app; not
+   * part of the frozen public {@link ComposerController} contract surface.
+   */
+  revealRequest: NoteRevealRequest
 
   addTrack: () => void
   removeTrack: (trackId: string) => void
@@ -144,6 +162,12 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   const [positionBeats, setPositionBeats] = useState(0)
   const [savedProjects, setSavedProjects] = useState<StoredProjectMeta[]>([])
   const [status, setStatus] = useState('Ready')
+  // Bumped whenever a batch of notes is inserted so the piano roll can reveal the
+  // freshly placed region exactly once per insert (see `insertNotes`).
+  const [revealRequest, setRevealRequest] = useState<NoteRevealRequest>(() => ({
+    noteIds: [],
+    token: 0,
+  }))
 
   // Formats come from the plugin host so plugin-contributed exporters/importers
   // appear alongside the built-ins; re-read on any host lifecycle change.
@@ -291,17 +315,24 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     },
     [],
   )
-  // Insert a batch of notes (e.g. an accepted AI suggestion). Each note goes
-  // through the reducer's `add-note`, so all are sanitized/clamped and the
-  // timeline grows to fit — the accept path never bypasses model validation.
+  // Insert a batch of notes (e.g. an accepted AI suggestion) in one transition.
+  // A single `insert-notes` dispatch (rather than a loop of `add-note`) keeps it
+  // one undo step and leaves ALL inserted notes selected — then we bump
+  // `revealRequest` so the piano roll scrolls the placed region into view. The
+  // notes are still sanitized/clamped by the reducer, so the accept path never
+  // bypasses model validation.
   const insertNotes = useCallback(
     (
       trackId: string,
       notes: Array<{ pitch: number; start: number; duration: number; velocity: number }>,
     ) => {
-      for (const n of notes) {
-        dispatch({ type: 'add-note', trackId, note: createNote(n, newId('note')) })
-      }
+      if (notes.length === 0) return
+      const created = notes.map((n) => createNote(n, newId('note')))
+      dispatch({ type: 'insert-notes', trackId, notes: created })
+      setRevealRequest((prev) => ({
+        noteIds: created.map((n) => n.id),
+        token: prev.token + 1,
+      }))
     },
     [],
   )
@@ -509,6 +540,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     removeNote,
     selectNote,
     previewNote,
+    revealRequest,
     addTrack,
     removeTrack,
     selectTrack,

@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { useEffect } from 'react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PianoRoll } from './PianoRoll'
 import { useComposer } from '../hooks/useComposer'
@@ -105,5 +106,36 @@ describe('<PianoRoll />', () => {
 
     const resized = screen.getAllByRole('button').find((b) => b.className.includes('pr-note'))!
     expect(resized.style.width).not.toBe(beforeWidth)
+  })
+
+  it('highlights every note in a batch-inserted selection', () => {
+    // An accepted AI suggestion inserts several notes and selects them all; the
+    // roll must mark each one `.is-selected`, not just the first.
+    let controller: ReturnType<typeof useComposer> | undefined
+    function Capture() {
+      const c = useComposer({
+        createEngine: () => new SilentAudioEngine(),
+        store: new LocalStorageProjectStore(new MemoryStorage()),
+        initialProject: createEmptyProject('p'),
+        autosaveDelay: 0,
+      })
+      // Capture in an effect (not during render) to satisfy the purity lint rule.
+      useEffect(() => {
+        controller = c
+      })
+      return <PianoRoll controller={c} />
+    }
+    render(<Capture />)
+    act(() => {
+      controller!.insertNotes(controller!.selectedTrackId, [
+        { pitch: 60, start: 0, duration: 1, velocity: 0.8 },
+        { pitch: 64, start: 1, duration: 1, velocity: 0.8 },
+        { pitch: 67, start: 2, duration: 1, velocity: 0.8 },
+      ])
+    })
+    const selected = screen
+      .getAllByRole('button')
+      .filter((b) => b.className.includes('pr-note') && b.className.includes('is-selected'))
+    expect(selected).toHaveLength(3)
   })
 })

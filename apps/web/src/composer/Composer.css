@@ -100,6 +100,21 @@
   flex: 1 1 12rem;
 }
 
+/*
+ * #101: `.field-grow` encodes a *horizontal* grow (a 12rem flex-basis width) for
+ * row toolbars like `.toolbar`. Inside these column-flex panels it is applied to
+ * the main (vertical) axis instead, so every slider row was forced to a ≥12rem
+ * min-height and then stretched to fill — the "REALLY odd" empty vertical bands
+ * between Temperature/Length/Generate. Reset it so rows size to their content;
+ * the label still spans the full width via the column's cross-axis stretch.
+ */
+.assistant-params .field-grow,
+.ai-studio-controls .field-grow,
+.mixer-strip .field-grow,
+.mixer-master .field-grow {
+  flex: 0 0 auto;
+}
+
 .field-suffix {
   color: var(--color-text-subtle);
   font-variant-numeric: tabular-nums;
