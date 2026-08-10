@@ -7,6 +7,7 @@ import { ProfilePage } from './auth/ProfilePage'
 import { useAuth } from './auth/authContext'
 import { PricingPage } from './billing/PricingPage'
 import { useEntitlements } from './billing/useEntitlements'
+import { watermarkExportsFor } from './composer/formats/exportEntitlements'
 import { StemsPage } from './stems/StemsPage'
 import { handleAuthChange, projectStore } from './appStores'
 import { buildCollabConfig } from './composer/model/collab/collabConfig'
@@ -21,9 +22,10 @@ function AppShell() {
   const authenticated = auth.status === 'authenticated'
   const entitlements = useEntitlements(authenticated)
 
-  // Server-authoritative; the client gate is convenience only. Unknown/anonymous
-  // defaults to watermarked (the safe free-tier default).
-  const watermarkExports = entitlements?.watermarkExports ?? true
+  // Server-authoritative; the client gate is convenience only. Routed through the
+  // published export seam, which defaults unknown/anonymous/malformed entitlements
+  // to watermarked (the safe free-tier default).
+  const watermarkExports = watermarkExportsFor(entitlements)
 
   // Opt-in live collaboration parsed from the share link + signed-in identity.
   // Null (the common case) keeps the composer single-user.

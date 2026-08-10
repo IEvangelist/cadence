@@ -12,8 +12,9 @@ export * from './onboarding'
 export * from './platform'
 export * from './mixing'
 export * from './ai'
+export * from './export'
 export * from './conformance'
 export * from './collaborationSelector'
 
 /** Current published composer contract version. */
-export const COMPOSER_CONTRACT_VERSION = '1.0.0'
+export const COMPOSER_CONTRACT_VERSION = '1.1.0'
