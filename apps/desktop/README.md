@@ -32,6 +32,22 @@ Run from `apps/desktop`:
 - `npm run build:web` / `npm run dev:web` — build/serve the `@cadence/web`
   workspace directly.
 
+## Under `aspire run`
+
+`aspire run` can launch this shell as an explicitly-started **`desktop`** resource
+that loads the Aspire-managed `web` dev server instead of self-spawning a second
+Vite (effort #93). The AppHost invokes `npm run tauri -- dev --config {json}` with
+`beforeDevCommand` cleared and `devUrl` overridden to `web`'s endpoint, so the
+window points at the same origin that already proxies `/api` and the
+`/api/collab` WebSocket.
+
+One-time prerequisites: install the Rust toolchain via
+[`rustup`](https://rustup.rs) and run `npm ci` at the repo root. Then `aspire run`
+→ open the Aspire dashboard → **Start** the `desktop` resource. It stays
+*Not started* until you click Start (Tauri needs a display + cargo), never enters
+the published manifest (run-mode only), and is omitted with a console hint when
+cargo is not found.
+
 ## Determinism
 
 - Exact crate versions pinned in `src-tauri/Cargo.toml`; `Cargo.lock` committed.

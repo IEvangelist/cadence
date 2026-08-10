@@ -186,6 +186,56 @@ primitives, so it runs cleanly on the 13.4.x AppHost. The AppHost is
 `RestoreLockedMode=false`, so its committed `packages.lock.json` carries the new
 package (and host-RID entries) without breaking cross-OS locked restore.
 
+### The Tauri desktop shell under `aspire run`
+
+`aspire run` can also launch the **`apps/desktop`** Tauri shell so the native
+window loads the same Aspire-managed `web` dev server — not a second Vite (effort
+#93). The desktop resource is added right beside `web`, inside the same
+`node_modules` gate:
+
+```csharp
+builder.AddNpmApp("desktop", "../../apps/desktop", "tauri")
+    .WithReference(web).WaitFor(web)
+    .WithExplicitStart()
+    .WithArgs(context =>
+    {
+        // npm run tauri -- dev --config {json}  ->  tauri dev with
+        // beforeDevCommand cleared and devUrl pointed at `web`.
+        context.Args.Add("--");
+        context.Args.Add("dev");
+        context.Args.Add("--config");
+        context.Args.Add(ReferenceExpression.Create(
+            $"{{\"build\":{{\"beforeDevCommand\":\"\",\"devUrl\":\"{web.GetEndpoint("http")}\"}}}}"));
+    });
+```
+
+`apps/desktop/src-tauri/tauri.conf.json` ships `beforeDevCommand: "npm run
+dev:web"` + `devUrl: http://localhost:5173`, which would self-spawn a
+**backend-blind** Vite (no `PORT`, no `/api` proxy, no service discovery) that can
+also collide with `web`'s dynamic port. The `--config` override clears
+`beforeDevCommand` and repoints `devUrl` at `web.GetEndpoint("http")`, so Tauri
+loads the exact same origin that already proxies `/api` and the `/api/collab`
+WebSocket. `WithReference(web).WaitFor(web)` orders startup after the SPA is up.
+
+Three guards keep the desktop shell scoped and non-disruptive:
+
+- **Explicit start** (`WithExplicitStart`) — unlike `web`, the resource is
+  **not** auto-started. Tauri opens a native window and needs a display plus the
+  Rust toolchain, so it stays *Not started* in the dashboard until a developer
+  clicks **Start**. This also keeps it inert in the Docker-only integration
+  harness, which boots the AppHost in run mode but has no display.
+- **Run mode only** — like `web`/`docs-site`, it is added only under
+  `IsRunMode`, so the published `azd`/`aspire publish` manifest has **no
+  `desktop` resource** (the desktop app ships via its own `tauri build`).
+- **Rust toolchain present** — the resource is wired only when `cargo`
+  (rustup) is resolvable on `PATH` or under `~/.cargo/bin`; otherwise the
+  AppHost logs a one-line `https://rustup.rs` install hint and omits it, mirroring
+  the `web` `node_modules` gate.
+
+To smoke it locally: `npm ci` at the repo root, install the Rust toolchain via
+[`rustup`](https://rustup.rs), then `aspire run` → open the dashboard → **Start**
+the `desktop` resource. The Tauri window opens on the Aspire-served SPA.
+
 ## Collaboration document persistence (effort #91)
 
 The live-collaboration relay (effort #9) was a pure in-memory broadcaster: it

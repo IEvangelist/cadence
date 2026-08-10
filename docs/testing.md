@@ -411,6 +411,19 @@ The dev proxy added to `apps/web/vite.config.ts` is a **dev-server-only** option
 (`server.proxy`); Vitest and the production build ignore it, so web unit coverage
 and the bundle are unchanged.
 
+### The `desktop` (Tauri) resource stays out of the harness
+
+Effort #93 adds a sibling **`desktop`** resource that launches the Tauri shell
+against the Aspire `web` endpoint. It uses `WithExplicitStart()`, so unlike `web`
+it is **not** auto-started — it stays *Not started* in the dashboard until a
+developer clicks Start. That, plus the same run-mode + `node_modules` gates as
+`web` (and an added Rust-toolchain check), means the Docker-only
+`dotnet-integration` job never launches it: the `Aspire.Hosting.Testing` harness
+boots the AppHost in run mode but installs no `node_modules`, has no display, and
+has no cargo, so the desktop resource is skipped entirely and the integration
+assertions still see only the API + backing services. Publish mode omits it too,
+so `aspire publish` artifacts contain no `desktop` resource.
+
 ## Stem pipeline hardening tests (effort #10, Phase 2)
 
 Phase 2 (`#57`) reliability logic is unit-tested in `Cadence.Api.Tests` so the
