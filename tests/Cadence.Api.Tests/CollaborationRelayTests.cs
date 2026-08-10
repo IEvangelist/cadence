@@ -80,14 +80,59 @@ public class CollaborationRelayTests(CadenceApiFactory factory) : IClassFixture<
         return stream.ToArray();
     }
 
+    // Try to read one full frame within a short window; returns null on timeout
+    // so the caller can re-probe. Used only by the join handshake.
+    private static async Task<byte[]?> TryReceiveAsync(WebSocket socket, TimeSpan timeout)
+    {
+        using var cts = new CancellationTokenSource(timeout);
+        var buffer = new byte[64 * 1024];
+        using var stream = new MemoryStream();
+        try
+        {
+            WebSocketReceiveResult result;
+            do
+            {
+                result = await socket.ReceiveAsync(buffer, cts.Token);
+                stream.Write(buffer, 0, result.Count);
+            }
+            while (!result.EndOfMessage);
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        return stream.ToArray();
+    }
+
     // Confirm both peers are registered in the room and the broadcast path works,
     // so subsequent per-frame assertions are deterministic (not racing the join).
+    //
+    // The server-side room join runs asynchronously and can lag the moment
+    // ConnectAsync returns to the client, so an awareness probe sent too early is
+    // broadcast to a room the other peer has not joined yet and is silently
+    // dropped. Re-probe with a fresh marker until each peer observes the other's,
+    // which both proves membership and leaves no residual frames queued.
     private static async Task HandshakeAsync(WebSocket first, WebSocket second)
     {
-        await SendAsync(first, Awareness(0xF1));
-        await SendAsync(second, Awareness(0xF2));
-        Assert.Equal(Awareness(0xF2), await ReceiveAsync(first));
-        Assert.Equal(Awareness(0xF1), await ReceiveAsync(second));
+        await ProbeUntilDeliveredAsync(first, second, markerBase: 0xF0);
+        await ProbeUntilDeliveredAsync(second, first, markerBase: 0xE0);
+    }
+
+    private static async Task ProbeUntilDeliveredAsync(WebSocket sender, WebSocket receiver, byte markerBase)
+    {
+        var probeTimeout = TimeSpan.FromMilliseconds(500);
+        for (var attempt = 0; attempt < 40; attempt++)
+        {
+            var marker = (byte)(markerBase + (attempt & 0x0F));
+            await SendAsync(sender, Awareness(marker));
+            var frame = await TryReceiveAsync(receiver, probeTimeout);
+            if (frame is not null && frame.Length == 2 && frame[0] == 0x01 && frame[1] == marker)
+            {
+                return;
+            }
+        }
+
+        Assert.Fail("Collaboration handshake did not converge: peer never joined the room.");
     }
 
     [Fact]
