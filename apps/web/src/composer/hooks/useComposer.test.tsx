@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useComposer } from './useComposer'
@@ -11,6 +12,7 @@ import { defaultPluginHost } from '../plugins/defaultHost'
 class FakeEngine implements AudioEngine {
   state: TransportState = 'stopped'
   calls: string[] = []
+  disposed = false
   readonly mixer: MixerController = createMixerController()
   private listeners = new Set<(s: TransportState) => void>()
   private setState(s: TransportState) {
@@ -48,8 +50,13 @@ class FakeEngine implements AudioEngine {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
   }
+  ensureAlive() {
+    this.calls.push('ensureAlive')
+    this.disposed = false
+  }
   dispose() {
     this.calls.push('dispose')
+    this.disposed = true
   }
 }
 
@@ -241,6 +248,33 @@ describe('useComposer', () => {
       frames.shift()?.(0)
     })
     expect(hook.result.current.positionBeats).toBe(1.5)
+  })
+})
+
+describe('useComposer — StrictMode lifecycle (regression #97)', () => {
+  it('revives the engine after a StrictMode remount so playback never drives a disposed graph', () => {
+    const engine = new FakeEngine()
+    renderHook(
+      () =>
+        useComposer({
+          createEngine: () => engine,
+          store: new LocalStorageProjectStore(new MemoryStorage()),
+          initialProject: createEmptyProject('strict_mode'),
+          autosaveDelay: 0,
+        }),
+      { wrapper: StrictMode },
+    )
+
+    // StrictMode (dev) runs setup → cleanup(dispose) → setup, so the remount path
+    // that silenced audio in #97 actually executed here — guard against a change
+    // that stops exercising it (which would make this test vacuously pass).
+    expect(engine.calls).toContain('dispose')
+    // After the remount the engine must be left alive: ensureAlive() ran after the
+    // last dispose so voices/preview connect to a live graph, not dead nodes.
+    expect(engine.disposed).toBe(false)
+    expect(engine.calls.lastIndexOf('ensureAlive')).toBeGreaterThan(
+      engine.calls.lastIndexOf('dispose'),
+    )
   })
 })
 

@@ -412,6 +412,44 @@ describe('ToneAudioEngine preview + dispose', () => {
   })
 })
 
+describe('ToneAudioEngine ensureAlive (regression #97)', () => {
+  it('is a no-op while the engine is alive (keeps the same graph)', () => {
+    const engine = new ToneAudioEngine()
+    const mixerBefore = engine.mixer
+    engine.ensureAlive()
+    // Nothing was disposed, so the graph (and its mixer) must be untouched.
+    expect(engine.mixer).toBe(mixerBefore)
+  })
+
+  it('rebuilds the graph after dispose so a StrictMode remount is audible again', () => {
+    const engine = new ToneAudioEngine()
+    engine.setProject(projectWithTracks())
+    const mixerBefore = engine.mixer
+    engine.dispose()
+
+    // Mirror the useComposer remount: revive the disposed engine, then let the
+    // setProject effect re-schedule onto the fresh graph.
+    engine.ensureAlive()
+    expect(engine.mixer).not.toBe(mixerBefore)
+
+    h.parts.length = 0
+    h.partStart.mockClear()
+    engine.setProject(projectWithTracks())
+    // synth + fm + drums = 3 parts scheduled onto the rebuilt graph.
+    expect(h.parts).toHaveLength(3)
+    expect(h.partStart).toHaveBeenCalledTimes(3)
+  })
+
+  it('plays through the rebuilt graph after a dispose → ensureAlive cycle', async () => {
+    const engine = new ToneAudioEngine()
+    engine.dispose()
+    engine.ensureAlive()
+    await engine.play()
+    expect(h.transport.start).toHaveBeenCalled()
+    expect(engine.state).toBe('playing')
+  })
+})
+
 describe('createAudioEngine', () => {
   it('returns a working engine instance', () => {
     const engine = createAudioEngine()
