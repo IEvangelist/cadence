@@ -36,12 +36,18 @@ public class AuthEndpointTests(CadenceApiFactory factory) : IClassFixture<Cadenc
     [Fact]
     public async Task Register_DuplicateEmail_ReturnsValidationProblem()
     {
+        const string email = "dup@example.com";
         var client = _factory.CreateClient();
-        await client.RegisterAsync("dup@example.com");
+        await client.RegisterAsync(email);
 
-        var second = await _factory.CreateClient().RegisterAsync("dup@example.com");
+        var second = await _factory.CreateClient().RegisterAsync(email);
+        var body = await second.Content.ReadAsStringAsync();
 
         Assert.Equal(HttpStatusCode.BadRequest, second.StatusCode);
+        Assert.DoesNotContain(email, body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("already taken", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("taken", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("exists", body, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
