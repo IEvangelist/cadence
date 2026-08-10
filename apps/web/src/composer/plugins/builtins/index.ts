@@ -13,6 +13,7 @@ import { DRUM_KIT_INSTRUMENTS } from './drumKits'
 import { BUILTIN_FORMATS } from './formats'
 import { BUILTIN_AI_PROVIDERS } from './aiProviders'
 import { BUILTIN_EFFECTS } from './effects'
+import { MIX_EFFECTS } from './mixEffects'
 
 /** The contributions bundled by the core plugin. */
 export function coreContributions(): PluginContributions {
@@ -24,7 +25,7 @@ export function coreContributions(): PluginContributions {
     ],
     formats: BUILTIN_FORMATS,
     aiProviders: BUILTIN_AI_PROVIDERS,
-    effects: BUILTIN_EFFECTS,
+    effects: [...BUILTIN_EFFECTS, ...MIX_EFFECTS],
   }
 }
 

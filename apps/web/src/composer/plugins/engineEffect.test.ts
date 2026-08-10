@@ -25,10 +25,35 @@ vi.mock('tone', () => {
     connect() {
       return this
     }
+    disconnect() {
+      return this
+    }
+    dispose = vi.fn()
+  }
+  class Panner {
+    pan = { value: 0 }
+    connect() {
+      return this
+    }
+    disconnect() {
+      return this
+    }
+    dispose = vi.fn()
+  }
+  class Limiter {
+    threshold = { value: -1 }
+    connect() {
+      return this
+    }
+    disconnect() {
+      return this
+    }
     dispose = vi.fn()
   }
   return {
     Gain,
+    Panner,
+    Limiter,
     getTransport: () => h.transport,
     start: () => Promise.resolve(),
     now: () => 0,

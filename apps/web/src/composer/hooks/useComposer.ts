@@ -41,6 +41,7 @@ import {
   decodeProjectFromFragment,
 } from '../formats/share'
 import { type AudioEngine, type TransportState, createAudioEngine } from '../audio/engine'
+import type { MixerController } from '../audio/mixerController'
 
 export interface UseComposerOptions {
   createEngine?: () => AudioEngine
@@ -121,6 +122,8 @@ export interface ComposerController {
   exportFormat: (id: string) => string | Uint8Array | null
   /** Import via a host-registered format id. */
   importFormat: (id: string, data: string, name?: string) => void
+  /** The #44 mixer controller (per-track strips, inserts, master bus, automation). */
+  mixer: MixerController
 }
 
 function defaultProject(options: UseComposerOptions): Project {
@@ -524,5 +527,6 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     formats,
     exportFormat,
     importFormat,
+    mixer: engine.mixer,
   }
 }

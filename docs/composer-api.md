@@ -316,6 +316,19 @@ function syncMute(api: ComposerPublicApi, mixer: MixerController) {
 }
 ```
 
+**Implemented by** (effort #44): the mixer UI consumes this contract through
+`composer/hooks/useMixer.ts` and `composer/components/MixerPanel.tsx`, backed by
+`composer/audio/mixerController.ts` (state overlay + inserts + automation) and
+`composer/audio/mixerGraph.ts` (the Tone audio graph). The insert palette —
+parametric EQ, studio reverb, tempo delay, and glue compressor — ships as
+`composer/plugins/builtins/mixEffects.ts` `EffectContribution`s, all
+`enabledByDefault: false` so the stock signal path stays transparent. The
+controller wires into the audio engine additively; the default overlay (0 dB,
+center pan, limiter off) is unity, and note preview routes past the mixer so
+auditions remain audible. Live insert-parameter editing is deferred until the
+effect factory accepts params — today inserts are add / remove / enable with
+baked default params.
+
 ### #45 Extended AI
 
 What it builds on: the current `CompositionAssistant`, `AssistantSuggestion`, and
