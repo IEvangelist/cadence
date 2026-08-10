@@ -47,6 +47,13 @@ export interface AudioEngine {
   previewNote(track: Track, pitch: number, durationBeats?: number): void
   /** Subscribe to transport state changes; returns an unsubscribe function. */
   onStateChange(listener: (state: TransportState) => void): () => void
+  /**
+   * Rebuild the audio graph if it has been disposed. React StrictMode (dev)
+   * mounts, unmounts — disposing the engine — then remounts the *same* instance;
+   * calling this on remount revives the graph so playback is never left silent
+   * on dead nodes (#97). It is a no-op while the engine is alive.
+   */
+  ensureAlive(): void
   dispose(): void
 }
 
@@ -61,13 +68,13 @@ interface ScheduledEvent {
 }
 
 export class ToneAudioEngine implements AudioEngine {
-  private readonly master: ToneOutput
+  private master!: ToneOutput
   // Voices connect to this bus; the bus routes through the master effect chain.
-  private readonly voiceBus: ToneOutput
+  private voiceBus!: ToneOutput
   private readonly effectNodes: EffectNode[] = []
   // The #44 mixer graph sits between the voices and the master bus.
-  private readonly mixerGraph: MixerGraph
-  private readonly _mixer: MixerController
+  private mixerGraph!: MixerGraph
+  private _mixer!: MixerController
   // Voices and parts are keyed by track id so edits touch only what changed.
   private readonly voices = new Map<string, Voice>()
   private readonly parts = new Map<string, Tone.Part<ScheduledEvent>>()
@@ -76,9 +83,20 @@ export class ToneAudioEngine implements AudioEngine {
   private tempo = 120
   private loop: LoopRegion = { enabled: false, start: 0, end: 16 }
   private _state: TransportState = 'stopped'
+  // True once dispose() has torn down the graph; guards ensureAlive() rebuilds.
+  private disposed = false
   private readonly listeners = new Set<(state: TransportState) => void>()
 
   constructor() {
+    this.build()
+  }
+
+  /**
+   * Construct (or reconstruct) the audio graph: master bus, voice bus, master
+   * effect chain, and the #44 mixer overlay. Split out of the constructor so the
+   * engine can be revived after {@link dispose} — see {@link ensureAlive}.
+   */
+  private build(): void {
     this.master = new Tone.Gain(0.9).toDestination()
     this.voiceBus = new Tone.Gain(1)
     this.buildEffectChain()
@@ -91,6 +109,17 @@ export class ToneAudioEngine implements AudioEngine {
       createEffect: (effectId) => this.createInsertNode(effectId),
     })
     Tone.getTransport().bpm.value = this.tempo
+    this.disposed = false
+  }
+
+  /**
+   * Rebuild the graph if it was disposed. StrictMode (dev) disposes the engine on
+   * the throwaway first mount, then remounts the same instance; without this the
+   * revived UI would drive dead audio nodes and play nothing (#97). Voices/parts
+   * are re-populated by the subsequent `setProject`, whose maps `dispose` cleared.
+   */
+  ensureAlive(): void {
+    if (this.disposed) this.build()
   }
 
   get mixer(): MixerController {
@@ -300,6 +329,7 @@ export class ToneAudioEngine implements AudioEngine {
     this.voiceBus.dispose()
     this.master.dispose()
     this.listeners.clear()
+    this.disposed = true
   }
 }
 
@@ -365,6 +395,8 @@ export class SilentAudioEngine implements AudioEngine {
       this.listeners.delete(listener)
     }
   }
+  // No audio graph to rebuild — the silent engine is always "alive".
+  ensureAlive(): void {}
   dispose(): void {
     this._mixer.dispose()
     this.listeners.clear()

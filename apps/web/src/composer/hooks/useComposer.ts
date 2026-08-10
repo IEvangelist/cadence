@@ -168,6 +168,11 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
 
   // Subscribe to transport state + reschedule whenever the project changes.
   useEffect(() => {
+    // StrictMode (dev) disposes the engine on the throwaway first mount; revive
+    // the graph before re-subscribing so the remounted UI drives live audio, not
+    // dead nodes (#97). This effect precedes the setProject effect below, so the
+    // graph is rebuilt before the project is re-scheduled onto it.
+    engine.ensureAlive()
     const off = engine.onStateChange((next) => {
       setTransportState(next)
       if (next === 'stopped') setPositionBeats(0)
