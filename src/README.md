@@ -1,7 +1,7 @@
 # src
 
 The .NET back end for Cadence, orchestrated by
-[.NET Aspire](https://learn.microsoft.com/dotnet/aspire). Every project targets
+[Aspire](https://aspire.dev). Every project targets
 **.NET 10** (pinned via the root [`global.json`](../global.json)) and uses Central
 Package Management ([`Directory.Packages.props`](../Directory.Packages.props)) with
 exact, pinned versions and lockfile-backed restore. The solution is
@@ -35,7 +35,7 @@ See [`../docs/testing.md`](../docs/testing.md) for how to run every suite and th
 From the repository root:
 
 ```bash
-dotnet run --project src/Cadence.AppHost
+aspire run
 ```
 
 Aspire boots the containers and services, then opens the **Aspire dashboard**. The

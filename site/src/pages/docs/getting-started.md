@@ -7,7 +7,7 @@ description: Prerequisites and commands to run the Cadence backend, web UI, and 
 # Getting started
 
 This guide gets Cadence running locally. The backend is orchestrated by
-[.NET Aspire](https://learn.microsoft.com/dotnet/aspire/), so a single command
+[Aspire](https://aspire.dev), so a single command
 starts the API together with its Postgres, Redis, and Blob dependencies.
 
 ## Prerequisites
@@ -32,10 +32,23 @@ cd cadence
 ## 2. Run the backend
 
 The Aspire AppHost is the entry point. It builds the API and starts every
-resource it models:
+resource it models.
+
+First, install the **Aspire CLI** (once per machine):
 
 ```bash
-dotnet run --project src/Cadence.AppHost
+# Windows (PowerShell)
+irm https://aspire.dev/install.ps1 | iex
+
+# Linux/macOS
+curl -sSL https://aspire.dev/install.sh | bash
+```
+
+See the [install guide](https://aspire.dev/get-started/install-cli/) for details.
+Then start the backend:
+
+```bash
+aspire run
 ```
 
 This opens the **Aspire dashboard**, which lists each resource, its health, logs,

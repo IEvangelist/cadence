@@ -7,7 +7,7 @@ description: Guides for building, running, deploying, and understanding Cadence 
 # Cadence documentation
 
 Cadence is an AI-powered, cross-platform music creation studio: a Tauri desktop
-shell around a TypeScript SPA, backed by a .NET Aspire service graph. These docs
+shell around a TypeScript SPA, backed by an Aspire service graph. These docs
 cover how to run it locally, how the pieces fit together, and how to deploy your
 own instance.
 
@@ -33,7 +33,7 @@ own instance.
 
 ```bash
 # 1. Run the backend (Aspire orchestrates Postgres, Redis, Azurite, and the API)
-dotnet run --project src/Cadence.AppHost
+aspire run
 
 # 2. Run the web UI
 cd apps/web && npm install && npm run dev

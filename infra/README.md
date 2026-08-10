@@ -2,7 +2,7 @@
 
 Deployment and infrastructure-as-code for the Cadence backend. Target:
 **Azure Container Apps** via [`azd`](https://learn.microsoft.com/azure/developer/azure-developer-cli/)
-using the **.NET Aspire azd integration**, owned by the **DevOps/Release** squad.
+using the **Aspire azd integration**, owned by the **DevOps/Release** squad.
 
 ## How it works
 
@@ -48,7 +48,7 @@ Aspire manifest locally:
 
 ```bash
 # 1) Aspire deployment manifest (pure .NET SDK — no azd, no Docker, no login)
-dotnet run --project ../src/Cadence.AppHost/Cadence.AppHost.csproj \
+aspire run \
   -- --publisher manifest --output-path ./aspire-manifest.json
 
 # 2) Full ACA Bicep from the AppHost model (azd, offline — no login/provision)

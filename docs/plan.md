@@ -35,7 +35,7 @@ collaboration, multiple instruments, and interoperates with industry formats. It
 can also **isolate a single audio source into individual stems** (bass, drums,
 vocals, guitar, keyboards, synth). The whole codebase is built **test-first (TDD)**
 with unit, integration, smoke, e2e, accessibility, and security tests gating CI/CD.
-Backend runs on **.NET Aspire**, persists to **Postgres**, stores audio/assets in
+Backend runs on **Aspire**, persists to **Postgres**, stores audio/assets in
 **Blob Storage**, authenticates via **ASP.NET Core Identity + OAuth**, and monetizes
 via a **freemium** model (free tier = watermarked audio + limits; paid unlocks more).
 Self-deploying to **Azure Container Apps** via `azd` + GitHub Actions, with a
@@ -49,7 +49,7 @@ Self-deploying to **Azure Container Apps** via `azd` + GitHub Actions, with a
 | Web UI | TypeScript SPA (**React + Vite** recommended; SolidJS alt — see Notes) |
 | AI (core) | Symbolic composition assistant, **hybrid**: in-browser Magenta.js/TF.js (free/basic, offline) + server-side models (premium) |
 | Auth | ASP.NET Core Identity + OAuth (GitHub, Google, Microsoft) + email magic-link; claims drive tier entitlements |
-| Backend | .NET Aspire orchestration; REST + OpenAPI |
+| Backend | Aspire orchestration; REST + OpenAPI |
 | Data | Postgres (relational) + Azure Blob Storage (audio/assets) + Redis (presence/cache/rate-limit) |
 | Collab | Yjs CRDT + presence over a WebSocket relay (Aspire-orchestrated) |
 | Deploy | Azure Container Apps via `azd`; GitHub Actions CI/CD |
@@ -129,7 +129,7 @@ if we want in-app agentic help — evaluated, not committed.
 +------------------------------ HTTPS / WSS ----------------------+
                     |                         |
       +-------------v-----------+   +---------v-----------+
-      |  .NET Aspire AppHost    |   | Yjs collab relay    |
+      |  Aspire AppHost         |   | Yjs collab relay    |
       |  - API (ASP.NET Core)   |   | (Node y-websocket)  |
       |    REST + OpenAPI       |   +---------------------+
       |    Identity + OAuth     |
