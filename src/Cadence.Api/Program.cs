@@ -50,6 +50,7 @@ var app = builder.Build();
 
 // Maps /health and /alive (Development only). See ServiceDefaults.
 app.MapDefaultEndpoints();
+app.UseCadenceTelemetry();
 
 // API reference documentation: the OpenAPI document plus the human-facing Scalar
 // reference UI. Cadence APIs ship with Scalar, so this is enabled in every
