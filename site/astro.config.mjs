@@ -29,6 +29,14 @@ export default defineConfig({
   site: 'https://ievangelist.github.io',
   base: '/cadence',
   trailingSlash: 'ignore',
+  // When the Aspire AppHost launches this site it injects the port to listen on
+  // via PORT and reaches the dev server through its proxy, so honor PORT (and
+  // bind all interfaces so the proxy can connect) whenever it is set. A plain
+  // `npm run dev` leaves PORT unset and keeps Astro's defaults; the Playwright
+  // suite runs `astro preview --port 4321`, which is unaffected.
+  server: process.env.PORT
+    ? { host: true, port: Number(process.env.PORT) }
+    : {},
   build: {
     // Emit clean directory URLs (docs/getting-started/ -> index.html).
     format: 'directory',
