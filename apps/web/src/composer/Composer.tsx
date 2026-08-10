@@ -1,10 +1,13 @@
 import { type UseComposerOptions, useComposer } from './hooks/useComposer'
 import { type UseAssistantOptions, useAssistant } from './hooks/useAssistant'
+import { type UseAiStudioOptions, useAiStudio } from './hooks/useAiStudio'
+import { useAiStudioEntitlements } from './hooks/useAiStudioEntitlements'
 import { usePlugins } from './plugins/usePlugins'
 import { ProjectToolbar } from './components/ProjectToolbar'
 import { TransportBar } from './components/TransportBar'
 import { TrackPanel } from './components/TrackPanel'
 import { AssistantPanel } from './components/AssistantPanel'
+import { AiStudioPanel } from './components/AiStudioPanel'
 import { PluginsPanel } from './components/PluginsPanel'
 import { PianoRoll } from './components/PianoRoll'
 import { PresenceBar } from './components/PresenceBar'
@@ -31,6 +34,8 @@ interface ComposerProps {
   collabProviderFactory?: CollabProviderFactory
   /** Whether to surface the owner "Share" affordance (signed-in users). */
   canShare?: boolean
+  /** Injectable AI Studio entitlements — used by tests; defaults to context. */
+  aiStudioOptions?: UseAiStudioOptions
 }
 
 /** The flagship composing surface: toolbar, transport, tracks, and piano roll. */
@@ -40,9 +45,14 @@ export function Composer({
   collab = null,
   collabProviderFactory,
   canShare = false,
+  aiStudioOptions,
 }: ComposerProps = {}) {
   const controller = useComposer(options)
   const assistant = useAssistant(controller, assistantOptions)
+  const resolvedEntitlements = useAiStudioEntitlements()
+  const aiStudio = useAiStudio(controller, {
+    entitlements: aiStudioOptions?.entitlements ?? resolvedEntitlements,
+  })
   const plugins = usePlugins(controller)
   const { project, audioReady, loadDemo } = controller
   const isEmpty = project.tracks.every((track) => track.notes.length === 0)
@@ -90,6 +100,7 @@ export function Composer({
         <div className="composer-sidebar">
           <TrackPanel controller={controller} />
           <AssistantPanel assistant={assistant} />
+          <AiStudioPanel studio={aiStudio} />
           <PluginsPanel plugins={plugins} />
           {plugins.visiblePanels.map((panel) => (
             <section key={panel.id} className="plugin-surface" aria-label={panel.title}>
