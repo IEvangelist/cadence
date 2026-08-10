@@ -148,7 +148,7 @@ corrupted cache purged and re-fetched. See [`stems.md`](stems.md).
 
 ## Local development (one-command `aspire run`)
 
-`dotnet run --project src/Cadence.AppHost` (equivalently `aspire run`) brings up
+`aspire run` brings up
 the full local stack — Postgres, Redis, Azurite, the API, the stem-separation
 worker — **and** the `apps/web` Vite/React SPA, so the developer-facing UI is one
 command away (effort #79). The SPA is an Aspire **NodeJS** resource:
