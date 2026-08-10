@@ -387,17 +387,16 @@ relative counts so they are robust to the seeded demo project.
 ## Local run (`aspire run`) — the `web` resource
 
 Effort #79 adds the `apps/web` SPA to the AppHost as an auto-start Aspire NodeJS
-resource so `dotnet run --project src/Cadence.AppHost` serves the UI. Two
+resource so `aspire run` serves the UI. Two
 properties keep this from disturbing the test/CI matrix:
 
-- **It never enters the published manifest.** The resource is guarded by
-  `builder.ExecutionContext.IsRunMode`, so `aspire publish` / manifest generation
-  emits the unchanged baseline (postgres, redis, storage, api, separation) with
-  **no `web`**. Verify with:
+- **It never enters the published output.** The resource is guarded by
+  `builder.ExecutionContext.IsRunMode`, so publish mode skips it and `web`
+  never reaches the generated deployment artifacts. Verify with:
 
   ```bash
-  dotnet run --project src/Cadence.AppHost -- --publisher manifest --output-path aspire-manifest.json
-  # aspire-manifest.json contains no "web" resource
+  aspire publish -o ./aspire-output
+  # the generated artifacts (Bicep) contain no "web" resource
   ```
 
 - **It stays out of the Aspire integration harness.** `Aspire.Hosting.Testing`
