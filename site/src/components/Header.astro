@@ -9,7 +9,7 @@ const repo = 'https://github.com/IEvangelist/cadence';
 <header class="site-header">
   <div class="container inner">
     <a class="brand-link" href={href('/')} aria-label="Cadence home">
-      <Mark id="header" class="brand-mark" />
+      <Mark id="header" class="brand-mark" animated />
       <span class="brand-name">Cadence</span>
     </a>
 
@@ -29,7 +29,10 @@ const repo = 'https://github.com/IEvangelist/cadence';
 </header>
 
 <style>
-  .brand-mark {
+  /* The mark is a child component (Mark.astro) with its own style scope, so its
+     root <svg> doesn't receive this component's scope hash — pierce it with
+     :global() to size it reliably. */
+  .brand-link :global(.brand-mark) {
     width: 2rem;
     height: 2rem;
     margin-right: var(--space-2);
