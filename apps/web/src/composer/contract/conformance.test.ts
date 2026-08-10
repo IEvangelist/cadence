@@ -18,6 +18,8 @@ import {
   type SoundDesignInfo,
   type TrackMixerState,
   type AiEntitlementView,
+  type ExportAction,
+  type ExportEntitlementView,
 } from '.'
 import { SilentAudioEngine } from '../audio/engine'
 import { MockAssistant } from '../ai/mockProvider'
@@ -67,6 +69,11 @@ describe('composer contract conformance', () => {
         Math.max(0, entitlements.aiGenerationsPerDay - usedToday),
     }
 
+    const exportView: ExportEntitlementView = {
+      appliesWatermark: (_action: ExportAction, entitlements) =>
+        entitlements.watermarkExports !== false,
+    }
+
     const freeEntitlements: Entitlements = {
       tier: 'free',
       watermarkExports: true,
@@ -114,6 +121,7 @@ describe('composer contract conformance', () => {
     expect(template.create().tracks.length).toBeGreaterThanOrEqual(1)
     expect(mixerOverlay.track_1.trackId).toBe('track_1')
     expect(entitlementView.canUse('generate', freeEntitlements)).toBe(false)
+    expect(exportView.appliesWatermark('wav', freeEntitlements)).toBe(true)
     expect(collabStatus.participants[0].displayName).toBe('Vasquez')
     expect(collabStatus.participants[0].isSelf).toBe(true)
     expect(collabStatus.participants[0].role).toBeUndefined()

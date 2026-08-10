@@ -4,7 +4,7 @@ This is the stable surface the composer feature cluster builds against: live
 collaboration (#9) is the foundation, the current composer controller is
 formalized as a frozen core API, and efforts #41–#45 add typed extension seams
 without changing the serialized `Project` shape. The contract is exported from
-`composer/contract`; the current `COMPOSER_CONTRACT_VERSION` is `1.0.0`.
+`composer/contract`; the current `COMPOSER_CONTRACT_VERSION` is `1.1.0`.
 
 ## Stability & versioning
 
@@ -21,6 +21,7 @@ without changing the serialized `Project` shape. The contract is exported from
 | `platform.ts` | Provisional | Effort #43 viewport, PWA, offline-cache, and store decorator seam |
 | `mixing.ts` | Provisional | Effort #44 mixer overlay, inserts, and automation seam |
 | `ai.ts` | Provisional | Effort #45 extended AI actions, gating, and mastering seam |
+| `export.ts` | Provisional | Effort #72 audio-export watermark entitlement seam |
 
 Versioning follows semver:
 
@@ -336,6 +337,26 @@ overlay, not raw audio.
 function canRunAi(view: AiEntitlementView, entitlements: Entitlements) {
   if (!view.canUse('text-to-motif', entitlements)) return false
   return view.remainingGenerations(entitlements, usedToday()) > 0
+}
+```
+
+### #72 Audio-export watermark
+
+What it builds on: the server-authoritative `Entitlements.watermarkExports` flag
+and the pure `audioWatermark` renderer already applied at the WAV render→encode
+boundary. Gating must read `Entitlements.watermarkExports`; do not create a
+parallel entitlement model. The view only decides *whether* an export is
+watermarked — free (or any unknown/malformed entitlement) stays watermarked, and
+only a resolved paid entitlement that clears the flag exports clean.
+
+| Type | Purpose |
+|---|---|
+| `ExportAction` | Audio export actions whose output is watermark-gated (currently `wav`) |
+| `ExportEntitlementView` | Entitlement adapter deciding whether an export carries the free-tier watermark |
+
+```ts
+function watermarkFor(view: ExportEntitlementView, entitlements: Entitlements) {
+  return view.appliesWatermark('wav', entitlements)
 }
 ```
 
