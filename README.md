@@ -76,8 +76,12 @@ npm run dev --workspace @cadence/web     # http://localhost:5173
 
 The dashboard lists the running `api`, `postgres`, `redis`, and `blobs` resources and the
 API's endpoint; open the web URL above to use the composer. To run the **desktop shell**
-instead of the browser, use `npm run dev --workspace @cadence/desktop` (Tauri) — it needs
-the [Rust toolchain and Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
+instead of the browser, install the [Rust toolchain via `rustup`](https://rustup.rs) (a
+one-time prerequisite; also see the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)),
+then either launch it standalone with `npm run dev --workspace @cadence/desktop` (Tauri), or
+let `aspire run` manage it: with the Rust toolchain installed and `node_modules` present, the
+dashboard shows a **`desktop`** resource — click **Start** to open the native window on the
+Aspire-served `web` endpoint (no second Vite; `/api` stays proxied same-origin).
 
 No secrets are required for a local run: OAuth providers and Stripe billing stay off until
 you supply credentials via user-secrets. See [`docs/auth-setup.md`](docs/auth-setup.md) and

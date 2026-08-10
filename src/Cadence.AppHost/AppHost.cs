@@ -59,17 +59,64 @@ if (builder.ExecutionContext.IsRunMode)
 {
     if (Directory.Exists(Path.Combine(repoRoot, "node_modules")))
     {
-        builder.AddNpmApp("web", "../../apps/web", "dev")
+        var web = builder.AddNpmApp("web", "../../apps/web", "dev")
             .WithReference(api)
             .WaitFor(api)
             .WithHttpEndpoint(env: "PORT")
             .WithExternalHttpEndpoints();
+
+        // The Tauri desktop shell (apps/desktop) as an optional, explicitly-started
+        // resource that loads the Aspire-managed `web` dev server — NOT a second
+        // Vite. apps/desktop/src-tauri/tauri.conf.json sets beforeDevCommand
+        // "npm run dev:web" + devUrl http://localhost:5173, which would self-spawn a
+        // backend-blind Vite (no PORT, no /api proxy, no service discovery) that can
+        // also collide with `web`'s dynamic port. So we launch `tauri dev` with
+        // beforeDevCommand disabled and devUrl overridden to `web`'s endpoint, wired
+        // in via a reference expression so Tauri points at the same origin that
+        // already proxies /api + the /api/collab WebSocket.
+        //
+        // It is nested inside the node_modules gate (so `web` always exists for the
+        // reference and the Docker-only integration harness — which never installs
+        // node_modules — never adds it) and additionally guarded by:
+        //   - Run mode (inherited from the enclosing block) so it never enters the
+        //     published/azd manifest; the desktop app ships via its own tauri build.
+        //   - WithExplicitStart() so it stays not-started in the dashboard until a
+        //     developer clicks Start, and never auto-launches (Tauri opens a native
+        //     window and needs a display + the Rust toolchain, neither present in
+        //     headless CI / the Aspire.Hosting.Testing run-mode harness).
+        //   - The Rust toolchain (rustup/cargo) being present; otherwise we skip it
+        //     with a one-line install hint, matching the `web` node_modules gate.
+        if (DesktopPrerequisites.RustToolchainAvailable())
+        {
+            builder.AddNpmApp("desktop", "../../apps/desktop", "tauri")
+                .WithReference(web)
+                .WaitFor(web)
+                .WithExplicitStart()
+                .WithArgs(context =>
+                {
+                    // Runs `npm run tauri -- dev --config {json}`, i.e. `tauri dev`
+                    // with beforeDevCommand cleared and devUrl pointed at `web`.
+                    context.Args.Add("--");
+                    context.Args.Add("dev");
+                    context.Args.Add("--config");
+                    context.Args.Add(ReferenceExpression.Create(
+                        $"{{\"build\":{{\"beforeDevCommand\":\"\",\"devUrl\":\"{web.GetEndpoint("http")}\"}}}}"));
+                });
+        }
+        else
+        {
+            Console.WriteLine(
+                "[cadence] Skipping the 'desktop' resource: the Rust toolchain " +
+                "(rustup/cargo) was not found. Install it from https://rustup.rs to " +
+                "launch the Tauri shell under `aspire run`.");
+        }
     }
     else
     {
         Console.WriteLine(
-            "[cadence] Skipping the 'web' resource: node_modules is missing. " +
-            "Run `npm ci` at the repo root to dev-serve the SPA under `aspire run`.");
+            "[cadence] Skipping the 'web' resource (and the 'desktop' shell that " +
+            "loads it): node_modules is missing. Run `npm ci` at the repo root to " +
+            "dev-serve the SPA under `aspire run`.");
     }
 }
 
@@ -90,6 +137,71 @@ if (builder.ExecutionContext.IsRunMode)
 }
 
 builder.Build().Run();
+
+file static class DesktopPrerequisites
+{
+    // Detects whether the Rust toolchain (rustup/cargo) is available so the
+    // optional `desktop` (Tauri) resource is only wired when it could actually
+    // build. Tauri shells out to cargo, so cargo must be resolvable; we check the
+    // PATH (how a normal rustup install exposes it) and fall back to the default
+    // rustup home (~/.cargo/bin) in case PATH was not propagated to the AppHost.
+    public static bool RustToolchainAvailable()
+    {
+        string[] names = OperatingSystem.IsWindows()
+            ? ["cargo.exe", "cargo.cmd", "cargo.bat"]
+            : ["cargo"];
+
+        var path = Environment.GetEnvironmentVariable("PATH");
+        if (!string.IsNullOrEmpty(path))
+        {
+            foreach (var dir in path.Split(Path.PathSeparator))
+            {
+                if (string.IsNullOrWhiteSpace(dir))
+                {
+                    continue;
+                }
+
+                if (ContainsExecutable(dir, names))
+                {
+                    return true;
+                }
+            }
+        }
+
+        var cargoHome = Environment.GetEnvironmentVariable("CARGO_HOME");
+        if (string.IsNullOrEmpty(cargoHome))
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (!string.IsNullOrEmpty(home))
+            {
+                cargoHome = Path.Combine(home, ".cargo");
+            }
+        }
+
+        return !string.IsNullOrEmpty(cargoHome)
+            && ContainsExecutable(Path.Combine(cargoHome, "bin"), names);
+    }
+
+    private static bool ContainsExecutable(string directory, string[] names)
+    {
+        foreach (var name in names)
+        {
+            try
+            {
+                if (File.Exists(Path.Combine(directory, name)))
+                {
+                    return true;
+                }
+            }
+            catch (ArgumentException)
+            {
+                // Ignore malformed PATH entries (invalid path characters).
+            }
+        }
+
+        return false;
+    }
+}
 
 file static class BillingConfigurationExtensions
 {
