@@ -33,6 +33,7 @@ export type ComposerAction =
   | { type: 'set-track-instrument'; trackId: string; instrumentId: InstrumentId }
   | { type: 'toggle-track-muted'; trackId: string }
   | { type: 'add-note'; trackId: string; note: Note }
+  | { type: 'insert-notes'; trackId: string; notes: Note[] }
   | { type: 'update-note'; trackId: string; noteId: string; changes: Partial<Note> }
   | { type: 'remove-note'; trackId: string; noteId: string }
   | { type: 'select-notes'; noteIds: string[]; additive?: boolean }
@@ -205,6 +206,33 @@ export function composerReducer(
           })),
         },
         selectedNoteIds: [note.id],
+      }
+    }
+
+    case 'insert-notes': {
+      // Commit a batch (e.g. an accepted AI suggestion) in a single transition:
+      // every note is sanitized/clamped like `add-note`, the timeline grows to
+      // fit the latest end, and the whole batch becomes the selection. Doing this
+      // in one dispatch keeps it a single undo step and — unlike looping
+      // `add-note` — leaves ALL inserted notes selected instead of just the last,
+      // so the accept path can reveal and highlight the region it just placed.
+      if (action.notes.length === 0) return state
+      const notes = action.notes.map(sanitizeNote)
+      let lengthBeats = state.project.lengthBeats
+      for (const note of notes) {
+        lengthBeats = lengthForNoteEnd(lengthBeats, note.start + note.duration)
+      }
+      return {
+        ...state,
+        project: {
+          ...state.project,
+          lengthBeats,
+          tracks: mapTrack(state.project, action.trackId, (t) => ({
+            ...t,
+            notes: [...t.notes, ...notes],
+          })),
+        },
+        selectedNoteIds: notes.map((note) => note.id),
       }
     }
 

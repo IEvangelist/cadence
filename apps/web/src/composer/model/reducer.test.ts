@@ -247,6 +247,74 @@ describe('notes', () => {
   })
 })
 
+describe('insert-notes', () => {
+  it('appends the whole batch and selects every inserted note', () => {
+    const state = composerReducer(seed(), {
+      type: 'insert-notes',
+      trackId: 'track_a',
+      notes: [
+        createNote({ pitch: 60, start: 0, duration: 1 }, 'n1'),
+        createNote({ pitch: 64, start: 1, duration: 1 }, 'n2'),
+        createNote({ pitch: 67, start: 2, duration: 1 }, 'n3'),
+      ],
+    })
+    expect(state.project.tracks[0].notes.map((n) => n.id)).toEqual(['n1', 'n2', 'n3'])
+    // Unlike a loop of add-note (which selects only the last), the whole batch
+    // is selected so the accept path can reveal and highlight the region.
+    expect(state.selectedNoteIds).toEqual(['n1', 'n2', 'n3'])
+  })
+
+  it('preserves notes already on the track', () => {
+    let state = composerReducer(seed(), {
+      type: 'add-note',
+      trackId: 'track_a',
+      note: createNote({ pitch: 48, start: 0, duration: 1 }, 'existing'),
+    })
+    state = composerReducer(state, {
+      type: 'insert-notes',
+      trackId: 'track_a',
+      notes: [createNote({ pitch: 72, start: 4, duration: 1 }, 'n1')],
+    })
+    expect(state.project.tracks[0].notes.map((n) => n.id)).toEqual(['existing', 'n1'])
+    expect(state.selectedNoteIds).toEqual(['n1'])
+  })
+
+  it('sanitizes every inserted note', () => {
+    const state = composerReducer(seed(), {
+      type: 'insert-notes',
+      trackId: 'track_a',
+      notes: [createNote({ pitch: 200, start: -3, duration: 0, velocity: 5 }, 'n1')],
+    })
+    const note = state.project.tracks[0].notes[0]
+    expect(note.pitch).toBe(127)
+    expect(note.start).toBe(0)
+    expect(note.duration).toBe(MIN_NOTE_DURATION)
+    expect(note.velocity).toBe(1)
+  })
+
+  it('grows the timeline to fit the latest note end', () => {
+    const state = composerReducer(seed(), {
+      type: 'insert-notes',
+      trackId: 'track_a',
+      notes: [
+        createNote({ pitch: 60, start: 0, duration: 1 }, 'n1'),
+        createNote({ pitch: 62, start: 30, duration: 2 }, 'n2'),
+      ],
+    })
+    expect(state.project.lengthBeats).toBe(32)
+  })
+
+  it('is a no-op for an empty batch', () => {
+    const before = seed()
+    const after = composerReducer(before, {
+      type: 'insert-notes',
+      trackId: 'track_a',
+      notes: [],
+    })
+    expect(after).toBe(before)
+  })
+})
+
 describe('selection', () => {
   it('replaces selection by default', () => {
     let state = composerReducer(seed(), { type: 'select-notes', noteIds: ['a', 'b'] })

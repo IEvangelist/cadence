@@ -52,12 +52,18 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
     previewNote,
     positionBeats,
     transportState,
+    revealRequest,
   } = controller
 
   const track =
     project.tracks.find((t) => t.id === selectedTrackId) ?? project.tracks[0]
   const isDrum = track ? getInstrument(track.instrumentId).kind === 'drum' : false
-  const selectedNoteId = state.selectedNoteIds[0] ?? null
+  // The whole selection highlights (an accepted AI batch selects every inserted
+  // note); the first selected note still drives the velocity editor and the
+  // keyboard Delete/caret affordances.
+  const selectedNoteIds = state.selectedNoteIds
+  const selectedSet = new Set(selectedNoteIds)
+  const selectedNoteId = selectedNoteIds[0] ?? null
   const selectedNote = track?.notes.find((n) => n.id === selectedNoteId)
 
   const gridRef = useRef<HTMLDivElement>(null)
@@ -123,6 +129,34 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
     scroller.scrollTop = Math.max(0, centerY - scroller.clientHeight / 2)
     didAutoScrollRef.current = true
   }, [track])
+
+  // #101: when a batch of notes is inserted (e.g. an accepted AI suggestion),
+  // scroll the freshly placed region into view on BOTH axes. `Generate` anchors
+  // new melodies after the existing content, so the region is frequently
+  // off-viewport and the accept looks like a no-op. Token-gated so it fires once
+  // per insert (never on mount — token starts at 0 — and idempotent under
+  // StrictMode's double-invoke). Geometry is pure timing math, so it works before
+  // the browser paints the new notes.
+  useEffect(() => {
+    if (revealRequest.token === 0) return
+    const scroller = scrollRef.current
+    if (!scroller) return
+    const inserted = (track?.notes ?? []).filter((note) =>
+      revealRequest.noteIds.includes(note.id),
+    )
+    if (inserted.length === 0) return
+
+    const starts = inserted.map((note) => note.start)
+    const minStart = Math.min(...starts)
+    // Lead-in margin of one beat so the region isn't flush against the edge.
+    scroller.scrollLeft = Math.max(0, beatToX(minStart) - layout.beatWidth)
+
+    const pitches = inserted.map((note) => note.pitch)
+    const centerPitch = Math.round((Math.max(...pitches) + Math.min(...pitches)) / 2)
+    const centerY = pitchToRow(centerPitch) * layout.rowHeight + layout.rowHeight / 2
+    scroller.scrollTop = Math.max(0, centerY - scroller.clientHeight / 2)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire on token bump only, not on every note edit
+  }, [revealRequest.token])
 
   const beginGesture = (gesture: Gesture): void => {
     gestureRef.current = gesture
@@ -264,7 +298,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
 
           {track?.notes.map((note) => {
             const rect = noteRect(note, layout)
-            const selected = note.id === selectedNoteId
+            const selected = selectedSet.has(note.id)
             return (
               <button
                 key={note.id}

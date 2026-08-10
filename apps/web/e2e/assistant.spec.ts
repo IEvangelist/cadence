@@ -43,6 +43,16 @@ test.describe('AI assistant', () => {
       .poll(async () => page.locator('.pr-note:not(.is-preview)').count())
       .toBeGreaterThan(committedBefore)
     await expect(page.locator('.pr-note.is-preview')).toHaveCount(0)
+
+    // #101: accepting must SELECT every inserted note and REVEAL the region, so
+    // the placement is visible instead of feeling like a no-op. The empty project
+    // means every committed note is freshly inserted, so the whole batch is the
+    // selection — and the first of them must be scrolled into view.
+    const committedAfter = await page.locator('.pr-note:not(.is-preview)').count()
+    const inserted = committedAfter - committedBefore
+    expect(inserted).toBeGreaterThan(0)
+    await expect(page.locator('.pr-note.is-selected')).toHaveCount(inserted)
+    await expect(page.locator('.pr-note.is-selected').first()).toBeInViewport()
   })
 
   test('is keyboard-operable', async ({ page }) => {
