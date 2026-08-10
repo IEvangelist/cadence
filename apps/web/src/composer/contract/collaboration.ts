@@ -1,108 +1,99 @@
 /**
- * Collaboration contract seam for the single shared live composer session.
+ * Collaboration contract seam for the single shared live composer session (effort #9).
  *
- * Implemented by effort #9 with Yjs CRDT + y-websocket. Persistence still flows
- * through the existing ProjectStore seam so offline/local projects keep working.
+ * PUBLIC vs INTERNAL — the boundary features build against:
+ *   - PUBLIC (features #41/#42/#43/#45 MAY depend): `ShareRole`, `Participant`,
+ *     `CollaborationStatus`, and the read-only `useCollaborationStatus()` selector
+ *     (owned by this contract module; implemented over #9's live state during the
+ *     post-#9 rebase — see docs/composer-api.md).
+ *   - INTERNAL (#9 plumbing — features MUST NOT depend/drive): the Yjs sync path
+ *     (`ComposerController.applyRemoteProject`, the `sync-remote` reducer action, the
+ *     `<Composer collabProviderFactory>` prop) and #9's live-state hook
+ *     `useCollaboration(): CollaborationState` with roster entries `CollabPresence`
+ *     (apps/web/src/composer/model/collab/). See {@link ComposerCollaborationInternals}.
  *
- * PUBLIC vs INTERNAL: feature efforts (#41/#42/#43/#45) build ONLY against the
- * read-only {@link CollaborationStatus} surface (capability + presence). The
- * provider/session interfaces and the controller's `applyRemoteProject` sync
- * path are INTERNAL #9 plumbing — see {@link ComposerCollaborationInternals}.
+ * The PUBLIC `CollaborationStatus` is a read-only projection over #9's internal
+ * `CollaborationState`; it never mutates the session or drives the sync path.
  */
 import type { Project } from '../model/project'
 
 export type ShareRole = 'owner' | 'editor' | 'viewer'
 
-export interface Participant {
-  readonly id: string
-  readonly userId?: string
-  readonly displayName: string
-  readonly color: string
-  readonly role: ShareRole
-}
-
-export interface PresenceCursor {
-  readonly trackId: string | null
-  readonly beat: number
-  readonly pitch?: number
-}
-
-export interface PresenceState {
-  readonly self: Participant
-  readonly peers: readonly Participant[]
-  readonly cursors: Readonly<Record<string, PresenceCursor>>
-}
-
-export type PresenceListener = (state: PresenceState) => void
-export type ProjectChangeListener = (project: Project) => void
-
 /**
- * INTERNAL — the live provider/session seam that effort #9 implements and wires
- * via `<Composer collabProviderFactory>`. Features MUST NOT depend on these
- * directly; consume {@link CollaborationStatus} instead.
- */
-export interface CollaborationSession {
-  readonly projectId: string
-  readonly role: ShareRole
-  readonly connected: boolean
-  getPresence(): PresenceState
-  subscribePresence(listener: PresenceListener): () => void
-  updateCursor(cursor: PresenceCursor): void
-  subscribeProject(listener: ProjectChangeListener): () => void
-  subscribeConnection(listener: (connected: boolean) => void): () => void
-  dispose(): void
-}
-
-export interface CollaborationRoomOptions {
-  projectId: string
-  self: { displayName: string; color: string; userId?: string }
-  role?: ShareRole
-  signal?: AbortSignal
-}
-
-export interface CollaborationProvider {
-  readonly id: string
-  isEnabled(): boolean
-  connect(options: CollaborationRoomOptions): Promise<CollaborationSession>
-}
-
-export interface ShareGrant {
-  role: ShareRole
-  projectId: string
-  token?: string
-}
-
-/**
- * PUBLIC — read-only collaboration status that features may observe to render
- * share / presence affordances. This is the ONLY collaboration surface features
- * should depend on; it never mutates the live session or drives the sync path.
+ * A single live participant in a collaboration room — a read-only projection of one
+ * entry of #9's internal `CollabPresence` roster.
  *
- * Derived from the internal {@link CollaborationSession} by effort #9 and exposed
- * to features as plain, immutable state (e.g. via a hook selector or `<Composer>`
- * render prop). Solo/offline sessions report `isActive: false`, `role: 'owner'`,
- * and an empty `participants` list.
+ * `id` is a PER-CONNECTION presence handle (the stringified Yjs awareness `clientId`):
+ * one user open in two tabs appears as TWO participants. Use it as a stable React key
+ * and cursor-mapping handle; group by {@link Participant.userId} for a per-person view.
+ */
+export interface Participant {
+  /** Per-connection presence handle (stringified Yjs `clientId`). NOT per-user — multi-tab ⇒ multiple entries. */
+  readonly id: string
+  /** Stable auth identity of the user behind this connection (#9 `user.id`). Group by this for a per-person roster. */
+  readonly userId: string
+  /** Human-readable display name (#9 `user.name`). */
+  readonly displayName: string
+  /** Presence color (#9 `user.color`). */
+  readonly color: string
+  /** True for the local connection — lets features highlight "you" without plumbing auth identity. */
+  readonly isSelf: boolean
+  /**
+   * The participant's server-side role, when known. OPTIONAL: in v1 #9's awareness
+   * broadcasts only the CURRENT user's role (surfaced at {@link CollaborationStatus.role}),
+   * so peer entries omit it. When present it is a DISPLAY hint only and MUST NOT gate
+   * behavior — write access is enforced server-side by #9's relay, never by this field.
+   */
+  readonly role?: ShareRole
+}
+
+/**
+ * PUBLIC — read-only collaboration status; the ONLY collaboration surface features
+ * may depend on. A projection of #9's internal `CollaborationState`; it never mutates
+ * the live session or drives the sync path.
+ *
+ * Produced by the read-only selector {@link UseCollaborationStatus} (owned by this
+ * contract module, implemented over #9's `useCollaboration()` during the post-#9
+ * rebase). Mapping from #9's internal state:
+ *   - `canShare`     ← the `<Composer canShare>` capability prop
+ *   - `isActive`     ← `CollaborationState.active`
+ *   - `role`         ← the current user's server-authoritative role
+ *   - `participants` ← `CollaborationState.presence` projected to `Participant[]`
+ * #9's internal `connected` / `canWrite` fields are NOT part of the public surface.
+ *
+ * Solo/offline sessions report `{ isActive: false, role: 'owner', participants: [] }`.
  */
 export interface CollaborationStatus {
   /** Whether the current user may open or share a live room (mirrors `<Composer canShare>`). */
   readonly canShare: boolean
   /** Whether a live collaboration room is currently connected. */
   readonly isActive: boolean
-  /** The current user's role in the active room; `'owner'` when solo/offline. */
+  /** The current user's server-authoritative role; `'owner'` when solo/offline. */
   readonly role: ShareRole
   /** Live participant roster (read-only). Empty when not collaborating. */
   readonly participants: readonly Participant[]
 }
 
 /**
- * INTERNAL classification marker for effort #9's collaboration sync plumbing.
+ * The read-only selector that projects #9's live collaboration state into the PUBLIC
+ * {@link CollaborationStatus}. Owned by this contract module and implemented over #9's
+ * `useCollaboration()` hook during the post-#9 rebase; features consume the returned
+ * value and never touch #9's session or sync path.
+ */
+export type UseCollaborationStatus = () => CollaborationStatus
+
+/**
+ * INTERNAL classification marker for effort #9's collaboration plumbing.
  *
- * These members live on the runtime (controller / reducer / `<Composer>` props),
- * NOT in `ComposerPublicApi`. They are enumerated here purely to formalize the
- * public/internal boundary; `contract/conformance.ts` asserts they never leak
- * into the public surface. Features MUST NOT call them:
+ * These live on #9's runtime (controller / reducer / `<Composer>` props / live-state
+ * hook), NOT in `ComposerPublicApi`. They are enumerated here purely to formalize the
+ * public/internal boundary; `contract/conformance.ts` asserts they never leak into the
+ * public surface. Features MUST NOT call them:
  *   - `ComposerController.applyRemoteProject(project)` — applies a remote Yjs snapshot
  *   - `ComposerAction` variant `'sync-remote'` — reducer action backing the above
  *   - `<Composer collabProviderFactory>` — provider wiring
+ *   - `useCollaboration(): CollaborationState` + `CollabPresence` — #9's live-state hook and
+ *     roster (apps/web/src/composer/model/collab/), the source the public projection derives from
  */
 export interface ComposerCollaborationInternals {
   /** @internal Applies a remote project snapshot into the store. Do not call from features. */

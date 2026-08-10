@@ -6,7 +6,6 @@ import {
   LocalStorageProjectStore,
   MemoryStorage,
   type AudioEngine,
-  type CollaborationSession,
   type CollaborationStatus,
   type ComposerViewport,
   type CompositionAssistant,
@@ -78,39 +77,18 @@ describe('composer contract conformance', () => {
       collaborationSeats: 1,
     }
 
-    const presence = {
-      self: {
-        id: 'participant_self',
-        displayName: 'Vasquez',
-        color: '#ff00aa',
-        role: 'owner' as const,
-      },
-      peers: [],
-      cursors: {},
+    const self: Participant = {
+      id: '42',
+      userId: 'user_vasquez',
+      displayName: 'Vasquez',
+      color: '#ff00aa',
+      isSelf: true,
     }
-    const collaboration: CollaborationSession = {
-      projectId: 'project_from_template',
-      role: 'owner',
-      connected: true,
-      getPresence: () => presence,
-      subscribePresence: (listener) => {
-        listener(presence)
-        return () => {}
-      },
-      updateCursor: () => {},
-      subscribeProject: () => () => {},
-      subscribeConnection: (listener) => {
-        listener(true)
-        return () => {}
-      },
-      dispose: () => {},
-    }
-
     const collabStatus: CollaborationStatus = {
-      canShare: false,
-      isActive: false,
+      canShare: true,
+      isActive: true,
       role: 'owner',
-      participants: [] as readonly Participant[],
+      participants: [self] as readonly Participant[],
     }
 
     const preset: InstrumentPreset = {
@@ -136,9 +114,11 @@ describe('composer contract conformance', () => {
     expect(template.create().tracks.length).toBeGreaterThanOrEqual(1)
     expect(mixerOverlay.track_1.trackId).toBe('track_1')
     expect(entitlementView.canUse('generate', freeEntitlements)).toBe(false)
-    expect(collaboration.getPresence().self.displayName).toBe('Vasquez')
-    expect(collabStatus.isActive).toBe(false)
-    expect(collabStatus.participants).toHaveLength(0)
+    expect(collabStatus.participants[0].displayName).toBe('Vasquez')
+    expect(collabStatus.participants[0].isSelf).toBe(true)
+    expect(collabStatus.participants[0].role).toBeUndefined()
+    expect(collabStatus.isActive).toBe(true)
+    expect(collabStatus.participants).toHaveLength(1)
     expect(preset.instrumentId).toBe('poly-synth')
     expect(soundDesign.engine).toBe('synth')
     expect(viewport.kind).toBe('desktop')

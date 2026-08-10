@@ -118,53 +118,79 @@ collaboration is the foundation seam: durable edits converge into a shared
 project, while presence/awareness stays separate from `Project`. Persistence
 continues to flow through `ProjectStore`.
 
-| Type | Purpose |
-|---|---|
-| `ShareRole` | Role union: `owner`, `editor`, or `viewer` |
-| `Participant` | Peer identity shown in collaboration UI |
-| `PresenceCursor` | Ephemeral piano-roll cursor location |
-| `PresenceState` | Self, peers, and peer cursor map |
-| `PresenceListener` | Presence subscription callback |
-| `ProjectChangeListener` | Shared-project update callback |
-| `CollaborationStatus` | Public, read-only collaboration model features may consume |
-| `CollaborationSession` | Internal connected-room handle for #9 provider plumbing |
-| `CollaborationRoomOptions` | Internal inputs required to connect to a room |
-| `CollaborationProvider` | Internal provider abstraction for Yjs/y-websocket or test doubles |
-| `ShareGrant` | Project/token/role grant returned by sharing flows |
-| `ComposerCollaborationInternals` | Classification marker for collaboration sync plumbing that must stay out of `ComposerPublicApi` |
+| Type | Purpose | Tier |
+|---|---|---|
+| `ShareRole` | Role union: `owner`, `editor`, `viewer` (mirrors #9's server-authoritative `CollaborationRole`) | PUBLIC |
+| `Participant` | Read-only projection of one `CollabPresence` entry: per-connection `id`, `userId`, `displayName`, `color`, `isSelf`, optional `role` | PUBLIC |
+| `CollaborationStatus` | Read-only collaboration model features consume (`canShare`, `isActive`, `role`, `participants`) | PUBLIC |
+| `UseCollaborationStatus` | Signature of the read-only selector that projects #9's live state into `CollaborationStatus` | PUBLIC |
+| `ComposerCollaborationInternals` | Classification marker for #9 sync plumbing that must stay out of `ComposerPublicApi` | INTERNAL |
 
 #### Public vs internal — collaboration surface
 
-#9 merges first; the contract and feature PRs rebase on top. The composer gains
-a collaboration surface, split as follows.
+#9 merges first; this contract and the feature PRs rebase on top. The single-model
+rule (agreed with #9): **this contract owns the PUBLIC shape; #9 owns the internal live
+state and produces the public shape via a read-only selector — one type, no duplicate,
+no mutation path.**
 
 **PUBLIC (features #41/#42/#43/#45 may depend on these):**
 
 - `canShare` — capability flag (mirrors the `<Composer canShare>` prop).
-- `CollaborationStatus` — a read-only model in `contract/collaboration.ts`:
+- `CollaborationStatus` — read-only model in `contract/collaboration.ts`:
   `{ readonly canShare: boolean; readonly isActive: boolean; readonly role: ShareRole; readonly participants: readonly Participant[] }`.
-  Solo/offline reports `isActive: false`, `role: 'owner'`, and empty
-  participants. This is the **only** collaboration surface features should
-  consume.
+  The **only** collaboration surface features should consume.
+- `Participant` — a read-only projection of one `CollabPresence` entry. `id` is a
+  **per-connection** presence handle (stringified Yjs `clientId`), so one user in two
+  tabs appears twice — group by `userId` for a per-person view. `isSelf` marks the local
+  connection. `role` is **optional** (see below).
+- `useCollaborationStatus(): CollaborationStatus` — the read-only selector that projects
+  #9's live state. Owned by this contract module and implemented over #9's
+  `useCollaboration()` during the post-#9 rebase; features import it from the contract.
 
-**INTERNAL (features MUST NOT depend on / drive these — collab sync plumbing):**
+Projection mapping (#9 internal → contract public):
 
-- `ComposerController.applyRemoteProject(project)` — applies a remote Yjs
-  snapshot into the store.
-- `ComposerAction` variant `'sync-remote'` — the reducer action backing the
-  above.
+| Contract (`CollaborationStatus` / `Participant`) | #9 source (`CollaborationState` / `CollabPresence`) |
+|---|---|
+| `isActive` | `active` |
+| `role` (current user) | current user's server-authoritative role |
+| `participants` | `presence` projected to `Participant[]` |
+| `Participant.id` | `String(clientId)` (per-connection) |
+| `Participant.userId` | `user.id` |
+| `Participant.displayName` | `user.name` |
+| `Participant.color` | `user.color` |
+| `Participant.isSelf` | `isSelf` |
+| `canShare` | `<Composer canShare>` capability prop |
+
+#9's internal `connected` / `canWrite` and per-participant `cursor` are **not** part of
+the public surface.
+
+**Per-participant `role` is optional in v1.** #9's awareness broadcasts only the current
+user's role (surfaced at `CollaborationStatus.role`), not each peer's, so `Participant.role`
+is omitted for peers. When a feature needs per-peer role badges, #9 adds a self-reported
+role to awareness as an additive fast-follow. **Security:** a self-reported awareness role
+is a **display hint only** and MUST NOT gate behavior — write access is enforced
+server-side by #9's relay (viewers' write-frames are dropped before broadcast), never by
+this field.
+
+**INTERNAL (features MUST NOT depend on / drive these — collab plumbing):**
+
+- `ComposerController.applyRemoteProject(project)` — applies a remote Yjs snapshot.
+- `ComposerAction` variant `'sync-remote'` — the reducer action backing the above.
 - `<Composer collabProviderFactory>` prop — provider wiring.
-- `CollaborationProvider` / `CollaborationSession` — the internal provider seam
-  #9 implements; features consume `CollaborationStatus`, not these.
+- `useCollaboration(): CollaborationState` + `CollabPresence` (in
+  `composer/model/collab/`) — #9's live-state hook and roster; the source the public
+  projection derives from. Features consume `CollaborationStatus`, not these.
 
-`contract/collaboration.ts` now also exports `ComposerCollaborationInternals`
-purely as a classification marker, and `contract/conformance.ts` enforces the
-boundary at compile time.
+`contract/collaboration.ts` exports `ComposerCollaborationInternals` purely as a
+classification marker, and `contract/conformance.ts` enforces the boundary at compile
+time (`'applyRemoteProject'` must never be a key of `ComposerPublicApi`). Post-#9, the
+contract additionally asserts the selector's return is assignable to `CollaborationStatus`
+(`⊆`: #9 conforms to the contract shape, never the reverse).
 
 ```ts
 function CollaborationBadge({ status }: { status: CollaborationStatus }) {
   setShareDisabled(!status.canShare)
-  renderParticipants(status.participants)
+  renderParticipants(status.participants) // each has id, userId, displayName, color, isSelf
 
   // INTERNAL — do NOT call: controller.applyRemoteProject(...)
   return status.isActive ? `Live as ${status.role}` : 'Solo'
@@ -339,6 +365,7 @@ import type {
   ComposerPublicApi,
   InstrumentPreset,
   MixerController,
+  Participant,
 } from '../composer/contract'
 ```
 
