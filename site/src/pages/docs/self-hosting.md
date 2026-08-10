@@ -8,7 +8,7 @@ description: Deploy the Cadence Aspire backend to Azure Container Apps with azd,
 
 Cadence's backend deploys to **Azure Container Apps** using
 [`azd`](https://learn.microsoft.com/azure/developer/azure-developer-cli/) and the
-**.NET Aspire azd integration**. There is no hand-authored Bicep to drift from the
+**Aspire azd integration**. There is no hand-authored Bicep to drift from the
 app — azd generates the infrastructure from the Aspire AppHost model. This page
 mirrors [`infra/README.md`](https://github.com/IEvangelist/cadence/blob/main/infra/README.md).
 

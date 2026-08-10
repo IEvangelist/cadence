@@ -1,12 +1,12 @@
 ---
 layout: ../../layouts/DocsLayout.astro
 title: Architecture
-description: How Cadence fits together — the Tauri desktop shell, the TypeScript SPA, and the .NET Aspire service graph.
+description: How Cadence fits together — the Tauri desktop shell, the TypeScript SPA, and the Aspire service graph.
 ---
 
 # Architecture
 
-Cadence is a desktop-first client over a .NET Aspire backend. This page mirrors
+Cadence is a desktop-first client over an Aspire backend. This page mirrors
 [`docs/architecture.md`](https://github.com/IEvangelist/cadence/blob/main/docs/architecture.md);
 the repository is the source of truth.
 
@@ -24,7 +24,7 @@ the repository is the source of truth.
 +------------------------------ HTTPS / WSS ----------------------+
                     |                         |
       +-------------v-----------+   +---------v-----------+
-      |  .NET Aspire AppHost    |   | Yjs collab relay    |
+      |  Aspire AppHost         |   | Yjs collab relay    |
       |  - API (ASP.NET Core)   |   | (Node y-websocket)  |
       |    REST + OpenAPI       |   +---------------------+
       |    Identity + OAuth     |

@@ -14,7 +14,7 @@ Condensed view. The authoritative roadmap is [`plan.md`](plan.md).
 +------------------------------ HTTPS / WSS ----------------------+
                     |                         |
       +-------------v-----------+   +---------v-----------+
-      |  .NET Aspire AppHost    |   | Yjs collab relay    |
+      |  Aspire AppHost         |   | Yjs collab relay    |
       |  - API (ASP.NET Core)   |   | (Node y-websocket)  |
       |    REST + OpenAPI       |   +---------------------+
       |    Identity + OAuth     |

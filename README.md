@@ -10,7 +10,7 @@
 ## What it is
 
 Cadence is a **Tauri** desktop app (cross-platform from day one) wrapping a TypeScript
-SPA, backed by a **.NET Aspire** service graph. Today you can:
+SPA, backed by an **Aspire** service graph. Today you can:
 
 - Compose in a **piano-roll** editor with a Tone.js audio engine, instruments, transport,
   and MIDI import/export.
@@ -52,6 +52,9 @@ and audio **stem separation** (Demucs/ONNX, [#10](https://github.com/IEvangelist
 **Prerequisites**
 
 - **.NET 10 SDK** (pinned in [`global.json`](global.json)).
+- **Aspire CLI** — install with `irm https://aspire.dev/install.ps1 | iex` (Windows) or
+  `curl -sSL https://aspire.dev/install.sh | bash` (Linux/macOS); see the
+  [install guide](https://aspire.dev/get-started/install-cli/).
 - **Docker Desktop**, running — Aspire starts Postgres, Redis, and the Azurite blob
   emulator as containers.
 - **Node.js LTS** (≥ 20) for the web SPA and Tauri shell.
@@ -60,7 +63,7 @@ and audio **stem separation** (Demucs/ONNX, [#10](https://github.com/IEvangelist
 storage, and opens the **Aspire dashboard** (resource list, logs, traces, metrics):
 
 ```bash
-dotnet run --project src/Cadence.AppHost
+aspire run
 ```
 
 **Start the web UI** — in a second terminal, run the Vite dev server from the repo root
@@ -83,7 +86,7 @@ you supply credentials via user-secrets. See [`docs/auth-setup.md`](docs/auth-se
 ## Architecture
 
 A TypeScript SPA (shipped in the browser and inside a Tauri desktop shell) talks over
-HTTPS to a .NET Aspire service graph. The API owns identity, entitlements, and project
+HTTPS to an Aspire service graph. The API owns identity, entitlements, and project
 persistence over Postgres, Redis, and Blob storage, and ships an interactive OpenAPI
 reference (Scalar) at `/scalar`. See [`docs/architecture.md`](docs/architecture.md) for
 the detailed view.
@@ -93,7 +96,7 @@ flowchart TB
     subgraph client["Client — Tauri desktop shell / browser"]
         spa["TypeScript SPA (React + Vite)<br/>piano roll · Tone.js engine · notation<br/>in-browser AI (Magenta.js/TF.js) · Plugin SDK"]
     end
-    subgraph aspire[".NET Aspire AppHost"]
+    subgraph aspire["Aspire AppHost"]
         api["API (ASP.NET Core)<br/>REST + OpenAPI · Identity + OAuth<br/>entitlements · billing"]
         pg[("Postgres")]
         redis[("Redis")]
@@ -112,7 +115,7 @@ flowchart TB
 | Audio/MIDI | Tone.js / Web Audio, Web MIDI, soundfonts |
 | Notation | OpenSheetMusicDisplay + VexFlow |
 | AI (core) | Symbolic assistant — in-browser Magenta.js / TF.js |
-| Backend | .NET Aspire, ASP.NET Core (REST + OpenAPI) |
+| Backend | Aspire, ASP.NET Core (REST + OpenAPI) |
 | Data | Postgres + Azure Blob Storage + Redis |
 | Auth | ASP.NET Core Identity + OAuth (GitHub/Google/Microsoft) + email magic-link |
 | Billing | Stripe (freemium; free tier = watermarked audio + limits) |
