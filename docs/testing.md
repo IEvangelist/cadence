@@ -431,3 +431,32 @@ gates stay fast and hermetic (SQLite, no Docker):
 The host-only glue (`SeparationBackgroundService` sweep loop, `HttpStemModelProvider`
 download/verify/purge I/O) stays `[ExcludeFromCodeCoverage]` — its logic is factored
 into the pure, tested `SeparationJobProcessor` and `StemModelIntegrity` helpers.
+
+## Collaboration document persistence (effort #91)
+
+Server-side persistence (survive all-peers-disconnect) is unit- and
+integration-tested in `Cadence.Api.Tests` (SQLite/in-memory, no Docker), TDD-first:
+
+- **Update-log codec** (`CollabDocumentCodecTests`). Round-trips a list of update
+  payloads through the single-`byte[]` framing, preserves empty entries, and decodes
+  `null`/empty/truncated blobs to an empty log (fail-soft).
+- **Hub lifecycle** (`CollabHubPersistenceTests`). `JoinAsync` loads the saved log
+  exactly once on first join; `AppendUpdate` accumulates; `SnapshotUpdates` hands
+  back a copy; `LeaveAsync` saves on last-leave, skips the save when the log is
+  empty, and a rejoin reloads from the store.
+- **EF store** (`EfCollabDocumentStoreTests`, SQLite). A missing document reads as
+  an empty log; save/load round-trips the bytes and timestamp; a second save upserts
+  the single `(OwnerId, ProjectId)` row; documents are owner-scoped (no cross-owner
+  read).
+- **WebSocket end-to-end** (`CollaborationPersistenceTests`). An editor's updates
+  survive a full disconnect and a reconnecting client is rehydrated from the DB (the
+  server answers its SyncStep1 with the persisted state); a fresh room answers
+  SyncStep1 with the empty-document update; a reconnecting **viewer** receives the
+  persisted state read-only. Reconnect ordering is made deterministic by polling the
+  persisted row before rejoining (proving save-on-leave completed).
+
+The pre-existing relay/authz tests (`CollaborationRelayTests`) are unchanged and
+still green: none sends SyncStep1, so the reactive rehydration responder is
+invisible to them. The generated EF migration is excluded from the coverage gate
+(`[*]Cadence.Data.Migrations.*`); the store, hub, endpoint, protocol, and codec
+logic are covered by the tests above. Backend line + method coverage stays ≥ 80%.

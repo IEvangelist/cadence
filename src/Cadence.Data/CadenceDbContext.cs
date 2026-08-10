@@ -23,6 +23,9 @@ public sealed class CadenceDbContext(DbContextOptions<CadenceDbContext> options)
     /// <summary>Collaboration share links granting roles on projects.</summary>
     public DbSet<ProjectShareLink> ProjectShareLinks => Set<ProjectShareLink>();
 
+    /// <summary>Durable server-side Yjs documents backing live collaboration rooms.</summary>
+    public DbSet<CollaborationDocument> CollaborationDocuments => Set<CollaborationDocument>();
+
     /// <summary>Per-user billing subscriptions (1:1 with users).</summary>
     public DbSet<Subscription> Subscriptions => Set<Subscription>();
 
@@ -85,6 +88,22 @@ public sealed class CadenceDbContext(DbContextOptions<CadenceDbContext> options)
                 .HasOne(s => s.Project)
                 .WithMany()
                 .HasForeignKey(s => new { s.OwnerId, s.ProjectId })
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<CollaborationDocument>(document =>
+        {
+            // One durable document per owner-scoped project, keyed by the same
+            // composite as ProjectEntity and cascade-deleted with the project, so
+            // deleting a project reclaims its persisted collaboration state.
+            document.HasKey(d => new { d.OwnerId, d.ProjectId });
+            document.Property(d => d.OwnerId).IsRequired();
+            document.Property(d => d.ProjectId).IsRequired();
+            document.Property(d => d.State).IsRequired();
+            document
+                .HasOne(d => d.Project)
+                .WithMany()
+                .HasForeignKey(d => new { d.OwnerId, d.ProjectId })
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
