@@ -47,8 +47,9 @@ without Docker, and without any Azure login** by generating the IaC and the
 Aspire manifest locally:
 
 ```bash
-# 1) Aspire deployment manifest (pure .NET SDK — no azd, no Docker, no login)
-aspire run \
+# 1) Aspire deployment manifest — low-level manifest publisher (pure .NET SDK,
+#    no azd/Docker/login; a diagnostic, not the `aspire run` dev loop)
+dotnet run --project src/Cadence.AppHost \
   -- --publisher manifest --output-path ./aspire-manifest.json
 
 # 2) Full ACA Bicep from the AppHost model (azd, offline — no login/provision)
