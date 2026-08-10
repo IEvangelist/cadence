@@ -143,6 +143,17 @@ instruments: [
 Once the plugin is active, the instrument appears in every track's instrument
 dropdown and the engine plays it — no other wiring required.
 
+An instrument may also declare an optional `group` label (e.g. `Keys`, `Bass`,
+`Pads`). It's purely presentational: the picker buckets instruments that share a
+group under an `<optgroup>`, in first-seen order, and instruments without a
+group render as plain options. Omitting it is fully backward compatible.
+
+The core plugin dogfoods this: alongside the original poly/FM synths and drum
+kit it now contributes an expanded built-in library — electric piano, organ,
+pads, basses, leads, mallets/plucks, and additional drum kits — each registered
+through this exact same seam (see `plugins/builtins/synthVoices.ts` and
+`plugins/builtins/drumKits.ts`).
+
 ### (b) Effect
 
 An effect returns an `EffectNode` (`input` → effect → `output`). Effects with
@@ -345,7 +356,10 @@ current surface is the seam they'll grow from:
   render) remain first-class toolbar controls rather than generic contributions.
 - **Runtime effect toggling.** Effects are resolved when the engine is built;
   per-session enable/disable of an *already-built* chain is a follow-up.
-- **Plugin-instrument persistence.** A saved project referencing a
-  plugin-provided instrument coerces to the default synth when that plugin isn't
-  active (the persistence layer's existing coercion seam); durable per-plugin
-  instrument identity is a follow-up.
+- **Plugin-instrument persistence.** Saved projects store an instrument by id,
+  and the persistence layer's coercion seam is registry-aware: any id the host
+  currently knows (built-in or contributed by an active plugin) round-trips
+  intact, and only genuinely unknown ids fall back to the default synth. A
+  project referencing a plugin-provided instrument therefore still coerces to
+  the default when that plugin isn't active; durable per-plugin instrument
+  identity across load order is a follow-up.

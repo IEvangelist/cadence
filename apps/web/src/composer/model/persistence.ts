@@ -18,6 +18,7 @@ import {
   type Track,
   newId,
 } from './project'
+import { getInstrument } from '../instruments/registry'
 
 export class ProjectParseError extends Error {
   constructor(message: string) {
@@ -25,8 +26,6 @@ export class ProjectParseError extends Error {
     this.name = 'ProjectParseError'
   }
 }
-
-const INSTRUMENT_IDS: InstrumentId[] = ['poly-synth', 'fm-synth', 'drum-kit']
 
 const num = (value: unknown, fallback: number): number =>
   typeof value === 'number' && Number.isFinite(value) ? value : fallback
@@ -41,8 +40,17 @@ const MAX_TEMPO = 300
 const str = (value: unknown, fallback: string): string =>
   typeof value === 'string' ? value : fallback
 
+/**
+ * Coerce a stored instrument id to one the registry actually knows about.
+ *
+ * This is registry-aware rather than a hardcoded list so that instruments
+ * contributed by plugins (or the expanded built-in library) round-trip through
+ * persistence instead of being silently reset. Unknown ids fall back to the
+ * default `poly-synth`. {@link getInstrument} already falls back for unknown
+ * ids, so we compare the resolved id back to the input to detect that fallback.
+ */
 function coerceInstrument(value: unknown): InstrumentId {
-  return INSTRUMENT_IDS.includes(value as InstrumentId)
+  return typeof value === 'string' && getInstrument(value).id === value
     ? (value as InstrumentId)
     : 'poly-synth'
 }

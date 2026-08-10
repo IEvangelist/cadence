@@ -60,6 +60,7 @@ export const BUILTIN_INSTRUMENTS: InstrumentContribution[] = [
     kind: 'synth',
     description: 'A warm polyphonic subtractive synth — chords and pads.',
     polyphonic: true,
+    group: 'Synths',
     createVoice: (ctx) => createSynthVoice(ctx, false),
   },
   {
@@ -68,6 +69,7 @@ export const BUILTIN_INSTRUMENTS: InstrumentContribution[] = [
     kind: 'synth',
     description: 'A bright FM voice for leads, bells, and plucks.',
     polyphonic: true,
+    group: 'Synths',
     createVoice: (ctx) => createSynthVoice(ctx, true),
   },
   {
@@ -76,6 +78,7 @@ export const BUILTIN_INSTRUMENTS: InstrumentContribution[] = [
     kind: 'drum',
     description: 'A basic sampler-style kit: kick, snare, and hats.',
     polyphonic: true,
+    group: 'Drums',
     createVoice: (ctx) => createDrumVoice(ctx),
   },
 ]
