@@ -388,24 +388,6 @@ const description =
       </table>
     </div>
 
-    <figure class="pricing-shot">
-      <div class="app-frame">
-        <span class="app-chrome" aria-hidden="true"><i></i><i></i><i></i></span>
-        <img
-          src={href('/screenshots/pricing.webp')}
-          width="1400"
-          height="541"
-          alt="Cadence's in-app pricing screen comparing the Free plan at $0 with the Pro plan at $12 per month, including AI generation and export limits."
-          loading="lazy"
-          decoding="async"
-        />
-      </div>
-      <figcaption>
-        Pricing lives inside the app too. Free and Pro are live today; Studio is
-        indicative for the preview.
-      </figcaption>
-    </figure>
-
     <p class="pricing-note">
       Pricing is indicative for the preview and not final. The free tier is
       always free.
@@ -497,8 +479,7 @@ const description =
     z-index: -1;
   }
 
-  .hero-shot figcaption,
-  .pricing-shot figcaption {
+  .hero-shot figcaption {
     margin-top: var(--space-4);
     text-align: center;
     color: var(--color-text-subtle);
@@ -685,12 +666,6 @@ const description =
 
   .compare .dash {
     color: var(--color-text-subtle);
-  }
-
-  /* ------------------------------------------------------- In-app pricing shot */
-  .pricing-shot {
-    max-width: 52rem;
-    margin: clamp(var(--space-10), 6vw, var(--space-16)) auto 0;
   }
 
   .pricing-note {

@@ -4,9 +4,9 @@
  *
  * This drives the *actual* app (apps/web) with Playwright — no mockups. The app is
  * offline-first: signed out, the composer renders client-side from a seeded demo
- * project in localStorage, so we never need the Aspire backend. The only network
- * call we stub is `/api/entitlements` (so the pricing page shows a clean Free tier)
- * and other `/api/*` routes (kept fast + deterministic).
+ * project in localStorage, so we never need the Aspire backend. We stub
+ * `/api/entitlements` (a deterministic signed-out Free-tier state) and other
+ * `/api/*` routes (kept fast + deterministic).
  *
  * Reproduce:
  *   1. From the repo root: `npm ci` (installs the apps/web workspace, read-only).
@@ -33,7 +33,7 @@ const BASE_URL = process.env.CADENCE_APP_URL ?? 'http://localhost:5199';
 const VIEWPORT = { width: 1440, height: 900 };
 const SCALE = 2;
 
-/** Free-tier entitlements so the in-app pricing page renders a clean, current state. */
+/** Free-tier entitlements for a deterministic signed-out API state. */
 const FREE_ENTITLEMENTS = {
   tier: 'Free',
   watermarkExports: true,
@@ -195,17 +195,6 @@ async function main() {
   results.push(await capture(app, encoderPage, { name: 'plugins', selector: '.plugins-panel', maxWidth: 900 }));
   results.push(await capture(app, encoderPage, { name: 'import-export-share', selector: '.toolbar', maxWidth: 1600 }));
   await app.close();
-
-  // --- Pricing page (Free/Pro, clean Free-tier state) ---
-  const pricing = await newPage(context);
-  await pricing.goto(BASE_URL, { waitUntil: 'networkidle' });
-  await pricing.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
-  await pricing.addStyleTag({ content: CAPTURE_CSS });
-  await pricing.getByRole('button', { name: 'Pricing' }).click();
-  await pricing.locator('.pricing').waitFor({ state: 'visible', timeout: 20000 });
-  await pricing.getByText('$12', { exact: false }).first().waitFor({ state: 'visible', timeout: 20000 });
-  results.push(await capture(pricing, encoderPage, { name: 'pricing', selector: '.pricing', maxWidth: 1400 }));
-  await pricing.close();
 
   await browser.close();
 
