@@ -173,21 +173,66 @@ select:focus-visible {
 
 /* ---- Body layout ---- */
 .composer-body {
-  display: grid;
-  grid-template-columns: minmax(16rem, 22rem) 1fr;
+  display: flex;
   gap: var(--space-4);
-  align-items: start;
+  align-items: stretch;
 }
 
 .composer-sidebar {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-3);
+  flex: 0 0 22rem;
+  max-width: 22rem;
+  min-width: 0;
+}
+
+.piano-roll {
+  flex: 1 1 auto;
+}
+
+/*
+ * Desktop: the composer fills the viewport (#98). The rail scrolls internally and
+ * the piano roll grows to fill the remaining height as the primary surface, so the
+ * page no longer grows to the summed height of every panel.
+ */
+@media (min-width: 60.0625rem) {
+  .app--composer {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .app--composer > .composer {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .composer-body {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .composer-sidebar {
+    overflow-y: auto;
+  }
+
+  .piano-roll {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
 }
 
 @media (max-width: 60rem) {
   .composer-body {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .composer-sidebar {
+    flex-basis: auto;
+    max-width: none;
   }
 }
 
@@ -211,6 +256,103 @@ select:focus-visible {
   font-family: var(--font-display);
   font-size: var(--font-size-md);
 }
+
+/* ---- #98 Collapsible side-rail panels ---- */
+.rail-item {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.rail-item__heading {
+  margin: 0;
+}
+
+.rail-item__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 2.25rem;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  text-align: left;
+}
+
+.rail-item__toggle:hover {
+  background: var(--color-surface-raised);
+}
+
+.rail-item__toggle:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
+.rail-item__chevron {
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.rail-item.is-open .rail-item__chevron {
+  transform: rotate(45deg);
+}
+
+.rail-item__body {
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+/* The rail-item is the card; flatten the wrapped panel's own chrome. */
+.rail-item__body > .track-panel,
+.rail-item__body > .assistant-panel,
+.rail-item__body > .ai-studio-panel,
+.rail-item__body > .mixer-panel,
+.rail-item__body > .plugins-panel {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+/*
+ * The disclosure `<h2>` already shows the title, so the panel's own `<h3>` is a
+ * visual duplicate — hide it visually but keep it in the a11y tree so the heading
+ * ladder stays H2 → H3 → H4 (PluginsPanel has H4 subheads).
+ */
+.rail-item__body .panel-header {
+  margin-bottom: 0;
+}
+
+.rail-item__body .panel-header > h3 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Comfortable hit targets (#98 a11y): floor interactive controls at ~28px. */
+.composer .btn,
+.composer select,
+.composer .track-select {
+  min-height: 1.75rem;
+}
+
 
 .track-list {
   list-style: none;
@@ -277,6 +419,15 @@ select:focus-visible {
   overflow: auto;
   border-radius: var(--radius-md);
   background: var(--color-surface-sunken);
+}
+
+/* Desktop: the roll fills the composer's remaining height (#98). */
+@media (min-width: 60.0625rem) {
+  .pr-scroll {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+  }
 }
 
 .pr-keys {
