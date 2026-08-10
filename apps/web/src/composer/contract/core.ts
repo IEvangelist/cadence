@@ -131,7 +131,6 @@ export {
   listInstruments,
   getInstrument,
   getInstrumentContribution,
-  INSTRUMENTS,
   DRUM_MAP,
   drumLabel,
 } from '../instruments/registry'
