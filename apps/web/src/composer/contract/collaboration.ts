@@ -3,9 +3,9 @@
  *
  * PUBLIC vs INTERNAL — the boundary features build against:
  *   - PUBLIC (features #41/#42/#43/#45 MAY depend): `ShareRole`, `Participant`,
- *     `CollaborationStatus`, and the read-only `useCollaborationStatus()` selector
- *     (owned by this contract module; implemented over #9's live state during the
- *     post-#9 rebase — see docs/composer-api.md).
+ *     `CollaborationStatus`, and the read-only `selectCollaborationStatus()` selector
+ *     (owned by this contract module in collaborationSelector.ts; a pure projection
+ *     over #9's live state, added during the post-#9 rebase — see docs/composer-api.md).
  *   - INTERNAL (#9 plumbing — features MUST NOT depend/drive): the Yjs sync path
  *     (`ComposerController.applyRemoteProject`, the `sync-remote` reducer action, the
  *     `<Composer collabProviderFactory>` prop) and #9's live-state hook
@@ -52,9 +52,9 @@ export interface Participant {
  * may depend on. A projection of #9's internal `CollaborationState`; it never mutates
  * the live session or drives the sync path.
  *
- * Produced by the read-only selector {@link UseCollaborationStatus} (owned by this
- * contract module, implemented over #9's `useCollaboration()` during the post-#9
- * rebase). Mapping from #9's internal state:
+ * Produced by the contract-owned read-only selector `selectCollaborationStatus`
+ * (see collaborationSelector.ts, added in the post-#9 rebase and implemented over
+ * #9's `useCollaboration()`). Mapping from #9's internal state:
  *   - `canShare`     ← the `<Composer canShare>` capability prop
  *   - `isActive`     ← `CollaborationState.active`
  *   - `role`         ← the current user's server-authoritative role
@@ -73,14 +73,6 @@ export interface CollaborationStatus {
   /** Live participant roster (read-only). Empty when not collaborating. */
   readonly participants: readonly Participant[]
 }
-
-/**
- * The read-only selector that projects #9's live collaboration state into the PUBLIC
- * {@link CollaborationStatus}. Owned by this contract module and implemented over #9's
- * `useCollaboration()` hook during the post-#9 rebase; features consume the returned
- * value and never touch #9's session or sync path.
- */
-export type UseCollaborationStatus = () => CollaborationStatus
 
 /**
  * INTERNAL classification marker for effort #9's collaboration plumbing.

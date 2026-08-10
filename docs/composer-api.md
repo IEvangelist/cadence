@@ -123,15 +123,16 @@ continues to flow through `ProjectStore`.
 | `ShareRole` | Role union: `owner`, `editor`, `viewer` (mirrors #9's server-authoritative `CollaborationRole`) | PUBLIC |
 | `Participant` | Read-only projection of one `CollabPresence` entry: per-connection `id`, `userId`, `displayName`, `color`, `isSelf`, optional `role` | PUBLIC |
 | `CollaborationStatus` | Read-only collaboration model features consume (`canShare`, `isActive`, `role`, `participants`) | PUBLIC |
-| `UseCollaborationStatus` | Signature of the read-only selector that projects #9's live state into `CollaborationStatus` | PUBLIC |
+| `selectCollaborationStatus` | Contract-owned read-only selector: projects #9's `CollaborationState` → `CollaborationStatus` | PUBLIC |
+| `projectParticipant` | Projects one `CollabPresence` roster entry → `Participant` | PUBLIC |
 | `ComposerCollaborationInternals` | Classification marker for #9 sync plumbing that must stay out of `ComposerPublicApi` | INTERNAL |
 
 #### Public vs internal — collaboration surface
 
-#9 merges first; this contract and the feature PRs rebase on top. The single-model
-rule (agreed with #9): **this contract owns the PUBLIC shape; #9 owns the internal live
-state and produces the public shape via a read-only selector — one type, no duplicate,
-no mutation path.**
+#9 merged first; this contract and the feature PRs rebase on top. The single-model
+rule (agreed with #9): **this contract owns the PUBLIC shape and the read-only selector
+that projects #9's internal live state into it — one type, no duplicate, no mutation
+path.**
 
 **PUBLIC (features #41/#42/#43/#45 may depend on these):**
 
@@ -143,9 +144,12 @@ no mutation path.**
   **per-connection** presence handle (stringified Yjs `clientId`), so one user in two
   tabs appears twice — group by `userId` for a per-person view. `isSelf` marks the local
   connection. `role` is **optional** (see below).
-- `useCollaborationStatus(): CollaborationStatus` — the read-only selector that projects
-  #9's live state. Owned by this contract module and implemented over #9's
-  `useCollaboration()` during the post-#9 rebase; features import it from the contract.
+- `selectCollaborationStatus(state, { role, canShare }): CollaborationStatus` — the
+  contract-owned read-only selector (in `contract/collaborationSelector.ts`), a pure
+  projection over #9's `CollaborationState` (from `useCollaboration()`). Added in the
+  post-#9 rebase; `<Composer>` composes it with the state, `collab?.role`, and the
+  `canShare` prop it already carries — **no #9 change required**. Features import it
+  (and `projectParticipant`) from the contract barrel.
 
 Projection mapping (#9 internal → contract public):
 
@@ -183,9 +187,13 @@ this field.
 
 `contract/collaboration.ts` exports `ComposerCollaborationInternals` purely as a
 classification marker, and `contract/conformance.ts` enforces the boundary at compile
-time (`'applyRemoteProject'` must never be a key of `ComposerPublicApi`). Post-#9, the
-contract additionally asserts the selector's return is assignable to `CollaborationStatus`
-(`⊆`: #9 conforms to the contract shape, never the reverse).
+time (`'applyRemoteProject'` must never be a key of `ComposerPublicApi`). Post-#9,
+`contract/collaborationSelector.ts` adds the tightening binding: it imports #9's real
+`CollaborationState` / `CollabPresence` and exports compile-time proofs
+(`rolesAligned`, `presenceProjectsToParticipant`, `selectorConformsToContract`) that
+bind #9's live shape to the contract (`⊆`: the contract owns the public shape and #9
+conforms to it, never the reverse). If #9's live-state fields drift, that file stops
+compiling.
 
 ```ts
 function CollaborationBadge({ status }: { status: CollaborationStatus }) {
