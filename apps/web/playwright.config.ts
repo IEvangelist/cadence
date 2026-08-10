@@ -18,6 +18,19 @@ export default defineConfig({
   use: {
     baseURL,
     trace: 'on-first-retry',
+    // Keep interaction suites on the returning-user path; onboarding.spec.ts
+    // opts back into first-run by resetting storageState.
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: baseURL,
+          localStorage: [
+            { name: 'cadence.v1.onboarding.seen', value: '1' },
+          ],
+        },
+      ],
+    },
   },
   projects: [
     {
