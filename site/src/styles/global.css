@@ -282,10 +282,6 @@ section {
   margin-top: var(--space-8);
 }
 
-.hero .app-preview {
-  margin-top: clamp(var(--space-10), 6vw, var(--space-16));
-}
-
 .text-gradient {
   color: var(--color-primary-text); /* solid AA fallback */
   background: var(--gradient-brand);
@@ -667,6 +663,25 @@ section {
 .prose th {
   background: var(--color-surface-sunken);
   font-family: var(--font-display);
+}
+
+/* Product screenshots embedded in docs prose */
+.prose figure {
+  margin-inline: 0;
+}
+
+.prose img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.prose figcaption {
+  margin-top: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-subtle);
 }
 
 .doc-footer {
