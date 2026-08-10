@@ -27,9 +27,34 @@ function magentaGlobalShim(): Plugin {
   }
 }
 
+/**
+ * Dev-server wiring for a one-command `aspire run`.
+ *
+ * When the AppHost launches this SPA (via AddNpmApp + WithReference("api")),
+ * Aspire injects the listen port as `PORT` and the API's address as the service
+ * discovery variable `services__api__http__0`. Proxying `/api` — including the
+ * `/api/collab` WebSocket (`ws: true`) — keeps the browser same-origin, so the
+ * SPA's relative `/api/*` fetches and the collaboration socket reach the API
+ * with no CORS. Run standalone (`npm run dev`) neither variable is set, so the
+ * proxy is omitted and Vite uses its default port — preserving existing behavior.
+ */
+function devServerOptions() {
+  const port = Number(process.env.PORT) || undefined
+  const apiTarget =
+    process.env['services__api__http__0'] ?? process.env['services__api__https__0']
+  return {
+    port,
+    strictPort: port !== undefined,
+    proxy: apiTarget
+      ? { '/api': { target: apiTarget, changeOrigin: true, ws: true } }
+      : undefined,
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [magentaGlobalShim(), react()],
+  server: devServerOptions(),
   worker: {
     format: 'es',
     // The worker bundles Magenta/tfjs; it needs the same global shim.

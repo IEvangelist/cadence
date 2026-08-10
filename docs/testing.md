@@ -383,3 +383,31 @@ throwaway Node relay fixture (`apps/web/e2e/collab-server.mjs`; a second
 Note-adds in the e2e specs use deterministic keyboard input (focus the note
 grid, arrow to an empty pitch row, `Enter`) rather than pixel clicks, and assert
 relative counts so they are robust to the seeded demo project.
+
+## Local run (`aspire run`) — the `web` resource
+
+Effort #79 adds the `apps/web` SPA to the AppHost as an auto-start Aspire NodeJS
+resource so `dotnet run --project src/Cadence.AppHost` serves the UI. Two
+properties keep this from disturbing the test/CI matrix:
+
+- **It never enters the published manifest.** The resource is guarded by
+  `builder.ExecutionContext.IsRunMode`, so `aspire publish` / manifest generation
+  emits the unchanged baseline (postgres, redis, storage, api, separation) with
+  **no `web`**. Verify with:
+
+  ```bash
+  dotnet run --project src/Cadence.AppHost -- --publisher manifest --output-path aspire-manifest.json
+  # aspire-manifest.json contains no "web" resource
+  ```
+
+- **It stays out of the Aspire integration harness.** `Aspire.Hosting.Testing`
+  boots the AppHost in **run mode**, so the `IsRunMode` guard alone would add
+  `web` there too. The resource is therefore *also* gated on the repo-root
+  `node_modules` existing — which the Docker-only `dotnet-integration` job never
+  installs — so that job boots exactly the API + backing services it asserts on,
+  never Vite. Locally, run `npm ci` at the repo root first to see the SPA under
+  `aspire run`.
+
+The dev proxy added to `apps/web/vite.config.ts` is a **dev-server-only** option
+(`server.proxy`); Vitest and the production build ignore it, so web unit coverage
+and the bundle are unchanged.

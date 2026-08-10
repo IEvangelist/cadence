@@ -9,6 +9,14 @@
     <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.4.6" />
     <PackageVersion Include="Aspire.Hosting.Redis" Version="13.4.6" />
     <PackageVersion Include="Aspire.Hosting.Azure.Storage" Version="13.4.6" />
+    <!--
+      Node.js hosting integration (AddNpmApp) for the apps/web dev server. The
+      curated feed publishes this package only up to 9.5.2 (the core Aspire
+      hosting packages are 13.4.6); 9.5.2 is the latest available stable and its
+      npm-app surface binds cleanly against the 13.4.6 host — verified by a live
+      `aspire run` smoke (the web resource starts Vite and serves the SPA).
+    -->
+    <PackageVersion Include="Aspire.Hosting.NodeJs" Version="9.5.2" />
   </ItemGroup>
 
   <ItemGroup Label="Stem separation (Blob storage, ONNX Runtime)">
