@@ -56,6 +56,18 @@ The SPA is offline-first: signed out, it stores projects in a versioned
 `localStorage` store; on sign-in it syncs local-only projects up to the API and
 switches to the remote store.
 
+<figure>
+  <img
+    src="/cadence/screenshots/composer.webp"
+    width="1600"
+    height="639"
+    alt="The Cadence web UI running locally: a project toolbar with import, export, and share actions above a transport bar and a two-track piano roll of violet note blocks."
+    loading="lazy"
+    decoding="async"
+  />
+  <figcaption>The Cadence web UI running from <code>npm run dev</code>.</figcaption>
+</figure>
+
 ## 4. Run the desktop shell (optional)
 
 The desktop app wraps the same SPA in a [Tauri](https://tauri.app/) (Rust) shell:
