@@ -12,6 +12,8 @@ test.describe('plugins / extensions', () => {
   test('enable the example plugin and run its command', async ({ page }) => {
     await page.goto('/')
 
+    // Extensions is a collapsed-by-default rail panel (#98); expand it first.
+    await page.getByRole('button', { name: 'Extensions' }).click()
     const panel = page.getByRole('region', { name: 'Extensions' })
     await expect(panel).toBeVisible()
 
@@ -45,6 +47,9 @@ test.describe('plugins / extensions', () => {
 
   test('the enabled choice persists across reload', async ({ page }) => {
     await page.goto('/')
+    // Extensions is collapsed by default (#98); expand before toggling. The
+    // reload then also verifies the layout state itself persists.
+    await page.getByRole('button', { name: 'Extensions' }).click()
     const panel = page.getByRole('region', { name: 'Extensions' })
     await panel.getByRole('checkbox', { name: exampleToggle }).check()
 
@@ -54,6 +59,8 @@ test.describe('plugins / extensions', () => {
 
   test('the extensions UI has no detectable a11y violations once enabled', async ({ page }) => {
     await page.goto('/')
+    // Extensions is collapsed by default (#98); expand it before enabling.
+    await page.getByRole('button', { name: 'Extensions' }).click()
     await page
       .getByRole('region', { name: 'Extensions' })
       .getByRole('checkbox', { name: exampleToggle })

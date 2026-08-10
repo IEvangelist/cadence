@@ -43,35 +43,44 @@ function AppShell() {
   const showProfile = view === 'profile' && authenticated
   const showPricing = view === 'pricing'
   const showStems = view === 'stems'
+  const showComposer = !showPricing && !showStems && !showProfile
 
   return (
-    <main className="app">
+    <main className={`app${showComposer ? ' app--composer' : ''}`}>
+      {showComposer && (
+        <a className="skip-link" href="#composer-main">
+          Skip to editor
+        </a>
+      )}
       <header className="app-header">
-        <div className="brand">
-          <img className="brand-mark" src="/favicon.svg" alt="" aria-hidden="true" />
-          <h1>{appName}</h1>
+        <div className="app-header__brand">
+          <div className="brand">
+            <img className="brand-mark" src="/favicon.svg" alt="" aria-hidden="true" />
+            <h1>{appName}</h1>
+          </div>
+          <p className="tagline">{tagline}</p>
         </div>
-        <p className="tagline">{tagline}</p>
-        <p className="hook">Every idea, resolved.</p>
-        <AuthBar onShowProfile={() => setView('profile')} profileActive={showProfile} />
-        <nav className="app-nav" aria-label="Primary">
-          <button
-            type="button"
-            className="app-nav-link"
-            onClick={() => setView(showStems ? 'composer' : 'stems')}
-            aria-pressed={showStems}
-          >
-            {showStems ? 'Back to composer' : 'Stems'}
-          </button>
-          <button
-            type="button"
-            className="app-nav-link"
-            onClick={() => setView(showPricing ? 'composer' : 'pricing')}
-            aria-pressed={showPricing}
-          >
-            {showPricing ? 'Back to composer' : 'Pricing'}
-          </button>
-        </nav>
+        <div className="app-header__actions">
+          <AuthBar onShowProfile={() => setView('profile')} profileActive={showProfile} />
+          <nav className="app-nav" aria-label="Primary">
+            <button
+              type="button"
+              className="app-nav-link"
+              onClick={() => setView(showStems ? 'composer' : 'stems')}
+              aria-pressed={showStems}
+            >
+              {showStems ? 'Back to composer' : 'Stems'}
+            </button>
+            <button
+              type="button"
+              className="app-nav-link"
+              onClick={() => setView(showPricing ? 'composer' : 'pricing')}
+              aria-pressed={showPricing}
+            >
+              {showPricing ? 'Back to composer' : 'Pricing'}
+            </button>
+          </nav>
+        </div>
       </header>
 
       {showPricing ? (

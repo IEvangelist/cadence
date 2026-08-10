@@ -61,6 +61,8 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
   const selectedNote = track?.notes.find((n) => n.id === selectedNoteId)
 
   const gridRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const didAutoScrollRef = useRef(false)
   const gestureRef = useRef<Gesture | null>(null)
   const [caret, setCaret] = useState({ pitch: 60, beat: 0 })
 
@@ -104,6 +106,23 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
       window.removeEventListener('pointerup', handleUp)
     }
   }, [])
+
+  // #98: on first render that has seeded notes, scroll the roll so those notes are
+  // in view. The grid spans all 128 pitches, so it otherwise opens at the top (C8)
+  // while the demo's C4–G4 content sits mid-grid, out of sight. Runs once, then
+  // never fights the user's own scrolling.
+  useEffect(() => {
+    if (didAutoScrollRef.current) return
+    const scroller = scrollRef.current
+    const notes = track?.notes ?? []
+    if (!scroller || notes.length === 0) return
+
+    const pitches = notes.map((note) => note.pitch)
+    const centerPitch = Math.round((Math.max(...pitches) + Math.min(...pitches)) / 2)
+    const centerY = pitchToRow(centerPitch) * layout.rowHeight + layout.rowHeight / 2
+    scroller.scrollTop = Math.max(0, centerY - scroller.clientHeight / 2)
+    didAutoScrollRef.current = true
+  }, [track])
 
   const beginGesture = (gesture: Gesture): void => {
     gestureRef.current = gesture
@@ -206,7 +225,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
 
   return (
     <section className="piano-roll" aria-label="Piano roll editor">
-      <div className="pr-scroll">
+      <div className="pr-scroll" ref={scrollRef}>
         <div className="pr-keys" aria-hidden="true" style={{ height }}>
           {Array.from({ length: PITCH_ROWS }, (_, row) => {
             const pitch = MAX_PITCH - row

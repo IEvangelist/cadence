@@ -3,6 +3,7 @@ import { type UseAssistantOptions, useAssistant } from './hooks/useAssistant'
 import { type UseAiStudioOptions, useAiStudio } from './hooks/useAiStudio'
 import { useAiStudioEntitlements } from './hooks/useAiStudioEntitlements'
 import { useMixer } from './hooks/useMixer'
+import { usePanelLayout } from './hooks/usePanelLayout'
 import { usePlugins } from './plugins/usePlugins'
 import { ProjectToolbar } from './components/ProjectToolbar'
 import { TransportBar } from './components/TransportBar'
@@ -11,6 +12,7 @@ import { AssistantPanel } from './components/AssistantPanel'
 import { AiStudioPanel } from './components/AiStudioPanel'
 import { MixerPanel } from './components/MixerPanel'
 import { PluginsPanel } from './components/PluginsPanel'
+import { CollapsiblePanel } from './components/CollapsiblePanel'
 import { PianoRoll } from './components/PianoRoll'
 import { PresenceBar } from './components/PresenceBar'
 import { ShareProjectButton } from './components/ShareProjectButton'
@@ -59,6 +61,7 @@ export function Composer({
   })
   const plugins = usePlugins(controller)
   const mixer = useMixer(controller)
+  const panels = usePanelLayout()
   const { project, audioReady, loadDemo } = controller
   const isEmpty = project.tracks.every((track) => track.notes.length === 0)
 
@@ -83,7 +86,7 @@ export function Composer({
 
   return (
     <CollaborationStatusContext.Provider value={collaborationStatus}>
-    <section className="composer" aria-label="Composer">
+    <section className="composer" aria-label="Composer" id="composer-main" tabIndex={-1}>
       <div className="composer-topbar">
         <ProjectToolbar controller={controller} />
         {canShare && <ShareProjectButton projectId={project.id} />}
@@ -111,18 +114,53 @@ export function Composer({
       )}
 
       <div className="composer-body">
-        <div className="composer-sidebar">
-          <TrackPanel controller={controller} />
-          <AssistantPanel assistant={assistant} />
-          <AiStudioPanel studio={aiStudio} />
-          <MixerPanel mixer={mixer} />
-          <PluginsPanel plugins={plugins} />
+        <aside className="composer-sidebar" aria-label="Panels">
+          <CollapsiblePanel
+            id="tracks"
+            title="Tracks"
+            open={panels.isOpen('tracks')}
+            onToggle={panels.toggle}
+          >
+            <TrackPanel controller={controller} />
+          </CollapsiblePanel>
+          <CollapsiblePanel
+            id="assistant"
+            title="AI Assistant"
+            open={panels.isOpen('assistant')}
+            onToggle={panels.toggle}
+          >
+            <AssistantPanel assistant={assistant} />
+          </CollapsiblePanel>
+          <CollapsiblePanel
+            id="aiStudio"
+            title="AI Studio"
+            open={panels.isOpen('aiStudio')}
+            onToggle={panels.toggle}
+          >
+            <AiStudioPanel studio={aiStudio} />
+          </CollapsiblePanel>
+          <CollapsiblePanel
+            id="mixer"
+            title="Mixer"
+            open={panels.isOpen('mixer')}
+            onToggle={panels.toggle}
+          >
+            <MixerPanel mixer={mixer} />
+          </CollapsiblePanel>
+          <CollapsiblePanel
+            id="extensions"
+            title="Extensions"
+            open={panels.isOpen('extensions')}
+            onToggle={panels.toggle}
+          >
+            <PluginsPanel plugins={plugins} />
+          </CollapsiblePanel>
           {plugins.visiblePanels.map((panel) => (
             <section key={panel.id} className="plugin-surface" aria-label={panel.title}>
               {panel.render(plugins.panelContext)}
             </section>
           ))}
-        </div>
+        </aside>
         <PianoRoll controller={controller} previewNotes={assistant.previewNotes} />
       </div>
 
