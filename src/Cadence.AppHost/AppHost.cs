@@ -73,6 +73,22 @@ if (builder.ExecutionContext.IsRunMode)
     }
 }
 
+// Docs + marketing site (site/ Astro app) as an optional, explicitly-started
+// resource. It is wired only in run mode so it never enters the published/azd
+// manifest (the site ships via GitHub Pages, not Azure Container Apps), and
+// WithExplicitStart() leaves it not-started in the dashboard until a developer
+// clicks Start — which also keeps it from launching during the Docker-only
+// integration tests. Unlike apps/web, site/ is not an npm-workspace member, so
+// its dependencies are not hoisted to the repo root; run `npm ci` in site/ once
+// to populate site/node_modules before starting the resource.
+if (builder.ExecutionContext.IsRunMode)
+{
+    builder.AddNpmApp("docs-site", "../../site", "dev")
+        .WithHttpEndpoint(env: "PORT")
+        .WithExternalHttpEndpoints()
+        .WithExplicitStart();
+}
+
 builder.Build().Run();
 
 file static class BillingConfigurationExtensions
