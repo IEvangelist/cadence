@@ -113,6 +113,92 @@ describe('project fields', () => {
   })
 })
 
+describe('loop follows the timeline (whole-song loop)', () => {
+  // The "↻ Loop" transport control is a plain whole-song toggle — there is no
+  // A/B sub-region UI — so a frozen loop.end silences any note placed past it
+  // (e.g. the demo ships looping [0, 8) and notes added to the right, or an AI
+  // melody appended after the existing one, would never sound). loop.end must
+  // grow with the timeline so every note stays inside the loop and audible.
+  function loopedSeed(end = 8): ComposerState {
+    const project = createEmptyProject('p')
+    project.tracks = [createTrack({ name: 'Synth' }, 'track_a')]
+    project.lengthBeats = end
+    project.loop = { enabled: true, start: 0, end }
+    return initialState(project)
+  }
+
+  it('grows loop.end when a note is added past it', () => {
+    const state = composerReducer(loopedSeed(8), {
+      type: 'add-note',
+      trackId: 'track_a',
+      note: createNote({ pitch: 60, start: 12, duration: 1 }, 'n1'),
+    })
+    expect(state.project.lengthBeats).toBeGreaterThanOrEqual(13)
+    expect(state.project.loop.end).toBe(state.project.lengthBeats)
+  })
+
+  it('grows loop.end when a batch (accepted AI melody) is inserted past it', () => {
+    const state = composerReducer(loopedSeed(8), {
+      type: 'insert-notes',
+      trackId: 'track_a',
+      notes: [
+        createNote({ pitch: 60, start: 8, duration: 1 }, 'a'),
+        createNote({ pitch: 64, start: 10, duration: 1 }, 'b'),
+        createNote({ pitch: 67, start: 12, duration: 1 }, 'c'),
+      ],
+    })
+    expect(state.project.loop.end).toBe(state.project.lengthBeats)
+    expect(state.project.loop.end).toBeGreaterThanOrEqual(13)
+  })
+
+  it('grows loop.end when a note is resized past it', () => {
+    let state = composerReducer(loopedSeed(8), {
+      type: 'add-note',
+      trackId: 'track_a',
+      note: createNote({ pitch: 60, start: 4, duration: 1 }, 'n1'),
+    })
+    state = composerReducer(state, {
+      type: 'update-note',
+      trackId: 'track_a',
+      noteId: 'n1',
+      changes: { duration: 12 },
+    })
+    expect(state.project.loop.end).toBe(state.project.lengthBeats)
+    expect(state.project.loop.end).toBeGreaterThanOrEqual(16)
+  })
+
+  it('leaves a loop that already covers the note untouched', () => {
+    const state = composerReducer(loopedSeed(16), {
+      type: 'add-note',
+      trackId: 'track_a',
+      note: createNote({ pitch: 60, start: 2, duration: 1 }, 'n1'),
+    })
+    expect(state.project.loop.end).toBe(16)
+  })
+
+  it('self-heals a stale loaded project whose loop.end froze behind the timeline', () => {
+    // A project saved before this invariant: old code grew lengthBeats on edits
+    // but left loop.end at 8, so a note at beat 18 would be silent on load.
+    const stale = createEmptyProject('stale')
+    stale.tracks = [createTrack({ name: 'Synth' }, 'track_a')]
+    stale.lengthBeats = 20
+    stale.loop = { enabled: true, start: 0, end: 8 }
+    const state = composerReducer(seed(), { type: 'load-project', project: stale })
+    expect(state.project.loop.end).toBe(20)
+  })
+
+  it('does NOT grow loop.end on sync-remote (CRDT convergence stays echo-safe)', () => {
+    // The collaboration path must adopt a converged doc verbatim — growing
+    // loop.end here would emit a spurious update and break echo-safety.
+    const remote = createEmptyProject('p')
+    remote.tracks = [createTrack({ name: 'Synth' }, 'track_a')]
+    remote.lengthBeats = 20
+    remote.loop = { enabled: true, start: 0, end: 8 }
+    const state = composerReducer(seed(), { type: 'sync-remote', project: remote })
+    expect(state.project.loop.end).toBe(8)
+  })
+})
+
 describe('tracks', () => {
   it('adds a track and selects it', () => {
     const state = composerReducer(seed(), {

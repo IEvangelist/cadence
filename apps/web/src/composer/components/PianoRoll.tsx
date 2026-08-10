@@ -5,14 +5,11 @@ import { type ComposerController } from '../hooks/useComposer'
 import type { SuggestedNote } from '../ai/types'
 import {
   DEFAULT_LAYOUT,
-  PITCH_ROWS,
   beatToX,
   noteRect,
-  pitchToRow,
   snap as snapBeat,
   snapFloor,
   xToBeat,
-  yToPitch,
 } from '../timing/timing'
 
 interface PianoRollProps {
@@ -33,6 +30,28 @@ interface Gesture {
 
 const layout = DEFAULT_LAYOUT
 const clampPitch = (p: number): number => Math.min(MAX_PITCH, Math.max(MIN_PITCH, p))
+const TOTAL_ROWS = MAX_PITCH - MIN_PITCH + 1
+
+/**
+ * A pitch window of `rows` rows centred on `center`, clamped to the real
+ * [MIN_PITCH, MAX_PITCH] range. When the desired window runs off an edge it
+ * slides back in so the full row count is preserved (until it fills the whole
+ * keyboard), keeping the grid free of dead, un-keyed space.
+ */
+function pitchWindow(center: number, rows: number): { low: number; high: number } {
+  const span = Math.min(Math.max(Math.round(rows), 1), TOTAL_ROWS)
+  let high = center + Math.floor(span / 2)
+  let low = high - span + 1
+  if (high > MAX_PITCH) {
+    high = MAX_PITCH
+    low = high - span + 1
+  }
+  if (low < MIN_PITCH) {
+    low = MIN_PITCH
+    high = low + span - 1
+  }
+  return { low: Math.max(MIN_PITCH, low), high: Math.min(MAX_PITCH, high) }
+}
 
 /**
  * DOM-based piano roll — chosen over canvas so notes are real focusable
@@ -71,10 +90,34 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
   const didAutoScrollRef = useRef(false)
   const gestureRef = useRef<Gesture | null>(null)
   const [caret, setCaret] = useState({ pitch: 60, beat: 0 })
+  const [viewportRows, setViewportRows] = useState(0)
 
   const snapStep = snap > 0 ? snap : 1
   const width = project.lengthBeats * layout.beatWidth
-  const height = PITCH_ROWS * layout.rowHeight
+
+  // Fit-to-content vertical window: rendering the full 88-key range leaves the
+  // roll mostly empty staff. Clamp the rendered rows to the pitches actually in
+  // use (± a margin), defaulting to a ~2-octave window around middle C when the
+  // track is empty. The window then GROWS to at least fill the visible viewport
+  // height (measured below) so the grid never leaves dead space under the notes —
+  // every rendered row is real, keyed, clickable staff. The audio engine
+  // schedules by TIME only, so this vertical windowing never affects playback.
+  const PITCH_MARGIN = 4
+  const MIN_PITCH_SPAN = 24
+  const notePitches = track?.notes.map((n) => n.pitch) ?? []
+  const usedLow = notePitches.length > 0 ? Math.min(...notePitches) - PITCH_MARGIN : 54
+  const usedHigh = notePitches.length > 0 ? Math.max(...notePitches) + PITCH_MARGIN : 78
+  const contentCenter = Math.round((usedLow + usedHigh) / 2)
+  const contentRows = Math.max(usedHigh - usedLow + 1, MIN_PITCH_SPAN)
+  const desiredRows = Math.max(contentRows, viewportRows)
+  const { low: bottomPitch, high: topPitch } = pitchWindow(contentCenter, desiredRows)
+  const visibleRows = topPitch - bottomPitch + 1
+  const rowOfPitch = (pitch: number): number => topPitch - pitch
+  const yToWindowPitch = (y: number): number =>
+    clampPitch(topPitch - Math.floor(y / layout.rowHeight))
+  const clampToWindow = (pitch: number): number =>
+    Math.min(topPitch, Math.max(bottomPitch, pitch))
+  const height = visibleRows * layout.rowHeight
 
   // Keep live values reachable from the (mount-installed) window pointer
   // handlers without re-installing them on every render. The ref is written in
@@ -91,6 +134,12 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
       if (!gesture || !t) return
       const dBeat = (event.clientX - gesture.startX) / layout.beatWidth
       if (gesture.mode === 'move') {
+        // Ignore sub-threshold pointer travel so a click-to-select doesn't nudge.
+        if (
+          Math.abs(event.clientX - gesture.startX) < 3 &&
+          Math.abs(event.clientY - gesture.startY) < 3
+        )
+          return
         const dRows = Math.round((event.clientY - gesture.startY) / layout.rowHeight)
         update(t.id, gesture.noteId, {
           start: snapBeat(gesture.origStart + dBeat, step),
@@ -113,6 +162,21 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
     }
   }, [])
 
+  // Measure the scroll viewport so the pitch window can grow to fill it (no dead
+  // vertical space below the notes). jsdom has no ResizeObserver and reports zero
+  // height, so this is a no-op in unit tests — the content window is used instead.
+  useEffect(() => {
+    const scroller = scrollRef.current
+    if (!scroller) return
+    const measure = () =>
+      setViewportRows(Math.floor(scroller.clientHeight / layout.rowHeight))
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(scroller)
+    return () => observer.disconnect()
+  }, [])
+
   // #98: on first render that has seeded notes, scroll the roll so those notes are
   // in view. The grid spans all 128 pitches, so it otherwise opens at the top (C8)
   // while the demo's C4–G4 content sits mid-grid, out of sight. Runs once, then
@@ -125,9 +189,10 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
 
     const pitches = notes.map((note) => note.pitch)
     const centerPitch = Math.round((Math.max(...pitches) + Math.min(...pitches)) / 2)
-    const centerY = pitchToRow(centerPitch) * layout.rowHeight + layout.rowHeight / 2
+    const centerY = (topPitch - centerPitch) * layout.rowHeight + layout.rowHeight / 2
     scroller.scrollTop = Math.max(0, centerY - scroller.clientHeight / 2)
     didAutoScrollRef.current = true
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on first seeded render; topPitch tracks `track`
   }, [track])
 
   // #101: when a batch of notes is inserted (e.g. an accepted AI suggestion),
@@ -153,7 +218,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
 
     const pitches = inserted.map((note) => note.pitch)
     const centerPitch = Math.round((Math.max(...pitches) + Math.min(...pitches)) / 2)
-    const centerY = pitchToRow(centerPitch) * layout.rowHeight + layout.rowHeight / 2
+    const centerY = (topPitch - centerPitch) * layout.rowHeight + layout.rowHeight / 2
     scroller.scrollTop = Math.max(0, centerY - scroller.clientHeight / 2)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fire on token bump only, not on every note edit
   }, [revealRequest.token])
@@ -199,9 +264,9 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
     if (!track || !gridRef.current) return
     const rect = gridRef.current.getBoundingClientRect()
     const beat = snapFloor(xToBeat(event.clientX - rect.left, layout), snapStep)
-    const pitch = yToPitch(event.clientY - rect.top, layout)
+    const pitch = yToWindowPitch(event.clientY - rect.top)
     setCaret({ pitch, beat })
-    addNoteAt(track.id, pitch, beat, snapStep)
+    addNoteAt(track.id, pitch, beat, Math.max(snapStep, 1))
     previewNote(pitch)
   }
 
@@ -210,11 +275,11 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
     switch (event.key) {
       case 'ArrowUp':
         event.preventDefault()
-        setCaret((c) => ({ ...c, pitch: clampPitch(c.pitch + 1) }))
+        setCaret((c) => ({ ...c, pitch: clampToWindow(c.pitch + 1) }))
         break
       case 'ArrowDown':
         event.preventDefault()
-        setCaret((c) => ({ ...c, pitch: clampPitch(c.pitch - 1) }))
+        setCaret((c) => ({ ...c, pitch: clampToWindow(c.pitch - 1) }))
         break
       case 'ArrowRight':
         event.preventDefault()
@@ -227,7 +292,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
       case 'Enter':
       case ' ':
         event.preventDefault()
-        addNoteAt(track.id, caret.pitch, caret.beat, snapStep)
+        addNoteAt(track.id, caret.pitch, caret.beat, Math.max(snapStep, 1))
         previewNote(caret.pitch)
         break
       case 'Delete':
@@ -248,7 +313,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
   }
 
   const gridStyle = {
-    width,
+    minWidth: width,
     height,
     '--beat-w': `${layout.beatWidth}px`,
     '--row-h': `${layout.rowHeight}px`,
@@ -261,8 +326,8 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
     <section className="piano-roll" aria-label="Piano roll editor">
       <div className="pr-scroll" ref={scrollRef}>
         <div className="pr-keys" aria-hidden="true" style={{ height }}>
-          {Array.from({ length: PITCH_ROWS }, (_, row) => {
-            const pitch = MAX_PITCH - row
+          {Array.from({ length: visibleRows }, (_, row) => {
+            const pitch = topPitch - row
             return (
               <div
                 key={pitch}
@@ -290,7 +355,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
             aria-hidden="true"
             style={{
               left: beatToX(caret.beat, layout),
-              top: pitchToRow(caret.pitch) * layout.rowHeight,
+              top: rowOfPitch(caret.pitch) * layout.rowHeight,
               width: snapStep * layout.beatWidth,
               height: layout.rowHeight,
             }}
@@ -306,7 +371,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
                 className={`pr-note${selected ? ' is-selected' : ''}`}
                 style={{
                   left: rect.left,
-                  top: rect.top,
+                  top: rowOfPitch(note.pitch) * layout.rowHeight,
                   width: rect.width,
                   height: rect.height,
                   background: track.color,
@@ -335,7 +400,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
                 aria-hidden="true"
                 style={{
                   left: rect.left,
-                  top: rect.top,
+                  top: rowOfPitch(note.pitch) * layout.rowHeight,
                   width: rect.width,
                   height: rect.height,
                 }}
