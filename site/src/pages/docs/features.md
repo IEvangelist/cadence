@@ -15,6 +15,18 @@ A low-latency Web Audio composer with a piano-roll editor, transport, metronome,
 and a rich instrument set — keyboard-first and built to stay smooth on a canvas
 timeline. Notation round-trips through MusicXML (OpenSheetMusicDisplay + VexFlow).
 
+<figure>
+  <img
+    src="/cadence/screenshots/piano-roll.webp"
+    width="1200"
+    height="710"
+    alt="Cadence piano-roll editor: violet note blocks arranged across a horizontal timeline beside a vertical piano keyboard, with a transport bar above."
+    loading="lazy"
+    decoding="async"
+  />
+  <figcaption>The piano-roll editor — transport, timeline, and note blocks.</figcaption>
+</figure>
+
 ## AI composition assistant
 
 Suggest chords, harmonize a melody, or continue a phrase. The **free** tier runs
@@ -22,6 +34,18 @@ an in-browser assistant (Magenta.js + TensorFlow.js) that works offline; paid
 tiers add **server-side generation** through the premium AI service for larger
 models and longer context. The assistant sits behind a typed provider seam, so
 the runtime can evolve without changing the UI.
+
+<figure>
+  <img
+    src="/cadence/screenshots/ai-assistant.webp"
+    width="704"
+    height="834"
+    alt="The Cadence AI assistant panel with actions to suggest chords, harmonize a melody, and continue a phrase, plus temperature and length controls."
+    loading="lazy"
+    decoding="async"
+  />
+  <figcaption>The AI assistant — suggest, harmonize, and continue, on-device or server-side.</figcaption>
+</figure>
 
 ## Stems
 
@@ -41,6 +65,18 @@ Projects are owner-scoped and can be shared with owner, editor, or viewer roles.
 - **WAV** and **MP3** audio export.
 - Portable `.cadence.json` projects.
 - Offline-first local storage that syncs to the cloud on sign-in.
+
+<figure>
+  <img
+    src="/cadence/screenshots/import-export-share.webp"
+    width="1600"
+    height="68"
+    alt="The Cadence composer toolbar showing import, export, and share actions for MIDI, MusicXML, WAV, and MP3."
+    loading="lazy"
+    decoding="async"
+  />
+  <figcaption>Import, export, and share — right in the composer toolbar.</figcaption>
+</figure>
 
 ## Editions
 

@@ -1,7 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Icon from '../components/Icon.astro';
-import AppPreview from '../components/AppPreview.astro';
 import { href } from '../lib/href';
 
 const repo = 'https://github.com/IEvangelist/cadence';
@@ -14,12 +13,12 @@ const features = [
     body: 'Suggest chords, harmonize a line, or continue a phrase. Runs in your browser offline on the free tier; premium taps larger server-side models.',
   },
   {
-    icon: 'waveform',
+    icon: 'piano',
     title: 'A composer that feels instant',
     body: 'Piano-roll editing, transport, metronome, and a rich instrument set on a low-latency Web Audio engine — 60fps canvas, keyboard-first.',
   },
   {
-    icon: 'layers',
+    icon: 'stems',
     title: 'Stem separation',
     body: 'Split any track into bass, drums, vocals, guitar, keys, and synth. Each stem lands as an editable track with its own solo, mute, and gain.',
   },
@@ -29,7 +28,7 @@ const features = [
     body: 'Edit the same project together in real time with presence and conflict-free CRDT sync. Share with owner, editor, or viewer roles.',
   },
   {
-    icon: 'interop',
+    icon: 'share',
     title: 'Import, export & share',
     body: 'MIDI and MusicXML round-trip, WAV and MP3 export, portable .cadence.json projects, and shareable listen links.',
   },
@@ -37,6 +36,52 @@ const features = [
     icon: 'shield',
     title: 'Accounts done right',
     body: 'ASP.NET Core Identity with GitHub, Google, and Microsoft OAuth plus passwordless magic links. Hardened cookies, no secrets in the repo.',
+  },
+];
+
+// Real product screenshots captured from the running web app (see
+// scripts/capture-screenshots.mjs). Intrinsic dimensions are set on each <img>
+// to reserve layout space (no CLS) and every shot carries descriptive alt text.
+const shots = [
+  {
+    icon: 'piano',
+    src: '/screenshots/piano-roll.webp',
+    width: 1200,
+    height: 710,
+    title: 'Compose on a real piano roll',
+    body:
+      'Draw and drag notes on a snapping grid, set tempo and loop points, and audition instantly on the Web Audio engine. Keyboard-first, 60fps, and offline by default.',
+    alt: "Cadence's piano-roll editor showing violet note blocks across a beat grid, with C4–C5 pitch guides.",
+  },
+  {
+    icon: 'sparkles',
+    src: '/screenshots/ai-assistant.webp',
+    width: 704,
+    height: 834,
+    title: 'An AI assistant that runs on your device',
+    body:
+      'Continue a melody, generate a fresh idea, or harmonize under the tune. The free tier runs in your browser — 50 generations a day, offline — while Pro unlocks unlimited server-side AI.',
+    alt: 'The Cadence AI assistant panel with Continue / Generate / Harmonize actions, temperature and length controls, and a "Free · on-device" badge.',
+  },
+  {
+    icon: 'puzzle',
+    src: '/screenshots/plugins.webp',
+    width: 704,
+    height: 386,
+    title: 'Extensible by design',
+    body:
+      'Toggle built-in and community plugins to add instruments, export formats, and commands. Everything sits behind a typed extension seam with its own keyboard shortcuts.',
+    alt: 'The Cadence extensions panel listing installable plugins with enable toggles.',
+  },
+  {
+    icon: 'share',
+    src: '/screenshots/import-export-share.webp',
+    width: 1600,
+    height: 68,
+    title: 'Yours to take anywhere',
+    body:
+      'Round-trip MIDI and MusicXML, export WAV and MP3, save portable .cadence.json projects, and hand someone a shareable listen link — all from the project toolbar.',
+    alt: 'The Cadence project toolbar with New, Demo, Save, Open, Import file, Export, Share, Import MIDI, and Export MIDI actions.',
   },
 ];
 
@@ -90,6 +135,58 @@ const plans = [
   },
 ];
 
+// Rich, side-by-side comparison — the AI-consumption rows are the headline, so
+// each tier spells out its exact generation limit and where inference runs.
+const compareCols = ['Free', 'Pro', 'Studio'];
+const compareRows = [
+  {
+    icon: 'sparkles',
+    label: 'AI generations',
+    highlight: true,
+    values: ['50 / day · on-device', 'Unlimited · server-side', 'Unlimited · priority queue'],
+  },
+  {
+    icon: 'folder',
+    label: 'Saved projects',
+    values: ['Up to 10', 'Unlimited', 'Unlimited'],
+  },
+  {
+    icon: 'piano',
+    label: 'Composer, piano roll & playback',
+    values: [true, true, true],
+  },
+  {
+    icon: 'music',
+    label: 'MIDI & MusicXML import / export',
+    values: [true, true, true],
+  },
+  {
+    icon: 'verified',
+    label: 'Watermark-free WAV / MP3 export',
+    values: [false, true, true],
+  },
+  {
+    icon: 'stems',
+    label: 'Advanced formats & stem separation',
+    values: [false, 'Soon', true],
+  },
+  {
+    icon: 'users',
+    label: 'Live collaboration seats',
+    values: [false, 'Up to 5', 'Team'],
+  },
+  {
+    icon: 'zap',
+    label: 'Priority server AI queue',
+    values: [false, false, true],
+  },
+  {
+    icon: 'support',
+    label: 'Support',
+    values: ['Community', 'Priority', 'Priority'],
+  },
+];
+
 const description =
   'Cadence is an AI-powered, cross-platform music creation studio. Compose with an AI assistant, split songs into stems, collaborate live, and export anywhere.';
 ---
@@ -99,7 +196,7 @@ const description =
   <section class="hero container">
     <p class="badge"><span class="dot"></span> Every idea, resolved.</p>
     <h1>
-      The music studio that helps you
+      The music studio that helps you{' '}
       <span class="text-gradient">land the idea</span>.
     </h1>
     <p class="lede">
@@ -115,7 +212,23 @@ const description =
         <Icon name="book" size={20} /> Read the docs
       </a>
     </div>
-    <AppPreview />
+
+    <figure class="hero-shot">
+      <div class="app-frame">
+        <span class="app-chrome" aria-hidden="true">
+          <i></i><i></i><i></i>
+        </span>
+        <img
+          src={href('/screenshots/composer.webp')}
+          width="1600"
+          height="639"
+          alt="The Cadence composer: a project toolbar with import, export and share actions above a transport bar and a two-track piano roll of violet note blocks."
+          decoding="async"
+          fetchpriority="high"
+        />
+      </div>
+      <figcaption>The Cadence composer — a real capture, not a mockup.</figcaption>
+    </figure>
   </section>
 
   <!-- Features -->
@@ -136,6 +249,41 @@ const description =
             <h3>{f.title}</h3>
             <p>{f.body}</p>
           </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- Product gallery — real screenshots -->
+  <section id="gallery" class="container">
+    <div class="section-head">
+      <p class="eyebrow"><Icon name="disc" size={16} /> See it in action</p>
+      <h2>Real surfaces from the real app</h2>
+      <p>
+        Every image below is a live capture of Cadence running — the composer, the
+        on-device AI assistant, extensions, and the export toolbar.
+      </p>
+    </div>
+    <div class="showcase">
+      {
+        shots.map((s) => (
+          <article class="showcase-row">
+            <figure class="shot">
+              <img
+                src={href(s.src)}
+                width={s.width}
+                height={s.height}
+                alt={s.alt}
+                loading="lazy"
+                decoding="async"
+              />
+            </figure>
+            <div class="showcase-copy">
+              <span class="icon"><Icon name={s.icon as any} /></span>
+              <h3>{s.title}</h3>
+              <p>{s.body}</p>
+            </div>
+          </article>
         ))
       }
     </div>
@@ -179,6 +327,85 @@ const description =
         ))
       }
     </div>
+
+    <div class="compare-head">
+      <h3>Compare every plan</h3>
+      <p>
+        The numbers that matter — especially how much AI you get and where it runs.
+      </p>
+    </div>
+    <div class="compare-wrap" role="region" aria-label="Plan comparison" tabindex="0">
+      <table class="compare">
+        <caption class="visually-hidden">
+          Cadence plan comparison across Free, Pro, and Studio tiers.
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Feature</th>
+            {
+              plans.map((plan) => (
+                <th scope="col" class={plan.featured ? 'is-featured' : undefined}>
+                  <span class="col-name">{plan.name}</span>
+                  <span class="col-price">
+                    {plan.price}<span>/{plan.cadence.replace('per ', '').replace('forever', 'free')}</span>
+                  </span>
+                </th>
+              ))
+            }
+          </tr>
+        </thead>
+        <tbody>
+          {
+            compareRows.map((row) => (
+              <tr class={row.highlight ? 'is-highlight' : undefined}>
+                <th scope="row">
+                  <Icon name={row.icon as any} size={18} />
+                  <span>{row.label}</span>
+                </th>
+                {
+                  row.values.map((v, i) => (
+                    <td class={compareCols[i] === 'Pro' ? 'is-featured' : undefined}>
+                      {v === true ? (
+                        <>
+                          <Icon name="check" size={18} class="yes" />
+                          <span class="visually-hidden">Included</span>
+                        </>
+                      ) : v === false ? (
+                        <>
+                          <span class="dash" aria-hidden="true">—</span>
+                          <span class="visually-hidden">Not included</span>
+                        </>
+                      ) : (
+                        <span>{v}</span>
+                      )}
+                    </td>
+                  ))
+                }
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <figure class="pricing-shot">
+      <div class="app-frame">
+        <span class="app-chrome" aria-hidden="true"><i></i><i></i><i></i></span>
+        <img
+          src={href('/screenshots/pricing.webp')}
+          width="1400"
+          height="541"
+          alt="Cadence's in-app pricing screen comparing the Free plan at $0 with the Pro plan at $12 per month, including AI generation and export limits."
+          loading="lazy"
+          decoding="async"
+        />
+      </div>
+      <figcaption>
+        Pricing lives inside the app too. Free and Pro are live today; Studio is
+        indicative for the preview.
+      </figcaption>
+    </figure>
+
     <p class="pricing-note">
       Pricing is indicative for the preview and not final. The free tier is
       always free.
@@ -206,6 +433,266 @@ const description =
 </BaseLayout>
 
 <style>
+  /* Eyebrow that carries a small leading icon. */
+  .section-head .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    justify-content: center;
+  }
+
+  /* ---------------------------------------------------- App screenshot frame */
+  .app-frame {
+    position: relative;
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+    text-align: left;
+  }
+
+  .app-chrome {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+
+  .app-chrome i {
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: var(--radius-pill);
+    background: var(--color-border-strong);
+  }
+
+  .app-chrome i:nth-child(1) { background: var(--color-violet-500); }
+  .app-chrome i:nth-child(2) { background: var(--color-blue-500); }
+  .app-chrome i:nth-child(3) { background: var(--color-cyan-400); }
+
+  .app-frame img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  /* ------------------------------------------------------------------- Hero */
+  .hero-shot {
+    position: relative;
+    max-width: 60rem;
+    margin: clamp(var(--space-10), 6vw, var(--space-16)) auto 0;
+  }
+
+  /* Soft brand glow behind the hero capture (decorative). */
+  .hero-shot::before {
+    content: '';
+    position: absolute;
+    inset: -12% -6% 0;
+    background: var(--gradient-brand);
+    opacity: 0.18;
+    filter: blur(48px);
+    border-radius: var(--radius-xl);
+    z-index: -1;
+  }
+
+  .hero-shot figcaption,
+  .pricing-shot figcaption {
+    margin-top: var(--space-4);
+    text-align: center;
+    color: var(--color-text-subtle);
+    font-size: var(--font-size-sm);
+  }
+
+  /* -------------------------------------------------------- Product showcase */
+  .showcase {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(var(--space-10), 6vw, var(--space-16));
+  }
+
+  .showcase-row {
+    display: grid;
+    gap: clamp(var(--space-6), 4vw, var(--space-10));
+    align-items: center;
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 52rem) {
+    .showcase-row {
+      grid-template-columns: 1.15fr 1fr;
+    }
+    /* Alternate the image side down the column. */
+    .showcase-row:nth-child(even) .shot {
+      order: 2;
+    }
+  }
+
+  .shot {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: var(--space-4);
+    background: var(--color-surface-sunken);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+
+  .shot img {
+    max-width: 100%;
+    max-height: 28rem;
+    width: auto;
+    height: auto;
+    border-radius: var(--radius-md);
+  }
+
+  .showcase-copy .icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    color: var(--color-primary-text);
+    margin-bottom: var(--space-4);
+  }
+
+  .showcase-copy h3 {
+    font-size: var(--font-size-2xl);
+    margin-bottom: var(--space-3);
+  }
+
+  .showcase-copy p {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-lg);
+  }
+
+  /* ----------------------------------------------------- Pricing comparison */
+  .compare-head {
+    text-align: center;
+    margin: clamp(var(--space-12), 7vw, var(--space-20)) auto var(--space-8);
+  }
+
+  .compare-head h3 {
+    font-size: var(--font-size-2xl);
+  }
+
+  .compare-head p {
+    color: var(--color-text-muted);
+    margin-top: var(--space-2);
+  }
+
+  /* Focusable, horizontally-scrollable region so the wide table never forces
+     page overflow on small screens (and stays keyboard-reachable — WCAG 2.1.1). */
+  .compare-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .compare {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-sm);
+    /* Mobile: fixed layout keeps the table inside the viewport (cells wrap)
+       — the scroll wrapper alone can't stop a min-content table from forcing
+       document-level horizontal scroll on the narrowest screens. */
+    table-layout: fixed;
+  }
+
+  /* From 48rem up there's room for the natural, comfortable table width; the
+     .compare-wrap still scrolls it should a viewport ever land in between. */
+  @media (min-width: 48rem) {
+    .compare {
+      table-layout: auto;
+      min-width: 44rem;
+    }
+  }
+
+  .compare th,
+  .compare td {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+    text-align: center;
+    vertical-align: middle;
+    overflow-wrap: break-word;
+  }
+
+  .compare thead th {
+    background: var(--color-surface);
+    border-bottom: 2px solid var(--color-border-strong);
+  }
+
+  .compare thead .col-name {
+    display: block;
+    font-family: var(--font-display);
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+  }
+
+  .compare thead .col-price {
+    display: block;
+    margin-top: var(--space-1);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-subtle);
+    font-weight: var(--font-weight-regular);
+  }
+
+  .compare tbody th[scope='row'] {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    text-align: left;
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text);
+  }
+
+  .compare tbody th[scope='row'] svg {
+    flex: none;
+    color: var(--color-accent-text);
+  }
+
+  /* Featured (Pro) column tint — pairs with the "Most popular" card. */
+  .compare th.is-featured,
+  .compare td.is-featured {
+    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  }
+
+  .compare thead th.is-featured .col-name {
+    color: var(--color-primary-text);
+  }
+
+  /* The AI-consumption row is the headline of the comparison. */
+  .compare tr.is-highlight td,
+  .compare tr.is-highlight th[scope='row'] {
+    background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .compare tr.is-highlight td.is-featured {
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  }
+
+  .compare .yes {
+    color: var(--color-accent-text);
+  }
+
+  .compare .dash {
+    color: var(--color-text-subtle);
+  }
+
+  /* ------------------------------------------------------- In-app pricing shot */
+  .pricing-shot {
+    max-width: 52rem;
+    margin: clamp(var(--space-10), 6vw, var(--space-16)) auto 0;
+  }
+
   .pricing-note {
     text-align: center;
     margin-top: var(--space-8);
