@@ -29,6 +29,15 @@ builder.AddProject<Projects.Cadence_Api>("api")
     .WaitFor(blobs)
     .WithBillingConfiguration(builder.Configuration);
 
+// Background stem-separation worker: consumes queued jobs, runs the separation
+// engine, and writes labeled stems back to Blob storage. It shares the Postgres
+// and Blob resources with the API and needs no inbound traffic of its own.
+builder.AddProject<Projects.Cadence_SeparationWorker>("separation")
+    .WithReference(cadenceDb)
+    .WaitFor(cadenceDb)
+    .WithReference(blobs)
+    .WaitFor(blobs);
+
 builder.Build().Run();
 
 file static class BillingConfigurationExtensions

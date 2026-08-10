@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Cadence.Api\Cadence.Api.csproj" />
+    <ProjectReference Include="..\Cadence.SeparationWorker\Cadence.SeparationWorker.csproj" />
   </ItemGroup>
 
 </Project>

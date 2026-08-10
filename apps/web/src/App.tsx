@@ -7,12 +7,13 @@ import { ProfilePage } from './auth/ProfilePage'
 import { useAuth } from './auth/authContext'
 import { PricingPage } from './billing/PricingPage'
 import { useEntitlements } from './billing/useEntitlements'
+import { StemsPage } from './stems/StemsPage'
 import { handleAuthChange, projectStore } from './appStores'
 import { buildCollabConfig } from './composer/model/collab/collabConfig'
 import './auth/auth.css'
 import './App.css'
 
-type View = 'composer' | 'profile' | 'pricing'
+type View = 'composer' | 'profile' | 'pricing' | 'stems'
 
 function AppShell() {
   const auth = useAuth()
@@ -39,6 +40,7 @@ function AppShell() {
 
   const showProfile = view === 'profile' && authenticated
   const showPricing = view === 'pricing'
+  const showStems = view === 'stems'
 
   return (
     <main className="app">
@@ -54,6 +56,14 @@ function AppShell() {
           <button
             type="button"
             className="app-nav-link"
+            onClick={() => setView(showStems ? 'composer' : 'stems')}
+            aria-pressed={showStems}
+          >
+            {showStems ? 'Back to composer' : 'Stems'}
+          </button>
+          <button
+            type="button"
+            className="app-nav-link"
             onClick={() => setView(showPricing ? 'composer' : 'pricing')}
             aria-pressed={showPricing}
           >
@@ -64,6 +74,13 @@ function AppShell() {
 
       {showPricing ? (
         <PricingPage onClose={() => setView('composer')} />
+      ) : showStems ? (
+        <StemsPage
+          authenticated={authenticated}
+          entitled={entitlements?.stemSeparation ?? false}
+          onUpgrade={() => setView('pricing')}
+          onClose={() => setView('composer')}
+        />
       ) : showProfile ? (
         <ProfilePage onClose={() => setView('composer')} />
       ) : (

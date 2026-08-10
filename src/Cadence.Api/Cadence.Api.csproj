@@ -13,6 +13,9 @@
     <!-- Aspire client integration: wires the Npgsql DbContext to the "cadencedb"
          resource with health checks, telemetry, and connection resilience. -->
     <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <!-- Aspire client integration: wires the Blob service client to the "blobs"
+         resource (Azurite in development) for mix/stem storage. -->
+    <PackageReference Include="Aspire.Azure.Storage.Blobs" />
     <!-- External OAuth providers. -->
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.MicrosoftAccount" />

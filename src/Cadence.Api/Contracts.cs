@@ -66,3 +66,29 @@ public sealed record EntitlementsResponse(
 
 /// <summary>A URL to redirect the browser to (checkout or customer portal).</summary>
 public sealed record BillingUrlResponse(string Url);
+
+/// <summary>Lightweight stem-separation job listing entry.</summary>
+public sealed record StemJobSummary(
+    string Id,
+    string Status,
+    string OriginalFileName,
+    long SizeBytes,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    DateTimeOffset? CompletedAt);
+
+/// <summary>One separated stem in a job detail (with its owner-scoped download URL).</summary>
+public sealed record StemInfo(string Label, long SizeBytes, string Url);
+
+/// <summary>Full stem-separation job, including its stems once completed.</summary>
+public sealed record StemJobDetail(
+    string Id,
+    string Status,
+    string OriginalFileName,
+    string ContentType,
+    long SizeBytes,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    DateTimeOffset? CompletedAt,
+    string? ErrorMessage,
+    IReadOnlyList<StemInfo> Stems);

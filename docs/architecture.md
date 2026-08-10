@@ -111,3 +111,24 @@ at the message boundary** before fan-out, so read-only access is enforced
 server-authoritatively (fail closed), never by the client. Collaboration is
 inert unless a session is explicitly activated, so single-user behavior is
 unchanged. See [`collaboration.md`](collaboration.md).
+
+## Stem separation (effort #10, Phase 1)
+
+Cadence splits an uploaded mix into isolated **stems** (bass, drums, vocals,
+guitar, keys, synth, other) through an authenticated, owner-scoped, **asynchronous
+job pipeline**. The `src/*.Api` surface (`/api/stems`) gates on the Pro-only
+`StemSeparation` entitlement (free → `402`, tier read from the DB profile),
+validates content-type/size/duration, persists an owner-scoped `SeparationJob`
+(composite key `{OwnerId, Id}`, IDOR-safe like `ProjectEntity`), and stores the
+mix in Blob. A dedicated **`src/Cadence.SeparationWorker`** — an Aspire `separation`
+resource wired to the existing Postgres + Blob — runs a `BackgroundService` that
+claims queued jobs, separates them, and writes labeled stems back to Blob for
+owner-scoped download.
+
+The separation model is **Demucs v4 (`htdemucs`, MIT)** run via ONNX Runtime
+(GPU with CPU fallback); the model binary is fetched-and-cached at runtime (never
+committed) and only its pinned URI/version/license is tracked. When no model is
+pinned (CI/dev default) a deterministic band-split engine drives the same
+`IStemSeparator` seam, keeping tests hermetic. Phase 1 ships a **standalone** web
+surface (`apps/web/src/stems/`) — the composer integration (stem → editable mixer
+track) is a Phase 2 follow-up. See [`stems.md`](stems.md).

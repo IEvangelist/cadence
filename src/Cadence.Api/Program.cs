@@ -46,6 +46,9 @@ builder.AddCadenceBilling();
 // In-memory hub backing the collaboration WebSocket relay (per-project rooms).
 builder.Services.AddSingleton<Cadence.Api.Collaboration.CollabHub>();
 
+// Stem separation: options + (outside Testing) Blob-backed stem storage.
+builder.AddCadenceStems();
+
 var app = builder.Build();
 
 // Maps /health and /alive (Development only). See ServiceDefaults.
@@ -82,6 +85,7 @@ app.MapCadenceProfile();
 app.MapCadenceProjects();
 app.MapCadenceCollaboration();
 app.MapCadenceBilling();
+app.MapCadenceStems();
 
 app.Run();
 

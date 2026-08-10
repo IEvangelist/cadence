@@ -1,0 +1,253 @@
+/* Stem separation UI — consumes the Cadence brand tokens (theme/tokens.css). */
+
+.stems {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  text-align: left;
+}
+
+.stems-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.stems-head h2 {
+  font-family: var(--font-display);
+  font-size: var(--font-size-2xl);
+  margin: 0;
+  color: var(--color-text);
+}
+
+.stems-sub {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+  max-width: 46rem;
+}
+
+.stems-gate,
+.stems-empty {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+}
+
+.stems-upsell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.stems-upsell h3 {
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  margin: 0;
+  color: var(--color-text);
+}
+
+.stems-upsell p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.stems-uploader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.stems-field {
+  flex-basis: 100%;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+}
+
+.stems-file {
+  flex: 1 1 16rem;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+.stems-error {
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+  margin: 0;
+}
+
+.stems-jobs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.stems-job-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.stems-job {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.stems-job-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.stems-job-name {
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  margin: 0;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+.stems-status {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-muted);
+}
+
+.stems-status-processing,
+.stems-status-queued {
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.stems-status-completed {
+  color: var(--color-on-primary);
+  background: var(--color-success);
+  border-color: var(--color-success);
+}
+
+.stems-status-failed {
+  color: var(--color-on-primary);
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.stems-progress {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.stems-outputs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+}
+
+.stems-output {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.stems-output-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  text-transform: capitalize;
+}
+
+.stems-audio {
+  width: 100%;
+}
+
+.stems-download {
+  font-size: var(--font-size-sm);
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.stems-download:hover {
+  text-decoration: underline;
+}
+
+.stems-download:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.stems-btn {
+  font-family: var(--font-body);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.stems-btn:hover {
+  border-color: var(--color-primary);
+}
+
+.stems-btn:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.stems-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.stems-btn-primary {
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.stems-btn-primary:hover {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}

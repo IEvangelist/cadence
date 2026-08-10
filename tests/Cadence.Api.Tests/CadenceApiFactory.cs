@@ -1,5 +1,6 @@
 using Cadence.Api.Billing;
 using Cadence.Data;
+using Cadence.Data.Stems;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
@@ -44,6 +45,12 @@ public sealed class CadenceApiFactory : WebApplicationFactory<Program>
     /// </summary>
     public IBillingGateway? BillingGateway { get; init; }
 
+    /// <summary>
+    /// In-memory stem storage substituted for the Azure Blob client in tests, so
+    /// upload/download flows work without Azurite. Tests can inspect stored blobs.
+    /// </summary>
+    internal InMemoryStemStorage StemStorage { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -58,6 +65,7 @@ public sealed class CadenceApiFactory : WebApplicationFactory<Program>
         {
             services.AddDbContext<CadenceDbContext>(options => options.UseSqlite(_connection));
             services.AddSingleton<IMagicLinkSender>(MagicLinks);
+            services.AddSingleton<IStemStorage>(StemStorage);
 
             if (MagicLinkTokenLifespan is { } lifespan)
             {

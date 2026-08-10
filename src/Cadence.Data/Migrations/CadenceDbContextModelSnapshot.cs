@@ -169,6 +169,85 @@ namespace Cadence.Data.Migrations
                     b.ToTable("ProjectShareLinks");
                 });
 
+            modelBuilder.Entity("Cadence.Data.Entities.SeparationJob", b =>
+                {
+                    b.Property<string>("OwnerId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Id")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("MixBlobPath")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("OwnerId", "Id");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("SeparationJobs");
+                });
+
+            modelBuilder.Entity("Cadence.Data.Entities.SeparationStem", b =>
+                {
+                    b.Property<string>("OwnerId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("JobId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("BlobPath")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("OwnerId", "JobId", "Label");
+
+                    b.ToTable("SeparationStems");
+                });
+
             modelBuilder.Entity("Cadence.Data.Entities.Subscription", b =>
                 {
                     b.Property<string>("UserId")
@@ -403,6 +482,28 @@ namespace Cadence.Data.Migrations
                     b.Navigation("Project");
                 });
 
+            modelBuilder.Entity("Cadence.Data.Entities.SeparationJob", b =>
+                {
+                    b.HasOne("Cadence.Data.Entities.ApplicationUser", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("Cadence.Data.Entities.SeparationStem", b =>
+                {
+                    b.HasOne("Cadence.Data.Entities.SeparationJob", "Job")
+                        .WithMany("Stems")
+                        .HasForeignKey("OwnerId", "JobId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Job");
+                });
+
             modelBuilder.Entity("Cadence.Data.Entities.Subscription", b =>
                 {
                     b.HasOne("Cadence.Data.Entities.ApplicationUser", "User")
@@ -479,6 +580,11 @@ namespace Cadence.Data.Migrations
             modelBuilder.Entity("Cadence.Data.Entities.ApplicationUser", b =>
                 {
                     b.Navigation("Profile");
+                });
+
+            modelBuilder.Entity("Cadence.Data.Entities.SeparationJob", b =>
+                {
+                    b.Navigation("Stems");
                 });
 #pragma warning restore 612, 618
         }
