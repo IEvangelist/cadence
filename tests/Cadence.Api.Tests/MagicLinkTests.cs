@@ -8,11 +8,13 @@ public class MagicLinkTests(CadenceApiFactory factory) : IClassFixture<CadenceAp
 {
     private readonly CadenceApiFactory _factory = factory;
 
-    private HttpClient CreateNonRedirectingClient() =>
-        _factory.CreateClient(new WebApplicationFactoryClientOptions
+    private static HttpClient CreateNonRedirectingClient(CadenceApiFactory factory) =>
+        factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             AllowAutoRedirect = false,
         });
+
+    private HttpClient CreateNonRedirectingClient() => CreateNonRedirectingClient(_factory);
 
     private static string VerifyUrl(string email, string token) =>
         $"/api/auth/magic-link/verify?email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(token)}";
@@ -24,40 +26,56 @@ public class MagicLinkTests(CadenceApiFactory factory) : IClassFixture<CadenceAp
     public async Task RequestMagicLink_ForUnknownEmail_Returns202_ButCreatesNoAccount()
     {
         const string email = "magic.unknown-noacct@example.com";
-        var before = _factory.MagicLinks.SentCount;
+        await using var factory = new CadenceApiFactory();
+        var before = factory.MagicLinks.SentCount;
 
-        var response = await _factory.CreateClient().PostAsJsonAsync(
+        var response = await factory.CreateClient().PostAsJsonAsync(
             "/api/auth/magic-link", new MagicLinkRequest(email));
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        Assert.False(await _factory.UserExistsAsync(email), "no account should be created");
-        Assert.Equal(before, _factory.MagicLinks.SentCount);
+        Assert.False(await factory.UserExistsAsync(email), "no account should be created");
+        Assert.Equal(before, factory.MagicLinks.SentCount);
+    }
+
+    // A malformed request that binds the email to null ({"email":null} / {}) must
+    // return the same neutral 202 as any other send, not an unhandled 500.
+    [Fact]
+    public async Task RequestMagicLink_WithNullEmail_Returns202_NotServerError()
+    {
+        await using var factory = new CadenceApiFactory();
+
+        var response = await factory.CreateClient().PostAsJsonAsync(
+            "/api/auth/magic-link", new MagicLinkRequest(null!));
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
     }
 
     [Fact]
     public async Task RequestMagicLink_ForExistingUser_SendsLink()
     {
         const string email = "magic.existing@example.com";
-        await _factory.CreateClient().RegisterAsync(email);
-        var before = _factory.MagicLinks.SentCount;
+        await using var factory = new CadenceApiFactory();
+        await factory.CreateClient().RegisterAsync(email);
+        var before = factory.MagicLinks.SentCount;
 
-        var response = await _factory.CreateClient().PostAsJsonAsync(
+        var response = await factory.CreateClient().PostAsJsonAsync(
             "/api/auth/magic-link", new MagicLinkRequest(email));
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        Assert.Equal(before + 1, _factory.MagicLinks.SentCount);
-        Assert.Equal(email, _factory.MagicLinks.LastEmail);
+        Assert.Equal(before + 1, factory.MagicLinks.SentCount);
+        Assert.Equal(email, factory.MagicLinks.LastEmail);
     }
 
     [Fact]
     public async Task RequestMagicLink_DoesNotEnumerate_ForUnknownVsKnown()
     {
         // Both an existing and a brand-new address return the same 202 status.
-        await _factory.CreateClient().RegisterAsync("magic.known@example.com");
+        await using var factory = new CadenceApiFactory();
+        await factory.CreateClient().RegisterAsync("magic.known@example.com");
 
-        var known = await _factory.CreateClient().PostAsJsonAsync(
+        var known = await factory.CreateClient().PostAsJsonAsync(
             "/api/auth/magic-link", new MagicLinkRequest("magic.known@example.com"));
-        var unknown = await _factory.CreateClient().PostAsJsonAsync(
+        var unknown = await factory.CreateClient().PostAsJsonAsync(
             "/api/auth/magic-link", new MagicLinkRequest("magic.enum-unknown@example.com"));
 
         Assert.Equal(HttpStatusCode.Accepted, known.StatusCode);
@@ -70,10 +88,11 @@ public class MagicLinkTests(CadenceApiFactory factory) : IClassFixture<CadenceAp
     public async Task MagicLinkToken_IsOpaque_NotSixDigitCode()
     {
         const string email = "magic.opaque@example.com";
-        await _factory.CreateClient().RegisterAsync(email);
+        await using var factory = new CadenceApiFactory();
+        await factory.CreateClient().RegisterAsync(email);
 
-        await _factory.CreateClient().PostAsJsonAsync("/api/auth/magic-link", new MagicLinkRequest(email));
-        var token = _factory.MagicLinks.LastToken!;
+        await factory.CreateClient().PostAsJsonAsync("/api/auth/magic-link", new MagicLinkRequest(email));
+        var token = factory.MagicLinks.LastToken!;
 
         Assert.True(token.Length > 20, $"token should be long/opaque but was '{token}'");
         Assert.Contains(token, t => !char.IsDigit(t));
@@ -83,11 +102,12 @@ public class MagicLinkTests(CadenceApiFactory factory) : IClassFixture<CadenceAp
     public async Task VerifyMagicLink_WithValidToken_SignsIn()
     {
         const string email = "magic.verify@example.com";
-        await _factory.CreateClient().RegisterAsync(email);
+        await using var factory = new CadenceApiFactory();
+        await factory.CreateClient().RegisterAsync(email);
 
-        var client = CreateNonRedirectingClient();
+        var client = CreateNonRedirectingClient(factory);
         await client.PostAsJsonAsync("/api/auth/magic-link", new MagicLinkRequest(email));
-        var token = _factory.MagicLinks.LastToken!;
+        var token = factory.MagicLinks.LastToken!;
 
         var verify = await client.GetAsync(VerifyUrl(email, token));
 
@@ -105,15 +125,16 @@ public class MagicLinkTests(CadenceApiFactory factory) : IClassFixture<CadenceAp
     public async Task VerifyMagicLink_IsSingleUse()
     {
         const string email = "magic.once@example.com";
-        await _factory.CreateClient().RegisterAsync(email);
+        await using var factory = new CadenceApiFactory();
+        await factory.CreateClient().RegisterAsync(email);
 
-        var client = CreateNonRedirectingClient();
+        var client = CreateNonRedirectingClient(factory);
         await client.PostAsJsonAsync("/api/auth/magic-link", new MagicLinkRequest(email));
-        var token = _factory.MagicLinks.LastToken!;
+        var token = factory.MagicLinks.LastToken!;
         var url = VerifyUrl(email, token);
 
         var first = await client.GetAsync(url);
-        var second = await CreateNonRedirectingClient().GetAsync(url);
+        var second = await CreateNonRedirectingClient(factory).GetAsync(url);
 
         Assert.Contains("auth=success", first.Headers.Location!.ToString());
         Assert.Contains("auth=error", second.Headers.Location!.ToString());
@@ -194,8 +215,9 @@ public class MagicLinkTests(CadenceApiFactory factory) : IClassFixture<CadenceAp
     public async Task VerifyMagicLink_WithBadToken_RedirectsToError()
     {
         const string email = "magic.bad@example.com";
-        await _factory.CreateClient().RegisterAsync(email);
-        var client = CreateNonRedirectingClient();
+        await using var factory = new CadenceApiFactory();
+        await factory.CreateClient().RegisterAsync(email);
+        var client = CreateNonRedirectingClient(factory);
         await client.PostAsJsonAsync("/api/auth/magic-link", new MagicLinkRequest(email));
 
         var verify = await client.GetAsync(VerifyUrl(email, "not-a-token"));

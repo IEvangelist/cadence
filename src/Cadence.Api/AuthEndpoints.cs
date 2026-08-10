@@ -5,8 +5,10 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using System.Security.Claims;
+using System.Threading.RateLimiting;
 
 namespace Cadence.Api;
 
@@ -16,16 +18,30 @@ public static class AuthEndpoints
     /// <summary>Rate-limit policy guarding the magic-link verify endpoint.</summary>
     public const string MagicLinkVerifyRateLimitPolicy = "magic-link-verify";
 
+    /// <summary>Rate-limit policy guarding magic-link send volume by client IP.</summary>
+    public const string MagicLinkSendRateLimitPolicy = "magic-link-send";
+
+    /// <summary>Key for the per-email magic-link send limiter enforced inside the handler.</summary>
+    public const string MagicLinkSendEmailLimiterKey = "magic-link-send-email";
+
+    /// <summary>Rate-limit policy guarding password login volume by client IP.</summary>
+    public const string LoginRateLimitPolicy = "login";
+
+    private static readonly string DummyPasswordHash =
+        new PasswordHasher<ApplicationUser>().HashPassword(new ApplicationUser(), "dummy-password-for-timing-equalization");
+
     /// <summary>Map <c>/api/auth/*</c> (local, magic-link, and external OAuth).</summary>
     public static IEndpointRouteBuilder MapCadenceAuth(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/auth").WithTags("Auth");
 
         group.MapPost("/register", RegisterAsync);
-        group.MapPost("/login", LoginAsync);
+        group.MapPost("/login", LoginAsync)
+            .RequireRateLimiting(LoginRateLimitPolicy);
         group.MapPost("/logout", LogoutAsync).RequireAuthorization();
         group.MapGet("/me", MeAsync).RequireAuthorization();
-        group.MapPost("/magic-link", RequestMagicLinkAsync);
+        group.MapPost("/magic-link", RequestMagicLinkAsync)
+            .RequireRateLimiting(MagicLinkSendRateLimitPolicy);
         group.MapGet("/magic-link/verify", VerifyMagicLinkAsync)
             .RequireRateLimiting(MagicLinkVerifyRateLimitPolicy);
         group.MapGet("/external/{provider}", ChallengeExternalAsync);
@@ -53,6 +69,15 @@ public static class AuthEndpoints
         var result = await users.CreateAsync(user, request.Password);
         if (!result.Succeeded)
         {
+            // Duplicate-account failures are deliberately collapsed to the same
+            // generic validation shape as other registration problems. Returning a
+            // full always-accepted flow would hide more, but it would also break the
+            // current successful-registration contract (200 + MeResponse + sign-in).
+            if (AccountHelpers.IsDuplicateAccount(result))
+            {
+                return AccountHelpers.NeutralRegistrationProblem();
+            }
+
             return Results.ValidationProblem(AccountHelpers.ToValidationErrors(result));
         }
 
@@ -65,14 +90,20 @@ public static class AuthEndpoints
         LoginRequest request,
         UserManager<ApplicationUser> users,
         SignInManager<ApplicationUser> signIn,
-        CadenceDbContext db)
+        CadenceDbContext db,
+        IPasswordHasher<ApplicationUser> hasher)
     {
         var user = await users.FindByEmailAsync(request.Email);
         if (user is null)
         {
+            _ = hasher.VerifyHashedPassword(new ApplicationUser(), DummyPasswordHash, request.Password);
             return Results.Unauthorized();
         }
 
+        // Identity lockout remains account-keyed. Making it IP+account-keyed would
+        // require a custom lockout store, so an IP-scoped rate limit is placed in
+        // front to keep attackers from cheaply driving repeated 5-failure lockouts;
+        // magic-link sign-in remains the recovery path.
         var result = await signIn.PasswordSignInAsync(user, request.Password, isPersistent: true, lockoutOnFailure: true);
         if (!result.Succeeded)
         {
@@ -103,8 +134,25 @@ public static class AuthEndpoints
         MagicLinkRequest request,
         UserManager<ApplicationUser> users,
         IMagicLinkSender sender,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        [FromKeyedServices(MagicLinkSendEmailLimiterKey)] PartitionedRateLimiter<string> emailLimiter)
     {
+        // A missing/blank email is treated as a no-op success: this endpoint
+        // always returns 202 regardless of account existence, and there is nothing
+        // to throttle or look up. Guards against an unhandled 500 (NRE) when a
+        // caller posts {"email":null} or {}.
+        if (string.IsNullOrWhiteSpace(request.Email))
+        {
+            return Results.Accepted();
+        }
+
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+        using var lease = await emailLimiter.AcquireAsync(normalizedEmail, 1);
+        if (!lease.IsAcquired)
+        {
+            return Results.StatusCode(StatusCodes.Status429TooManyRequests);
+        }
+
         // Only send a link to an address that already has an account. We must NOT
         // create accounts here: an unauthenticated caller could otherwise mass-
         // create accounts for arbitrary/victim emails (resource exhaustion, email

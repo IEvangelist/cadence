@@ -1,7 +1,9 @@
 using Cadence.Api.Billing;
 using Cadence.Data;
+using Cadence.Data.Entities;
 using Cadence.Data.Stems;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -51,6 +53,12 @@ public sealed class CadenceApiFactory : WebApplicationFactory<Program>
     /// </summary>
     internal InMemoryStemStorage StemStorage { get; } = new();
 
+    /// <summary>
+    /// Optional replacement for password hashing, so auth hardening tests can
+    /// assert verification paths without relying on wall-clock timing.
+    /// </summary>
+    public IPasswordHasher<ApplicationUser>? PasswordHasher { get; init; }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -76,6 +84,12 @@ public sealed class CadenceApiFactory : WebApplicationFactory<Program>
             {
                 services.RemoveAll<IBillingGateway>();
                 services.AddSingleton(gateway);
+            }
+
+            if (PasswordHasher is { } passwordHasher)
+            {
+                services.RemoveAll<IPasswordHasher<ApplicationUser>>();
+                services.AddSingleton(passwordHasher);
             }
 
             using var provider = services.BuildServiceProvider();

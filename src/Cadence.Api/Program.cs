@@ -10,12 +10,39 @@ builder.AddServiceDefaults();
 // OpenAPI document generation.
 builder.Services.AddOpenApi();
 
-// Throttle magic-link verification per target email so token guessing can't be
-// amplified by volume (the primary volume control now that bad tokens no longer
-// feed the shared account lockout — see VerifyMagicLinkAsync).
+builder.Services.AddKeyedSingleton<PartitionedRateLimiter<string>>(
+    AuthEndpoints.MagicLinkSendEmailLimiterKey,
+    (services, _) =>
+    {
+        var configuration = services.GetRequiredService<IConfiguration>();
+        var permitLimit = configuration.GetValue("RateLimiting:MagicLinkSendEmail:PermitLimit", 3);
+        var window = TimeSpan.FromSeconds(configuration.GetValue("RateLimiting:MagicLinkSendEmail:WindowSeconds", 3600));
+        return PartitionedRateLimiter.Create<string, string>(partitionKey =>
+            RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permitLimit,
+                Window = window,
+                QueueLimit = 0,
+            }));
+    });
+
+// Throttle auth entry points before they reach Identity. Magic-link verification
+// is keyed by target email because token guessing volume should be bounded per
+// victim address; send/login also receive IP-scoped middleware limits.
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(AuthEndpoints.MagicLinkSendRateLimitPolicy, context =>
+    {
+        var configuration = context.RequestServices.GetRequiredService<IConfiguration>();
+        var partitionKey = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = configuration.GetValue("RateLimiting:MagicLinkSend:PermitLimit", 5),
+            Window = TimeSpan.FromSeconds(configuration.GetValue("RateLimiting:MagicLinkSend:WindowSeconds", 60)),
+            QueueLimit = 0,
+        });
+    });
     options.AddPolicy(AuthEndpoints.MagicLinkVerifyRateLimitPolicy, context =>
     {
         // Normalize the email so casing/whitespace variants (Victim@x vs victim@x)
@@ -28,6 +55,17 @@ builder.Services.AddRateLimiter(options =>
         {
             PermitLimit = 10,
             Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+        });
+    });
+    options.AddPolicy(AuthEndpoints.LoginRateLimitPolicy, context =>
+    {
+        var configuration = context.RequestServices.GetRequiredService<IConfiguration>();
+        var partitionKey = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = configuration.GetValue("RateLimiting:Login:PermitLimit", 10),
+            Window = TimeSpan.FromSeconds(configuration.GetValue("RateLimiting:Login:WindowSeconds", 60)),
             QueueLimit = 0,
         });
     });
