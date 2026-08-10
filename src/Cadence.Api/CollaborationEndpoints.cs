@@ -133,7 +133,8 @@ public static class CollaborationEndpoints
         ClaimsPrincipal principal,
         UserManager<ApplicationUser> users,
         CadenceDbContext db,
-        CollabHub hub)
+        CollabHub hub,
+        ICollabDocumentStore documents)
     {
         if (!context.WebSockets.IsWebSocketRequest)
         {
@@ -158,14 +159,27 @@ public static class CollaborationEndpoints
 
         using var socket = await context.WebSockets.AcceptWebSocketAsync();
         var room = RoomKey(ownerId, projectId);
-        var connection = hub.Join(room, socket, role.Value);
+
+        // Load the room's persisted document (if any) on first join, so a client
+        // reconnecting after all peers left can be rehydrated from the server.
+        var connection = await hub.JoinAsync(
+            room,
+            socket,
+            role.Value,
+            () => documents.LoadAsync(ownerId, projectId, context.RequestAborted),
+            context.RequestAborted);
         try
         {
             await RelayLoopAsync(hub, room, connection, context.RequestAborted);
         }
         finally
         {
-            hub.Leave(room, connection.Id);
+            // Persist the room's update log when its last peer leaves. Never
+            // cancelled (RequestAborted is already tripped here) so edits survive.
+            await hub.LeaveAsync(
+                room,
+                connection.Id,
+                updates => documents.SaveAsync(ownerId, projectId, updates, CancellationToken.None));
         }
     }
 
@@ -217,7 +231,50 @@ public static class CollaborationEndpoints
                 continue;
             }
 
+            // Answer a state request from the room's durable log so a reconnecting
+            // collaborator (or the first client of a fresh room) converges from the
+            // server — this is what lets a room survive all peers disconnecting.
+            if (YProtocol.IsSyncStep1(message))
+            {
+                await SendSnapshotAsync(hub, room, connection, cancellationToken);
+            }
+            else if (YProtocol.TryReadUpdatePayload(message, out var payload))
+            {
+                // Capture every writer's document update so the room's persisted
+                // state stays current for the next reconnect.
+                hub.AppendUpdate(room, payload);
+            }
+
             await hub.BroadcastAsync(room, connection.Id, message, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Replay the room's persisted document to a single connection: the first
+    /// update as a sync step-2 (which also flips y-websocket to "synced", so the
+    /// client adopts the shared document instead of reseeding from a stale local
+    /// snapshot), the rest as incremental updates. A room with no persisted state
+    /// gets an empty step-2, which still marks the fresh client synced so it seeds.
+    /// </summary>
+    private static async Task SendSnapshotAsync(
+        CollabHub hub,
+        string room,
+        CollabConnection connection,
+        CancellationToken cancellationToken)
+    {
+        var snapshot = hub.SnapshotUpdates(room);
+        if (snapshot.Count == 0)
+        {
+            await connection.SendAsync(YProtocol.BuildSyncStep2(YProtocol.EmptyDocumentUpdate), cancellationToken);
+            return;
+        }
+
+        for (var i = 0; i < snapshot.Count; i++)
+        {
+            var reply = i == 0
+                ? YProtocol.BuildSyncStep2(snapshot[i])
+                : YProtocol.BuildSyncUpdate(snapshot[i]);
+            await connection.SendAsync(reply, cancellationToken);
         }
     }
 

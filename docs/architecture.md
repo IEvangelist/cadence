@@ -185,3 +185,25 @@ publishes; its `AddNpmApp`/`NodeAppResource` build only on stable hosting
 primitives, so it runs cleanly on the 13.4.x AppHost. The AppHost is
 `RestoreLockedMode=false`, so its committed `packages.lock.json` carries the new
 package (and host-RID entries) without breaking cross-OS locked restore.
+
+## Collaboration document persistence (effort #91)
+
+The live-collaboration relay (effort #9) was a pure in-memory broadcaster: it
+forwarded Yjs updates between peers and dropped a room when the last peer left, so
+the only durable copy of collaborative content was each client's browser autosave.
+Effort #91 gives the server its **own** durable copy so a room survives all peers
+disconnecting — the prerequisite for any future safe autosave suppression.
+
+Rather than re-implement Yjs on the server, the relay persists a
+**content-agnostic, append-only log of raw Yjs update payloads**. `CollabHub` loads
+the log on first-peer-join and saves it on last-peer-leave; a new
+`ICollabDocumentStore` / `EfCollabDocumentStore` seam writes it (framed by
+`CollabDocumentCodec`) into a `CollaborationDocuments` table keyed by
+`(OwnerId, ProjectId)` with a cascade FK to the owning project. Rehydration is
+reactive — the server answers a reconnecting client's Yjs **SyncStep1** from the
+stored log (`CollaborationEndpoints.SendSnapshotAsync`), or replies with the
+empty-document update for a fresh project. Persistence sits behind the unchanged,
+fail-closed viewer-write gate, so viewers still cannot persist edits. Because Yjs
+updates are commutative and idempotent, replaying the log reconstructs the document
+without de-duplication; log compaction is a tracked follow-up. See
+[`collaboration.md`](collaboration.md).

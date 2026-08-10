@@ -89,6 +89,10 @@ builder.AddCadenceBilling();
 // In-memory hub backing the collaboration WebSocket relay (per-project rooms).
 builder.Services.AddSingleton<Cadence.Api.Collaboration.CollabHub>();
 
+// Durable server-side persistence for each room's Yjs document, so a room
+// survives all peers disconnecting and reconnects with state intact.
+builder.Services.AddSingleton<Cadence.Api.Collaboration.ICollabDocumentStore, Cadence.Api.Collaboration.EfCollabDocumentStore>();
+
 // Stem separation: options + (outside Testing) Blob-backed stem storage.
 builder.AddCadenceStems();
 

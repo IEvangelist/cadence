@@ -25,6 +25,30 @@ public static class YProtocol
     public const uint SyncUpdate = 2;
 
     /// <summary>
+    /// The canonical encoding of an empty Yjs document update (<c>[0, 0]</c>: zero
+    /// client structs, empty delete set). Applying it is a no-op, so the relay can
+    /// answer a state request for a fresh room with a valid empty sync step-2 —
+    /// which flips the client to "synced" and lets it seed the new document.
+    /// </summary>
+    public static readonly byte[] EmptyDocumentUpdate = [0x00, 0x00];
+
+    /// <summary>
+    /// True when <paramref name="message"/> is a sync <see cref="SyncStep1"/> — a
+    /// read-only state-vector request. The relay answers these from its durable
+    /// update log so a reconnecting collaborator converges from the server.
+    /// </summary>
+    public static bool IsSyncStep1(ReadOnlySpan<byte> message)
+    {
+        var offset = 0;
+        if (!TryReadVarUint(message, ref offset, out var messageType) || messageType != MessageSync)
+        {
+            return false;
+        }
+
+        return TryReadVarUint(message, ref offset, out var syncType) && syncType == SyncStep1;
+    }
+
+    /// <summary>
     /// True when <paramref name="message"/> would mutate the shared document —
     /// i.e. a sync <see cref="SyncStep2"/> or <see cref="SyncUpdate"/> frame.
     /// Awareness, auth, query, and the read-only <see cref="SyncStep1"/> return
@@ -77,5 +101,85 @@ public static class YProtocol
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Append <paramref name="value"/> to <paramref name="buffer"/> as an unsigned
+    /// LEB128 <c>varUint</c> — the inverse of <see cref="TryReadVarUint"/>.
+    /// </summary>
+    public static void WriteVarUint(List<byte> buffer, uint value)
+    {
+        while (value >= 0x80)
+        {
+            buffer.Add((byte)(value | 0x80));
+            value >>= 7;
+        }
+
+        buffer.Add((byte)value);
+    }
+
+    /// <summary>
+    /// Build a <see cref="SyncStep2"/> frame carrying <paramref name="update"/> as
+    /// its <c>varUint8Array</c> payload. y-websocket flips a client to "synced"
+    /// when it processes a step-2, so the relay sends the persisted document as a
+    /// step-2 to rehydrate a lone reconnecting collaborator (see
+    /// <c>CollaborationEndpoints</c>).
+    /// </summary>
+    public static byte[] BuildSyncStep2(ReadOnlySpan<byte> update) => BuildSyncFrame(SyncStep2, update);
+
+    /// <summary>
+    /// Build a <see cref="SyncUpdate"/> frame carrying <paramref name="update"/> as
+    /// its <c>varUint8Array</c> payload. Used to replay the remaining persisted
+    /// updates after the initial step-2 during rehydration.
+    /// </summary>
+    public static byte[] BuildSyncUpdate(ReadOnlySpan<byte> update) => BuildSyncFrame(SyncUpdate, update);
+
+    /// <summary>
+    /// Extract the raw Yjs update payload from a sync <em>write</em> frame
+    /// (<see cref="SyncStep2"/> or <see cref="SyncUpdate"/>). Returns false for
+    /// awareness, the read-only <see cref="SyncStep1"/>, or any malformed/truncated
+    /// frame — so only genuine document mutations are appended to the durable log.
+    /// </summary>
+    public static bool TryReadUpdatePayload(ReadOnlySpan<byte> message, out byte[] payload)
+    {
+        payload = [];
+        var offset = 0;
+        if (!TryReadVarUint(message, ref offset, out var messageType) || messageType != MessageSync)
+        {
+            return false;
+        }
+
+        if (!TryReadVarUint(message, ref offset, out var syncType) || syncType is not (SyncStep2 or SyncUpdate))
+        {
+            return false;
+        }
+
+        if (!TryReadVarUint(message, ref offset, out var length))
+        {
+            return false;
+        }
+
+        // Guard against a length that overruns the frame (avoids overflow too).
+        if (length > (uint)(message.Length - offset))
+        {
+            return false;
+        }
+
+        payload = message.Slice(offset, (int)length).ToArray();
+        return true;
+    }
+
+    private static byte[] BuildSyncFrame(uint syncType, ReadOnlySpan<byte> update)
+    {
+        var buffer = new List<byte>(update.Length + 6);
+        WriteVarUint(buffer, MessageSync);
+        WriteVarUint(buffer, syncType);
+        WriteVarUint(buffer, (uint)update.Length);
+        foreach (var b in update)
+        {
+            buffer.Add(b);
+        }
+
+        return buffer.ToArray();
     }
 }

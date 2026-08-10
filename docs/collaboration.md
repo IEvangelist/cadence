@@ -169,6 +169,86 @@ the composer behaves exactly as the single-user build does.
 
 The relay URL is supplied to the web build via the `VITE_COLLAB_URL`
 environment variable (see the Aspire wiring in `src/Cadence.AppHost/AppHost.cs`).
+
+## Durability (server-side document persistence)
+
+Effort #91 adds a durable **server-side copy** of the shared document so a
+collaboration room survives *all* peers disconnecting. Before this, the relay
+(`CollabHub`) was a pure in-memory broadcaster that pruned a room the moment its
+last peer left — the only durable copy of collaborative content lived in each
+client's `localStorage` (autosave). A full-room drain followed by a reload could
+therefore lose edits that had not yet mirrored to a client. Server persistence
+closes that gap; client autosave is kept as the offline backstop — it writes a
+different, per-client store and never races the shared document.
+
+### Append-only update log (no server-side CRDT engine)
+
+The server does **not** run a C# port of Yjs. Re-implementing the CRDT would risk
+binary-interop drift against the pinned `yjs@13.6.31` client and add a
+dependency/pinning burden. Instead the relay persists a **content-agnostic,
+append-only log of the raw Yjs update payloads** it already relays:
+
+- `CollabHub.JoinAsync` loads the saved log **once**, when the first peer joins a
+  room (via a loader delegate backed by `ICollabDocumentStore`).
+- `CollabHub.AppendUpdate` appends the payload of each **write** frame
+  (sync `step2`/`update`, extracted by `YProtocol.TryReadUpdatePayload`) to the
+  room's in-memory log as it is broadcast.
+- `CollabHub.LeaveAsync` saves the log when the **last** peer leaves
+  (save-on-empty, under `CancellationToken.None` so the write always completes),
+  then prunes the room.
+
+Because Yjs updates are commutative, idempotent, and associative, replaying the
+whole log in order reconstructs the document regardless of duplicates — so the
+log never needs de-duplication to be correct.
+
+`CollabDocumentCodec` frames the list of updates into a single `byte[]` column
+(`varUint(len) + bytes` per entry) and decodes it back, failing soft on a
+truncated blob. `EfCollabDocumentStore` (a singleton that opens a scoped
+`CadenceDbContext` per operation via `IServiceScopeFactory`) stores the blob in a
+new **`CollaborationDocuments`** table keyed by `(OwnerId, ProjectId)` with a
+cascade FK to the owning project — owner-scoped and IDOR-safe like every other
+Cadence entity.
+
+### Reactive rehydration (answering SyncStep1)
+
+Rehydration is **reactive**, not proactive: the server never pushes an unsolicited
+frame at join time. When a client opens the connection it sends the standard Yjs
+**SyncStep1**; `CollaborationEndpoints.SendSnapshotAsync` answers it from the
+durable log:
+
+- **Non-empty log** → a `SyncStep2` carrying the first stored update, followed by a
+  `SyncUpdate` for each remaining entry. The client applies them and converges to
+  the persisted state.
+- **Empty log** (fresh project) → a `SyncStep2` carrying the *empty-document*
+  update (`[0x00, 0x00]`, the canonical `Y.encodeStateAsUpdate(new Y.Doc())`). This
+  still flips the client to "synced" so the very first client seeds the doc.
+
+Answering SyncStep1 (rather than injecting at join) is deliberate: it is invisible
+to a client that is *not* asking to sync, which keeps the existing relay handshake
+tests — none of which send SyncStep1 — byte-for-byte unaffected.
+
+### Security: the viewer gate is unchanged and still first
+
+Persistence sits **behind** the existing access-control gate. `RelayLoopAsync`
+still drops viewer write-frames *before* anything else:
+
+> `if (!connection.CanWrite && YProtocol.IsWriteMessage(message)) continue;`
+
+Only frames that pass this gate can be appended to the log or broadcast, so a
+viewer can never persist an edit. A viewer *can* send SyncStep1 and receive the
+persisted state (read-only) — `IsWriteMessage` classifies SyncStep1 as a non-write
+— and the role is still resolved server-side in `ResolveRoleAsync` (fail closed).
+
+### Growth and compaction (follow-up)
+
+The log is append-only, so a long-lived, heavily edited project accumulates updates
+over its lifetime. This is correct but not yet space-optimal. Because the updates
+are commutative/idempotent, a future compaction step can replace the whole log with
+a single squashed update (materialize the doc, `encodeStateAsUpdate`, store one
+entry) with **no** change to convergence semantics. That optimization is tracked as
+a follow-up and is intentionally out of scope for #91, which establishes
+correctness (survive all-peers-disconnect) first. The client-side `y-indexeddb`
+offline-reload convergence enhancement remains a separate, complementary follow-up.
 No secrets are involved — share tokens are per-project capability strings minted
 and revoked through the owner-only API.
 
