@@ -125,6 +125,8 @@ continues to flow through `ProjectStore`.
 | `CollaborationStatus` | Read-only collaboration model features consume (`canShare`, `isActive`, `role`, `participants`) | PUBLIC |
 | `selectCollaborationStatus` | Contract-owned read-only selector: projects #9's `CollaborationState` → `CollaborationStatus` | PUBLIC |
 | `projectParticipant` | Projects one `CollabPresence` roster entry → `Participant` | PUBLIC |
+| `useCollaborationStatus` | Zero-arg React hook — the feature-facing read; returns the status the nearest `<Composer>` publishes via context | PUBLIC |
+| `CollaborationStatusContext` | React context `<Composer>` publishes the projected status through (features read via the hook) | PUBLIC |
 | `ComposerCollaborationInternals` | Classification marker for #9 sync plumbing that must stay out of `ComposerPublicApi` | INTERNAL |
 
 #### Public vs internal — collaboration surface
@@ -145,11 +147,21 @@ path.**
   tabs appears twice — group by `userId` for a per-person view. `isSelf` marks the local
   connection. `role` is **optional** (see below).
 - `selectCollaborationStatus(state, { role, canShare }): CollaborationStatus` — the
-  contract-owned read-only selector (in `contract/collaborationSelector.ts`), a pure
-  projection over #9's `CollaborationState` (from `useCollaboration()`). Added in the
+  contract-owned read-only **projection primitive** (in `contract/collaborationSelector.ts`),
+  a pure function over #9's `CollaborationState` (from `useCollaboration()`). Added in the
   post-#9 rebase; `<Composer>` composes it with the state, `collab?.role`, and the
-  `canShare` prop it already carries — **no #9 change required**. Features import it
-  (and `projectParticipant`) from the contract barrel.
+  `canShare` prop it already carries — **no #9 change required**.
+- `useCollaborationStatus(): CollaborationStatus` — the **feature-facing read** (in
+  `contract/collaborationContext.ts`). A zero-arg React hook returning the status the
+  nearest `<Composer>` publishes through `CollaborationStatusContext`, or the solo default
+  outside one. `<Composer>` computes the value once with `selectCollaborationStatus` over
+  its **single** `useCollaboration()` instance and provides it via context; features
+  (#41/#44/#45) call the hook and **never** call `useCollaboration()` themselves. This
+  single-source rule is load-bearing: a second `useCollaboration()` call would open a
+  duplicate relay/awareness session and double the local user in presence. The Composer-side
+  Provider wrap is #9's additive fast-follow (merged after this contract, base unchanged);
+  until it lands the hook safely returns the solo default, so this contract stays green
+  independently.
 
 Projection mapping (#9 internal → contract public):
 
@@ -196,11 +208,14 @@ conforms to it, never the reverse). If #9's live-state fields drift, that file s
 compiling.
 
 ```ts
-function CollaborationBadge({ status }: { status: CollaborationStatus }) {
+// Feature panels (#41/#44/#45) render inside <Composer> and read the hook — no props,
+// no useCollaboration() call, no double-connect:
+function CollaborationBadge() {
+  const status = useCollaborationStatus() // zero-arg, single-source
   setShareDisabled(!status.canShare)
   renderParticipants(status.participants) // each has id, userId, displayName, color, isSelf
 
-  // INTERNAL — do NOT call: controller.applyRemoteProject(...)
+  // INTERNAL — do NOT call: controller.applyRemoteProject(...) / useCollaboration(...)
   return status.isActive ? `Live as ${status.role}` : 'Solo'
 }
 ```

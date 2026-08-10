@@ -6,6 +6,7 @@
  */
 export * from './core'
 export * from './collaboration'
+export * from './collaborationContext'
 export * from './instruments'
 export * from './onboarding'
 export * from './platform'
