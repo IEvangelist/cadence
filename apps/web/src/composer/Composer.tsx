@@ -17,6 +17,8 @@ import {
   type CollabProviderFactory,
   useCollaboration,
 } from './model/collab/useCollaboration'
+import { CollaborationStatusContext } from './contract/collaborationContext'
+import { selectCollaborationStatus } from './contract/collaborationSelector'
 import './Composer.css'
 
 interface ComposerProps {
@@ -68,7 +70,16 @@ export function Composer({
     collabProviderFactory,
   )
 
+  // Publish the single live session's status through the contract-owned context so
+  // feature panels can read it via useCollaborationStatus() without opening a second
+  // useCollaboration() session (which would duplicate the relay/awareness connection).
+  const collaborationStatus = selectCollaborationStatus(collaboration, {
+    role: collab?.role ?? 'owner',
+    canShare,
+  })
+
   return (
+    <CollaborationStatusContext.Provider value={collaborationStatus}>
     <section className="composer" aria-label="Composer">
       <div className="composer-topbar">
         <ProjectToolbar controller={controller} />
@@ -118,5 +129,6 @@ export function Composer({
         </p>
       )}
     </section>
+    </CollaborationStatusContext.Provider>
   )
 }
