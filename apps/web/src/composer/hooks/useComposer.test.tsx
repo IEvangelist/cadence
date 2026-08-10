@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useComposer } from './useComposer'
 import { type AudioEngine, type TransportState } from '../audio/engine'
+import { createMixerController, type MixerController } from '../audio/mixerController'
 import { LocalStorageProjectStore, MemoryStorage } from '../model/storage'
 import { createEmptyProject, type Project } from '../model/project'
 import { projectToMidiBytes } from '../midi/midi'
@@ -10,6 +11,7 @@ import { defaultPluginHost } from '../plugins/defaultHost'
 class FakeEngine implements AudioEngine {
   state: TransportState = 'stopped'
   calls: string[] = []
+  readonly mixer: MixerController = createMixerController()
   private listeners = new Set<(s: TransportState) => void>()
   private setState(s: TransportState) {
     this.state = s

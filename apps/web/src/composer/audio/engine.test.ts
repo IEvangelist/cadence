@@ -41,6 +41,29 @@ vi.mock('tone', () => {
     connect() {
       return this
     }
+    disconnect() {
+      return this
+    }
+    dispose = vi.fn()
+  }
+  class Panner {
+    pan = { value: 0 }
+    connect() {
+      return this
+    }
+    disconnect() {
+      return this
+    }
+    dispose = vi.fn()
+  }
+  class Limiter {
+    threshold = { value: 0 }
+    connect() {
+      return this
+    }
+    disconnect() {
+      return this
+    }
     dispose = vi.fn()
   }
   class PolySynth {
@@ -119,6 +142,8 @@ vi.mock('tone', () => {
   }
   return {
     Gain,
+    Panner,
+    Limiter,
     PolySynth,
     Synth,
     FMSynth,
@@ -419,7 +444,7 @@ describe('SilentAudioEngine', () => {
     // no-op methods should not throw
     engine.setTempo()
     engine.setLoop()
-    engine.setProject()
+    engine.setProject(createEmptyProject('s'))
     engine.previewNote()
     expect(engine.positionBeats()).toBe(0)
     expect(states).toEqual(['playing', 'paused', 'stopped'])

@@ -19,6 +19,8 @@ import { getInstrumentContribution } from '../instruments/registry'
 import { defaultPluginHost } from '../plugins/defaultHost'
 import { connectEffectChain } from '../plugins/effectChain'
 import type { EffectNode, InstrumentVoice } from '../plugins/types'
+import { createMixerGraph, type MixerGraph } from './mixerGraph'
+import { createMixerController, type MixerController } from './mixerController'
 import {
   beatsToBarsBeatsSixteenths,
   beatsToSeconds,
@@ -29,6 +31,8 @@ export type TransportState = 'stopped' | 'playing' | 'paused'
 
 export interface AudioEngine {
   readonly state: TransportState
+  /** The #44 mixer: per-track gain/pan/solo, inserts, master bus + automation. */
+  readonly mixer: MixerController
   /** Start (or resume) playback. Resolves once the audio context is running. */
   play(): Promise<void>
   pause(): void
@@ -61,6 +65,9 @@ export class ToneAudioEngine implements AudioEngine {
   // Voices connect to this bus; the bus routes through the master effect chain.
   private readonly voiceBus: ToneOutput
   private readonly effectNodes: EffectNode[] = []
+  // The #44 mixer graph sits between the voices and the master bus.
+  private readonly mixerGraph: MixerGraph
+  private readonly _mixer: MixerController
   // Voices and parts are keyed by track id so edits touch only what changed.
   private readonly voices = new Map<string, Voice>()
   private readonly parts = new Map<string, Tone.Part<ScheduledEvent>>()
@@ -75,7 +82,25 @@ export class ToneAudioEngine implements AudioEngine {
     this.master = new Tone.Gain(0.9).toDestination()
     this.voiceBus = new Tone.Gain(1)
     this.buildEffectChain()
+    // Route the mixer's master output into the existing voice bus so the mixer is
+    // an additive stage; with default (transparent) settings the sound is unchanged.
+    this.mixerGraph = createMixerGraph()
+    this.mixerGraph.output.connect(this.voiceBus)
+    this._mixer = createMixerController({
+      graph: this.mixerGraph,
+      createEffect: (effectId) => this.createInsertNode(effectId),
+    })
     Tone.getTransport().bpm.value = this.tempo
+  }
+
+  get mixer(): MixerController {
+    return this._mixer
+  }
+
+  /** Build an insert node for a mixer effect id via the plugin host (or null). */
+  private createInsertNode(effectId: string): EffectNode | null {
+    const contribution = defaultPluginHost.effects().find((effect) => effect.id === effectId)
+    return contribution ? contribution.createNode({ tempo: this.tempo }) : null
   }
 
   /**
@@ -97,9 +122,9 @@ export class ToneAudioEngine implements AudioEngine {
   }
 
   /** Resolve and build the voice for a track through the plugin host. */
-  private buildVoice(track: Track): Voice {
+  private buildVoice(track: Track, output: ToneOutput = this.mixerGraph.channelInput(track.id)): Voice {
     return getInstrumentContribution(track.instrumentId).createVoice({
-      output: this.voiceBus,
+      output,
       track,
       tempo: this.tempo,
     })
@@ -177,6 +202,10 @@ export class ToneAudioEngine implements AudioEngine {
       this.trackInstruments.delete(id)
     }
 
+    // Reconcile the mixer overlay: ensure a channel per track, mirror Track.muted,
+    // and dispose channels for removed tracks (after their voices are torn down).
+    this._mixer.syncTracks(project.tracks.map((track) => ({ id: track.id, muted: track.muted })))
+
     this.setLoop(project.loop)
   }
 
@@ -243,7 +272,9 @@ export class ToneAudioEngine implements AudioEngine {
     // Auditions come from a user gesture, so it is safe (and required on first
     // interaction) to resume the audio context before triggering the voice.
     void Tone.start()
-    const voice = this.buildVoice(track)
+    // Route the preview past the mixer (straight to the voice bus) so an audition
+    // is always audible regardless of the track's mute/solo/gain state.
+    const voice = this.buildVoice(track, this.voiceBus)
     const duration = beatsToSeconds(durationBeats, this.tempo)
     voice.trigger(pitch, duration, Tone.now(), 0.9)
     // Free the one-shot preview voice after it has rung out.
@@ -262,6 +293,8 @@ export class ToneAudioEngine implements AudioEngine {
     this.stop()
     Tone.getTransport().cancel()
     this.disposeVoicesAndParts()
+    // Disposes the mixer graph (channels, inserts, limiter, master + output).
+    this._mixer.dispose()
     for (const effect of this.effectNodes) effect.dispose()
     this.effectNodes.length = 0
     this.voiceBus.dispose()
@@ -291,9 +324,15 @@ export function isAudioSupported(): boolean {
 export class SilentAudioEngine implements AudioEngine {
   private _state: TransportState = 'stopped'
   private readonly listeners = new Set<(state: TransportState) => void>()
+  // A state-only mixer (no audio graph): the panel stays fully interactive.
+  private readonly _mixer: MixerController = createMixerController()
 
   get state(): TransportState {
     return this._state
+  }
+
+  get mixer(): MixerController {
+    return this._mixer
   }
 
   private setState(state: TransportState): void {
@@ -313,7 +352,9 @@ export class SilentAudioEngine implements AudioEngine {
   }
   setTempo(): void {}
   setLoop(): void {}
-  setProject(): void {}
+  setProject(project: Project): void {
+    this._mixer.syncTracks(project.tracks.map((track) => ({ id: track.id, muted: track.muted })))
+  }
   positionBeats(): number {
     return 0
   }
@@ -325,6 +366,7 @@ export class SilentAudioEngine implements AudioEngine {
     }
   }
   dispose(): void {
+    this._mixer.dispose()
     this.listeners.clear()
   }
 }

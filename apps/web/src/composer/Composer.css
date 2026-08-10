@@ -894,3 +894,125 @@ select:focus-visible {
   color: var(--color-danger, #c0392b);
   font-size: var(--font-size-sm);
 }
+
+/* ---- #44 Mixer panel ---- */
+.mixer-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.mixer-tracks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.mixer-strip,
+.mixer-master {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  margin: 0;
+}
+
+.mixer-strip legend,
+.mixer-master legend {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  padding: 0 var(--space-1);
+}
+
+.mixer-swatch {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  border: 1px solid var(--color-border-strong);
+}
+
+.mixer-strip-buttons {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.btn-toggle[aria-pressed='true'] {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border-color: var(--color-primary);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+}
+
+.btn-ghost:hover {
+  border-color: var(--color-border-strong);
+}
+
+.mixer-inserts,
+.mixer-automation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.mixer-inserts-title,
+.mixer-automation-title {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.mixer-insert-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.mixer-insert,
+.mixer-add-insert,
+.mixer-automation-buttons {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.mixer-insert {
+  justify-content: space-between;
+}
+
+.mixer-insert-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+.mixer-automation-buttons {
+  flex-wrap: wrap;
+}
+
+.mixer-status {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
+  font-variant-numeric: tabular-nums;
+}

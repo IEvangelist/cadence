@@ -2,12 +2,14 @@ import { type UseComposerOptions, useComposer } from './hooks/useComposer'
 import { type UseAssistantOptions, useAssistant } from './hooks/useAssistant'
 import { type UseAiStudioOptions, useAiStudio } from './hooks/useAiStudio'
 import { useAiStudioEntitlements } from './hooks/useAiStudioEntitlements'
+import { useMixer } from './hooks/useMixer'
 import { usePlugins } from './plugins/usePlugins'
 import { ProjectToolbar } from './components/ProjectToolbar'
 import { TransportBar } from './components/TransportBar'
 import { TrackPanel } from './components/TrackPanel'
 import { AssistantPanel } from './components/AssistantPanel'
 import { AiStudioPanel } from './components/AiStudioPanel'
+import { MixerPanel } from './components/MixerPanel'
 import { PluginsPanel } from './components/PluginsPanel'
 import { PianoRoll } from './components/PianoRoll'
 import { PresenceBar } from './components/PresenceBar'
@@ -56,6 +58,7 @@ export function Composer({
     entitlements: aiStudioOptions?.entitlements ?? resolvedEntitlements,
   })
   const plugins = usePlugins(controller)
+  const mixer = useMixer(controller)
   const { project, audioReady, loadDemo } = controller
   const isEmpty = project.tracks.every((track) => track.notes.length === 0)
 
@@ -112,6 +115,7 @@ export function Composer({
           <TrackPanel controller={controller} />
           <AssistantPanel assistant={assistant} />
           <AiStudioPanel studio={aiStudio} />
+          <MixerPanel mixer={mixer} />
           <PluginsPanel plugins={plugins} />
           {plugins.visiblePanels.map((panel) => (
             <section key={panel.id} className="plugin-surface" aria-label={panel.title}>
