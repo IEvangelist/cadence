@@ -133,6 +133,19 @@ pinned (CI/dev default) a deterministic band-split engine drives the same
 surface (`apps/web/src/stems/`) — the composer integration (stem → editable mixer
 track) is a Phase 2 follow-up. See [`stems.md`](stems.md).
 
+### Stem pipeline hardening (effort #10, Phase 2)
+
+Phase 2 (`#57`) hardens the pipeline for real deployment without changing its
+surface. Jobs carry a **processing lease** (`ProcessingStartedAt`) and an
+**attempt counter** (`Attempts`): a reaper in `SeparationJobProcessor` returns
+lease-expired `Processing` jobs to `Queued` (or `Failed` once attempts are
+exhausted), so a crashed worker no longer strands a job. Job claiming is now a
+single conditional `UPDATE … WHERE Status = 'Queued'` (`ExecuteUpdateAsync`, the
+`FOR UPDATE SKIP LOCKED` equivalent), so scaled-out worker replicas can never both
+claim the same job. When a model is pinned, the download must be `https` and is
+verified against a pinned SHA-256 (`Stems:ModelSha256`) before use, with a
+corrupted cache purged and re-fetched. See [`stems.md`](stems.md).
+
 ## Local development (one-command `aspire run`)
 
 `dotnet run --project src/Cadence.AppHost` (equivalently `aspire run`) brings up

@@ -31,5 +31,8 @@ public class StemOptionsTests
         Assert.Equal(600, options.MaxDurationSeconds);
         Assert.Equal("stems", options.ContainerName);
         Assert.Null(options.ModelUri);
+        Assert.Null(options.ModelSha256);
+        Assert.Equal(300, options.ProcessingLeaseSeconds);
+        Assert.Equal(3, options.MaxAttempts);
     }
 }

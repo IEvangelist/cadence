@@ -16,6 +16,9 @@ public static class SeparationJobStateMachine
         (JobStatus.Queued, JobStatus.Processing) => true,
         (JobStatus.Processing, JobStatus.Completed) => true,
         (JobStatus.Processing, JobStatus.Failed) => true,
+        // Reclaim: a stuck job whose processing lease expired is returned to the
+        // queue for another attempt (the reaper caps this via the attempt count).
+        (JobStatus.Processing, JobStatus.Queued) => true,
         _ => false,
     };
 
