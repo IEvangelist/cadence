@@ -6,7 +6,8 @@ var builder = DistributedApplication.CreateBuilder(args);
 var postgres = builder.AddPostgres("postgres");
 var cadenceDb = postgres.AddDatabase("cadencedb");
 
-// Presence, caching, and rate-limiting.
+// Presence and caching. (Auth rate limiting is currently in-process per replica,
+// not Redis-backed; cross-replica limiting is tracked as a follow-up.)
 var redis = builder.AddRedis("redis");
 
 // Audio/asset blob storage, backed by the Azurite emulator in development.

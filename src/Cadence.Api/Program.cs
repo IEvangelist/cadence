@@ -1,4 +1,5 @@
 using Cadence.Api;
+using Microsoft.AspNetCore.HttpOverrides;
 using Scalar.AspNetCore;
 using System.Threading.RateLimiting;
 
@@ -35,6 +36,8 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy(AuthEndpoints.MagicLinkSendRateLimitPolicy, context =>
     {
         var configuration = context.RequestServices.GetRequiredService<IConfiguration>();
+        // Proxy-resolved client IP (see UseForwardedHeaders below); ingress IP in prod
+        // without it. "unknown" only when no peer/XFF is present (e.g. in-proc tests).
         var partitionKey = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
         {
@@ -61,6 +64,8 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy(AuthEndpoints.LoginRateLimitPolicy, context =>
     {
         var configuration = context.RequestServices.GetRequiredService<IConfiguration>();
+        // Proxy-resolved client IP (see UseForwardedHeaders below); ingress IP in prod
+        // without it. "unknown" only when no peer/XFF is present (e.g. in-proc tests).
         var partitionKey = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
         {
@@ -110,6 +115,29 @@ if (!app.Environment.IsEnvironment("Testing"))
 {
     await app.MigrateCadenceDatabaseAsync();
 }
+
+// Behind the Azure Container Apps ingress (Envoy) the socket peer is the ingress,
+// not the caller, so the real client IP arrives in X-Forwarded-For. Resolve it
+// before rate limiting so the per-IP limiters partition by client rather than by
+// the shared ingress address (which would degrade them into global limiters).
+//
+// Trust scope: ForwardLimit = 1 honours ONLY the right-most XFF entry, which the
+// ingress appends with the true downstream peer IP. A caller that pre-seeds
+// X-Forwarded-For therefore cannot spoof its address to dodge or poison another
+// client's budget — its forged entries sit to the left of the ingress-appended
+// real IP and are never read. KnownNetworks/KnownProxies are cleared because the
+// ingress IP is assigned dynamically and is not knowable ahead of time; the
+// single-hop limit (not a fixed proxy allow-list) is what enforces the boundary.
+// This assumes the app is reachable only via the ingress, which is true for the
+// azd container-app deployment.
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+    ForwardLimit = 1,
+};
+forwardedHeadersOptions.KnownIPNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeadersOptions);
 
 app.UseRateLimiter();
 app.UseWebSockets();
