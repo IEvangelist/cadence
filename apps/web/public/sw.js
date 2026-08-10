@@ -4,6 +4,11 @@ const APP_SHELL = ['/', '/index.html', '/site.webmanifest', '/favicon.svg']
 
 const STATIC_ASSET_PATTERN = /(?:^\/assets\/|\/(?:favicon|apple-touch-icon|pwa-|maskable-).*\.(?:svg|png|ico)$|\.(?:css|js|svg|png|ico|woff2)$)/i
 
+// Never intercept authenticated API responses or realtime-collaboration traffic.
+// Cross-origin transports (Stripe, external API base URLs) are excluded by the origin check above.
+// WebSocket upgrades never fire SW fetch events — this guard covers same-origin HTTP paths only.
+const NETWORK_ONLY = /^\/(?:api|collab|ws|socket|realtime|sync)(?:\/|$)/i
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()),
@@ -24,6 +29,10 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url)
 
   if (request.method !== 'GET' || url.origin !== self.location.origin) {
+    return
+  }
+
+  if (NETWORK_ONLY.test(url.pathname)) {
     return
   }
 

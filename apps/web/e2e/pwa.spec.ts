@@ -90,6 +90,25 @@ test.describe('pwa', () => {
     }
   })
 
+  test('service worker does not cache /api paths', async ({ page }) => {
+    test.setTimeout(60_000)
+
+    await page.goto('/')
+    await waitForServiceWorkerReady(page)
+    await expectServiceWorkerController(page)
+
+    // Verify the SW never caches authenticated API responses — even paths that
+    // look like static assets (e.g. stem artwork under /api/stems/jobs/x/cover.png).
+    const cachedApi = await page.evaluate(async () => {
+      const cache = await caches.open('cadence-shell-v1')
+      const plain = await cache.match('/api/entitlements')
+      const assetLike = await cache.match('/api/stems/jobs/1/cover.png')
+      return { plain: plain !== undefined, assetLike: assetLike !== undefined }
+    })
+    expect(cachedApi.plain).toBe(false)
+    expect(cachedApi.assetLike).toBe(false)
+  })
+
   test('exposes installability signals', async ({ page }) => {
     test.setTimeout(60_000)
 
