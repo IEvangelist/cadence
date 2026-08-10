@@ -19,9 +19,14 @@ public interface IStemModelProvider
 /// <summary>
 /// Fetches the ONNX model referenced by <see cref="StemOptions.ModelUri"/> and
 /// caches it under the local application data directory, keyed by a hash of the
-/// URI so a changed pin re-downloads. A <c>file://</c> or plain local path is used
-/// in place. This is I/O glue with no unit tests (a model download would need the
-/// network), so it is excluded from coverage.
+/// URI so a changed pin re-downloads. Remote pins must be <c>https</c> (an
+/// <c>http</c> pin is rejected as MITM-substitutable) and, when
+/// <see cref="StemOptions.ModelSha256"/> is configured, the fetched bytes are
+/// verified against that digest before the model is cached or used. A <c>file://</c>
+/// or plain local path is used in place (still digest-verified when pinned). This is
+/// I/O glue with no unit tests (a model download would need the network) — the pure
+/// checks it delegates to live in <see cref="StemModelIntegrity"/> and are unit-tested
+/// — so it is excluded from coverage.
 /// </summary>
 [ExcludeFromCodeCoverage]
 public sealed class HttpStemModelProvider(
@@ -50,9 +55,15 @@ public sealed class HttpStemModelProvider(
             var uri = options.ModelUri
                 ?? throw new InvalidOperationException("Stems:ModelUri is not configured.");
 
-            // A local path or file URI is used directly.
+            // Reject an insecure http:// pin outright (MITM-substitutable), regardless
+            // of whether a digest is configured.
+            StemModelIntegrity.RequireSecureModelUri(uri);
+
+            // A local path or file URI is used in place (still digest-verified when a
+            // pin is configured, but never purged — it is the operator's own file).
             if (Uri.TryCreate(uri, UriKind.Absolute, out var parsed) && parsed.IsFile)
             {
+                await VerifyIfPinnedAsync(parsed.LocalPath, purgeOnMismatch: false, cancellationToken);
                 _cachedPath = parsed.LocalPath;
                 return _cachedPath;
             }
@@ -60,6 +71,7 @@ public sealed class HttpStemModelProvider(
             if (!uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
                 !uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             {
+                await VerifyIfPinnedAsync(uri, purgeOnMismatch: false, cancellationToken);
                 _cachedPath = uri;
                 return _cachedPath;
             }
@@ -76,6 +88,12 @@ public sealed class HttpStemModelProvider(
                 logger.LogInformation("Downloading pinned stem model from {ModelUri}.", uri);
                 await DownloadAsync(uri, cachePath, cancellationToken);
             }
+            else
+            {
+                // Re-verify an already-cached model so a poisoned cache entry is caught
+                // and purged rather than silently reused.
+                await VerifyIfPinnedAsync(cachePath, purgeOnMismatch: true, cancellationToken);
+            }
 
             _cachedPath = cachePath;
             return _cachedPath;
@@ -89,16 +107,64 @@ public sealed class HttpStemModelProvider(
     private async Task DownloadAsync(string uri, string destination, CancellationToken cancellationToken)
     {
         var tempPath = destination + ".tmp";
-        using (var response = await httpClient.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
+        try
         {
-            response.EnsureSuccessStatusCode();
-            await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
-            await using var target = File.Create(tempPath);
-            await source.CopyToAsync(target, cancellationToken);
+            using (var response = await httpClient.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
+            {
+                response.EnsureSuccessStatusCode();
+                await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
+                await using var target = File.Create(tempPath);
+                await source.CopyToAsync(target, cancellationToken);
+            }
+
+            // Verify integrity before the file is ever published to the cache path, so a
+            // MITM-substituted or corrupted binary is never used.
+            await VerifyIfPinnedAsync(tempPath, purgeOnMismatch: false, cancellationToken);
+
+            // Atomic publish so a partial/failed download is never treated as cached.
+            File.Move(tempPath, destination, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Verify <paramref name="path"/> against <see cref="StemOptions.ModelSha256"/> when a
+    /// digest is configured. Optionally purges the file on mismatch (for cache entries,
+    /// so a later run re-fetches). When no digest is pinned, logs a warning and skips.
+    /// </summary>
+    private async Task VerifyIfPinnedAsync(string path, bool purgeOnMismatch, CancellationToken cancellationToken)
+    {
+        if (options.ModelSha256 is not { Length: > 0 } expected)
+        {
+            logger.LogWarning("Stems:ModelSha256 is not set; the stem model is not integrity-verified.");
+            return;
         }
 
-        // Atomic publish so a partial download is never treated as the cached model.
-        File.Move(tempPath, destination, overwrite: true);
+        string actual;
+        await using (var stream = File.OpenRead(path))
+        {
+            actual = await StemModelIntegrity.ComputeSha256HexAsync(stream, cancellationToken);
+        }
+
+        try
+        {
+            StemModelIntegrity.VerifyChecksum(expected, actual);
+        }
+        catch
+        {
+            if (purgeOnMismatch && File.Exists(path))
+            {
+                File.Delete(path);
+            }
+
+            throw;
+        }
     }
 
     private static string HashUri(string uri)

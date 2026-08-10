@@ -139,6 +139,9 @@ Nothing here is a secret; all values have safe defaults (see `StemOptions`).
 | `Stems:AllowedContentTypes` | WAV/MP3/FLAC/OGG/MP4/AAC | Accepted upload media types (`415`). |
 | `Stems:ContainerName` | `stems` | Blob container for mixes + stems. |
 | `Stems:ModelUri` | *(unset)* | Pinned ONNX model URI; unset → band-split engine. |
+| `Stems:ModelSha256` | *(unset)* | Pinned lowercase-hex SHA-256 of the model binary; when set, a downloaded/local model is verified against it and rejected on mismatch. |
+| `Stems:ProcessingLeaseSeconds` | `300` | How long a job may stay `Processing` before it is treated as abandoned and reclaimed. |
+| `Stems:MaxAttempts` | `3` | Max processing attempts before a repeatedly-stuck job is failed instead of requeued. |
 
 ## Web UI (standalone)
 
@@ -159,3 +162,57 @@ errors) and axe-clean.
 
 See [`testing.md`](testing.md) for the full test matrix and
 [`billing-setup.md`](billing-setup.md) for the entitlement model.
+
+## Reliability & hardening (Phase 2)
+
+Phase 2 (`#57`) hardens the async pipeline against worker crashes, multi-replica
+races, and a compromised model download. All three are additive and covered by
+unit tests in `Cadence.Api.Tests`.
+
+### Stuck-`Processing` recovery (lease + reaper)
+
+If a worker dies mid-job, its job would otherwise sit in `Processing` forever and
+the owner would poll indefinitely. Each claim now stamps a **processing lease**
+(`SeparationJob.ProcessingStartedAt`) and increments an **attempt counter**
+(`SeparationJob.Attempts`). `SeparationJobProcessor.ReclaimTimedOutJobsAsync`
+sweeps jobs whose lease has aged past `Stems:ProcessingLeaseSeconds`:
+
+- **Under `Stems:MaxAttempts`** → returned to `Queued` (lease cleared) for another
+  worker to pick up. `Processing → Queued` is a first-class, unit-tested state
+  transition.
+- **At/over `Stems:MaxAttempts`** → moved to `Failed` with an explanatory error,
+  so a poison job cannot loop forever.
+
+The sweep runs on worker startup and once per lease window. It is safe to run from
+every replica: each transition is a conditional `UPDATE … WHERE Status = 'Processing'`,
+so only one reaper (or the completing worker) ever wins a given job.
+
+### Atomic multi-replica claim
+
+The worker resource scales out (`WithReplicas`), so two replicas can race for the
+same queued job. `ClaimNextQueuedAsync` claims via a conditional
+`ExecuteUpdateAsync` — `UPDATE … SET Status = 'Processing' … WHERE Id = @id AND
+Status = 'Queued'` — the cross-provider equivalent of
+`SELECT … FOR UPDATE SKIP LOCKED`. The database serialises the two updates: exactly
+one replica matches a row (and processes the job); the loser matches **zero** rows
+and moves on. A unit test (`ClaimNextQueuedAsync_TwoWorkers_OnlyOneClaimsTheSameJob`)
+proves two concurrent claims of one job yield exactly one winner.
+
+### Model-download integrity (HTTPS + pinned SHA-256)
+
+When `Stems:ModelUri` is set, the model download is now hardened by
+`StemModelIntegrity`:
+
+- **Secure transport required.** An `http://` model URI is rejected outright — a
+  plaintext download is MITM-substitutable. `https://`, `file://`, and bare local
+  paths are allowed.
+- **Pinned digest verified.** When `Stems:ModelSha256` is set, the fetched bytes
+  are hashed (SHA-256) and compared to the pin (case-, whitespace-, and
+  `sha256:`-prefix-insensitive). A downloaded model is verified **before** it is
+  published into the cache (written to a temp file and only moved into place on a
+  match); an already-cached file is re-verified on each start and **purged** on
+  mismatch so a corrupted cache self-heals. A mismatch throws and the worker
+  refuses to run the model.
+
+Leaving `Stems:ModelUri` unset (the CI/dev default) still uses the hermetic
+`BandSplitStemSeparator`, so none of this affects the integration test.

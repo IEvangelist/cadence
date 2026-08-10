@@ -31,23 +31,115 @@ public sealed class SeparationJobProcessor(
     /// </summary>
     public async Task<SeparationJob?> ClaimNextQueuedAsync(CancellationToken cancellationToken = default)
     {
-        // Order client-side by CreatedAt: SQLite (which backs the unit tests) cannot
-        // ORDER BY a DateTimeOffset, and the queued set is small. A single worker
-        // claims one job at a time, so load-then-claim needs no row locking here.
-        var queued = await _db.SeparationJobs
+        // Candidate queued jobs, oldest first. Ordering is client-side because SQLite
+        // (which backs the unit tests) cannot ORDER BY a DateTimeOffset and the queued
+        // set is small; the projection is untracked so nothing lands in the change
+        // tracker ahead of the atomic claim below.
+        var candidates = await _db.SeparationJobs
             .Where(j => j.Status == JobStatus.Queued)
+            .Select(j => new { j.OwnerId, j.Id, j.CreatedAt })
             .ToListAsync(cancellationToken);
 
-        var job = queued.OrderBy(j => j.CreatedAt).FirstOrDefault();
-        if (job is null)
+        foreach (var candidate in candidates.OrderBy(c => c.CreatedAt))
         {
-            return null;
+            var now = DateTimeOffset.UtcNow;
+
+            // Atomic conditional claim: the UPDATE only matches while the row is still
+            // Queued, so if another replica claimed it first this affects zero rows and
+            // we try the next candidate. This is the cross-provider equivalent of
+            // SELECT ... FOR UPDATE SKIP LOCKED and makes scale-out (WithReplicas) safe:
+            // two workers can never both flip the same job to Processing. The attempt
+            // count and lease stamp are set in the same statement for the reaper.
+            var claimed = await _db.SeparationJobs
+                .Where(j => j.OwnerId == candidate.OwnerId && j.Id == candidate.Id && j.Status == JobStatus.Queued)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(j => j.Status, JobStatus.Processing)
+                    .SetProperty(j => j.Attempts, j => j.Attempts + 1)
+                    .SetProperty(j => j.ProcessingStartedAt, now)
+                    .SetProperty(j => j.UpdatedAt, now),
+                    cancellationToken);
+
+            if (claimed == 1)
+            {
+                // Return the freshly-claimed row (tracked) so the caller can process it.
+                return await _db.SeparationJobs
+                    .FirstAsync(j => j.OwnerId == candidate.OwnerId && j.Id == candidate.Id, cancellationToken);
+            }
         }
 
-        job.Status = SeparationJobStateMachine.Transition(job.Status, JobStatus.Processing);
-        job.UpdatedAt = DateTimeOffset.UtcNow;
-        await _db.SaveChangesAsync(cancellationToken);
-        return job;
+        return null;
+    }
+
+    /// <summary>
+    /// Reclaim jobs stuck in <see cref="JobStatus.Processing"/> past their lease (their
+    /// worker died mid-run, so they would otherwise never terminate and the owner would
+    /// poll forever). A job under <paramref name="maxAttempts"/> is returned to
+    /// <see cref="JobStatus.Queued"/> for another attempt; once its attempts are
+    /// exhausted it is moved to <see cref="JobStatus.Failed"/>. Returns the number of
+    /// jobs reclaimed. Safe to run from multiple replicas: each transition is a
+    /// conditional UPDATE guarded on the row still being <c>Processing</c>, so only one
+    /// reaper (or the completing worker) ever wins.
+    /// </summary>
+    public async Task<int> ReclaimTimedOutJobsAsync(
+        TimeSpan leaseTimeout,
+        int maxAttempts,
+        CancellationToken cancellationToken = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var cutoff = now - leaseTimeout;
+
+        // Load the (small, worker-bounded) in-flight set untracked and filter the lease
+        // client-side: SQLite cannot translate a DateTimeOffset comparison.
+        var inFlight = await _db.SeparationJobs
+            .AsNoTracking()
+            .Where(j => j.Status == JobStatus.Processing)
+            .Select(j => new { j.OwnerId, j.Id, j.Attempts, j.ProcessingStartedAt })
+            .ToListAsync(cancellationToken);
+
+        var reclaimed = 0;
+        foreach (var job in inFlight)
+        {
+            // A job with no lease stamp is treated as freshly claimed, never stuck.
+            if (job.ProcessingStartedAt is null || job.ProcessingStartedAt > cutoff)
+            {
+                continue;
+            }
+
+            int affected;
+            if (job.Attempts >= maxAttempts)
+            {
+                affected = await _db.SeparationJobs
+                    .Where(j => j.OwnerId == job.OwnerId && j.Id == job.Id && j.Status == JobStatus.Processing)
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(j => j.Status, JobStatus.Failed)
+                        .SetProperty(j => j.ErrorMessage, Truncate($"Abandoned after {job.Attempts} attempt(s): processing lease expired."))
+                        .SetProperty(j => j.CompletedAt, now)
+                        .SetProperty(j => j.UpdatedAt, now),
+                        cancellationToken);
+                if (affected == 1)
+                {
+                    _logger.LogWarning("Job {JobId} failed after {Attempts} stalled attempt(s).", job.Id, job.Attempts);
+                }
+            }
+            else
+            {
+                affected = await _db.SeparationJobs
+                    .Where(j => j.OwnerId == job.OwnerId && j.Id == job.Id && j.Status == JobStatus.Processing)
+                    .ExecuteUpdateAsync(setters => setters
+                        .SetProperty(j => j.Status, JobStatus.Queued)
+                        .SetProperty(j => j.ProcessingStartedAt, (DateTimeOffset?)null)
+                        .SetProperty(j => j.UpdatedAt, now),
+                        cancellationToken);
+                if (affected == 1)
+                {
+                    _logger.LogInformation("Requeued stalled job {JobId} (attempt {Attempts}).", job.Id, job.Attempts);
+                }
+            }
+
+            reclaimed += affected;
+        }
+
+        return reclaimed;
     }
 
     /// <summary>Claim and process the next queued job; returns false when idle.</summary>

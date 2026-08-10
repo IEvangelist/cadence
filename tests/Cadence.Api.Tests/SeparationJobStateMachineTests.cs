@@ -10,6 +10,7 @@ public class SeparationJobStateMachineTests
     [InlineData(JobStatus.Queued, JobStatus.Processing)]
     [InlineData(JobStatus.Processing, JobStatus.Completed)]
     [InlineData(JobStatus.Processing, JobStatus.Failed)]
+    [InlineData(JobStatus.Processing, JobStatus.Queued)]
     public void CanTransition_AllowsLegalMoves(JobStatus from, JobStatus to) =>
         Assert.True(SeparationJobStateMachine.CanTransition(from, to));
 
@@ -20,8 +21,10 @@ public class SeparationJobStateMachineTests
     [InlineData(JobStatus.Processing, JobStatus.Processing)]
     [InlineData(JobStatus.Completed, JobStatus.Processing)]
     [InlineData(JobStatus.Completed, JobStatus.Failed)]
+    [InlineData(JobStatus.Completed, JobStatus.Queued)]
     [InlineData(JobStatus.Failed, JobStatus.Processing)]
     [InlineData(JobStatus.Failed, JobStatus.Completed)]
+    [InlineData(JobStatus.Failed, JobStatus.Queued)]
     public void CanTransition_RejectsIllegalMoves(JobStatus from, JobStatus to) =>
         Assert.False(SeparationJobStateMachine.CanTransition(from, to));
 

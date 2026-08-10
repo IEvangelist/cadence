@@ -411,3 +411,24 @@ properties keep this from disturbing the test/CI matrix:
 The dev proxy added to `apps/web/vite.config.ts` is a **dev-server-only** option
 (`server.proxy`); Vitest and the production build ignore it, so web unit coverage
 and the bundle are unchanged.
+
+## Stem pipeline hardening tests (effort #10, Phase 2)
+
+Phase 2 (`#57`) reliability logic is unit-tested in `Cadence.Api.Tests` so the
+gates stay fast and hermetic (SQLite, no Docker):
+
+- **Atomic claim (L3).** `ClaimNextQueuedAsync_TwoWorkers_OnlyOneClaimsTheSameJob`
+  and `AtomicClaim_WhenBothReplicasSeeQueued_ExactlyOneUpdateWins` seed one queued
+  job, run two independent contexts (standing in for two worker replicas), and assert
+  exactly one wins the conditional `ExecuteUpdate` claim.
+- **Stuck-`Processing` recovery (L2).** `ReclaimTimedOutJobsAsync_*` cover requeue
+  under max attempts, `Failed` once attempts are exhausted, a fresh (unexpired) job
+  left untouched, and queued/terminal jobs ignored. `SeparationJobStateMachineTests`
+  cover the new `Processing → Queued` transition.
+- **Model integrity (L4).** `StemModelIntegrityTests` cover `http` rejection,
+  `https`/`file`/local acceptance, a known SHA-256 vector, and checksum
+  match/mismatch (case- and `sha256:`-prefix-insensitive).
+
+The host-only glue (`SeparationBackgroundService` sweep loop, `HttpStemModelProvider`
+download/verify/purge I/O) stays `[ExcludeFromCodeCoverage]` — its logic is factored
+into the pure, tested `SeparationJobProcessor` and `StemModelIntegrity` helpers.

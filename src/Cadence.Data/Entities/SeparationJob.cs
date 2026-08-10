@@ -36,6 +36,21 @@ public sealed class SeparationJob
     /// <summary>Populated when <see cref="Status"/> is <see cref="JobStatus.Failed"/>.</summary>
     public string? ErrorMessage { get; set; }
 
+    /// <summary>
+    /// When the job was last claimed into <see cref="JobStatus.Processing"/> (UTC).
+    /// Acts as a processing lease: a stuck job whose worker died is detected when
+    /// this timestamp ages past the configured lease and is reclaimed by the reaper.
+    /// Null whenever the job is not actively being processed.
+    /// </summary>
+    public DateTimeOffset? ProcessingStartedAt { get; set; }
+
+    /// <summary>
+    /// How many times the job has been claimed for processing. Incremented on each
+    /// claim so the reaper can give up (transition to <see cref="JobStatus.Failed"/>)
+    /// after a bounded number of attempts instead of requeuing forever.
+    /// </summary>
+    public int Attempts { get; set; }
+
     /// <summary>Creation timestamp (UTC).</summary>
     public DateTimeOffset CreatedAt { get; set; }
 

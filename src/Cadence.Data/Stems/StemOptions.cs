@@ -42,6 +42,26 @@ public sealed class StemOptions
     /// </summary>
     public string? ModelUri { get; set; }
 
+    /// <summary>
+    /// Optional lowercase hex SHA-256 digest of the pinned model. When set, a
+    /// downloaded (or local) model is verified against it before use and rejected on
+    /// mismatch, so an <c>http</c>/MITM-substituted or corrupted binary is never run.
+    /// </summary>
+    public string? ModelSha256 { get; set; }
+
+    /// <summary>
+    /// How long a job may sit in <see cref="Cadence.Data.Entities.JobStatus.Processing"/>
+    /// before it is considered abandoned (its worker died) and eligible for reclaim.
+    /// Default 5 minutes.
+    /// </summary>
+    public int ProcessingLeaseSeconds { get; set; } = 300;
+
+    /// <summary>
+    /// Maximum number of processing attempts before the reaper gives up and fails a
+    /// repeatedly-stuck job instead of requeuing it again. Default 3.
+    /// </summary>
+    public int MaxAttempts { get; set; } = 3;
+
     /// <summary>Whether <paramref name="contentType"/>'s media type is allowed.</summary>
     public bool IsContentTypeAllowed(string? contentType)
     {
