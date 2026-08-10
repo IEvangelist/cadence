@@ -43,6 +43,45 @@ describe('load-project', () => {
   })
 })
 
+describe('sync-remote', () => {
+  it('adopts the converged project but preserves a still-valid selection', () => {
+    const start = seed()
+    const withNote = composerReducer(start, {
+      type: 'add-note',
+      trackId: 'track_a',
+      note: createNote({ pitch: 60, start: 0 }, 'n1'),
+    })
+    expect(withNote.selectedNoteIds).toEqual(['n1'])
+
+    // A remote copy that still contains track_a and note n1.
+    const remote = createEmptyProject('p')
+    const track = createTrack({ name: 'Synth' }, 'track_a')
+    track.notes = [createNote({ pitch: 62, start: 0 }, 'n1')]
+    remote.tracks = [track]
+
+    const synced = composerReducer(withNote, { type: 'sync-remote', project: remote })
+    expect(synced.project.tracks[0].notes[0].pitch).toBe(62)
+    expect(synced.selectedTrackId).toBe('track_a')
+    expect(synced.selectedNoteIds).toEqual(['n1'])
+  })
+
+  it('falls back to the first track and drops stale note selection', () => {
+    const start = composerReducer(seed(), {
+      type: 'add-note',
+      trackId: 'track_a',
+      note: createNote({ pitch: 60, start: 0 }, 'gone'),
+    })
+
+    // The remote project replaced the tracks entirely.
+    const remote = createEmptyProject('p')
+    remote.tracks = [createTrack({ name: 'New' }, 'track_z')]
+
+    const synced = composerReducer(start, { type: 'sync-remote', project: remote })
+    expect(synced.selectedTrackId).toBe('track_z')
+    expect(synced.selectedNoteIds).toEqual([])
+  })
+})
+
 describe('project fields', () => {
   it('renames the project', () => {
     const state = composerReducer(seed(), { type: 'set-project-name', name: 'Song' })

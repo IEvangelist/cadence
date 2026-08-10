@@ -99,6 +99,12 @@ export interface ComposerController {
   setProjectName: (name: string) => void
   newProject: () => void
   loadDemo: () => void
+  /**
+   * Adopt a project converged from a remote collaborator (Yjs CRDT). Unlike
+   * {@link loadProject} this preserves the local cursor selection when it is
+   * still valid, so live edits from peers don't yank the caret around.
+   */
+  applyRemoteProject: (project: Project) => void
   saveProject: () => Promise<void>
   loadProject: (id: string) => Promise<void>
   importMidi: (bytes: ArrayBuffer, name?: string) => void
@@ -361,6 +367,9 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     dispatch({ type: 'load-project', project: createDemoProject(newId('project')) })
     setStatus('Loaded demo')
   }, [])
+  const applyRemoteProject = useCallback((project: Project) => {
+    dispatch({ type: 'sync-remote', project })
+  }, [])
   const saveProject = useCallback(async () => {
     await persist(projectRef.current)
     setStatus('Saved')
@@ -501,6 +510,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     setProjectName,
     newProject,
     loadDemo,
+    applyRemoteProject,
     saveProject,
     loadProject,
     importMidi,

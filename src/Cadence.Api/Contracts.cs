@@ -45,6 +45,12 @@ public sealed record ProjectDetail(
 /// <summary>Create/update payload for a project.</summary>
 public sealed record SaveProjectRequest(string? Id, string Name, int SchemaVersion, string Data);
 
+/// <summary>Request to mint a share link. Role is <c>editor</c> or <c>viewer</c>.</summary>
+public sealed record CreateShareLinkRequest(string Role);
+
+/// <summary>A server-issued collaboration share link for a project.</summary>
+public sealed record ShareLinkResponse(string Token, string Role, DateTimeOffset CreatedAt);
+
 /// <summary>The external providers currently wired (for rendering sign-in buttons).</summary>
 public sealed record ProvidersResponse(IReadOnlyList<string> Providers);
 

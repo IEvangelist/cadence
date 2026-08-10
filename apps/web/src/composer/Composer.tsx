@@ -7,6 +7,13 @@ import { TrackPanel } from './components/TrackPanel'
 import { AssistantPanel } from './components/AssistantPanel'
 import { PluginsPanel } from './components/PluginsPanel'
 import { PianoRoll } from './components/PianoRoll'
+import { PresenceBar } from './components/PresenceBar'
+import { ShareProjectButton } from './components/ShareProjectButton'
+import {
+  type CollabConfig,
+  type CollabProviderFactory,
+  useCollaboration,
+} from './model/collab/useCollaboration'
 import './Composer.css'
 
 interface ComposerProps {
@@ -14,19 +21,57 @@ interface ComposerProps {
   options?: UseComposerOptions
   /** Injectable AI provider — used by tests/e2e; defaults to the factory. */
   assistantOptions?: UseAssistantOptions
+  /**
+   * Opt-in live-collaboration session parsed from a share link. `null`/omitted
+   * keeps the composer fully single-user (the default). Supplied by `App` from
+   * the signed-in identity + URL.
+   */
+  collab?: CollabConfig | null
+  /** Injectable collaboration transport — used by tests/e2e. */
+  collabProviderFactory?: CollabProviderFactory
+  /** Whether to surface the owner "Share" affordance (signed-in users). */
+  canShare?: boolean
 }
 
 /** The flagship composing surface: toolbar, transport, tracks, and piano roll. */
-export function Composer({ options, assistantOptions }: ComposerProps = {}) {
+export function Composer({
+  options,
+  assistantOptions,
+  collab = null,
+  collabProviderFactory,
+  canShare = false,
+}: ComposerProps = {}) {
   const controller = useComposer(options)
   const assistant = useAssistant(controller, assistantOptions)
   const plugins = usePlugins(controller)
   const { project, audioReady, loadDemo } = controller
   const isEmpty = project.tracks.every((track) => track.notes.length === 0)
 
+  const collaboration = useCollaboration(
+    {
+      project,
+      selectedTrackId: controller.selectedTrackId,
+      selectedNoteIds: controller.state.selectedNoteIds,
+      applyRemoteProject: controller.applyRemoteProject,
+    },
+    collab,
+    collabProviderFactory,
+  )
+
   return (
     <section className="composer" aria-label="Composer">
-      <ProjectToolbar controller={controller} />
+      <div className="composer-topbar">
+        <ProjectToolbar controller={controller} />
+        {canShare && <ShareProjectButton projectId={project.id} />}
+      </div>
+      {collaboration.active && (
+        <PresenceBar
+          presence={collaboration.presence}
+          connected={collaboration.connected}
+          canWrite={collaboration.canWrite}
+          resolveTrackName={(id) => project.tracks.find((t) => t.id === id)?.name}
+        />
+      )}
       <TransportBar controller={controller} />
 
       {isEmpty && (

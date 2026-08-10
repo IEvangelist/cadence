@@ -13,6 +13,13 @@ var redis = builder.AddRedis("redis");
 var storage = builder.AddAzureStorage("storage").RunAsEmulator();
 var blobs = storage.AddBlobs("blobs");
 
+// The `api` project also hosts the live-collaboration relay: an in-process
+// WebSocket endpoint at /api/collab/{projectId} that fans out Yjs CRDT updates
+// and awareness between collaborators. It is a first-party service (not a
+// separate y-websocket container) because each connection's role is authorized
+// server-side against the identity cookie (#7) and the projects/share-link
+// tables — see CollaborationEndpoints. No extra resource, image, or secret is
+// required; it rides on the existing API reference and database.
 builder.AddProject<Projects.Cadence_Api>("api")
     .WithReference(cadenceDb)
     .WaitFor(cadenceDb)
