@@ -21,7 +21,7 @@ var blobs = storage.AddBlobs("blobs");
 // server-side against the identity cookie (#7) and the projects/share-link
 // tables — see CollaborationEndpoints. No extra resource, image, or secret is
 // required; it rides on the existing API reference and database.
-builder.AddProject<Projects.Cadence_Api>("api")
+var api = builder.AddProject<Projects.Cadence_Api>("api")
     .WithReference(cadenceDb)
     .WaitFor(cadenceDb)
     .WithReference(redis)
@@ -38,6 +38,40 @@ builder.AddProject<Projects.Cadence_SeparationWorker>("separation")
     .WaitFor(cadenceDb)
     .WithReference(blobs)
     .WaitFor(blobs);
+
+// The Vite/React SPA (apps/web) — the developer-facing UI that makes `aspire run`
+// a one-command experience. It is added only when BOTH conditions hold:
+//   1. Run mode — the published manifest intentionally has no `web` resource (the
+//      SPA ships via its own build/Tauri packaging), so this block is skipped when
+//      generating the manifest (IsRunMode is false there).
+//   2. The repo-root node_modules is present — `npm run dev` (Vite) needs
+//      installed dependencies, which npm workspaces hoist to the repo root.
+//      Gating on this both documents `npm ci` as the one-time prerequisite and
+//      keeps `web` out of the backend integration-test harness:
+//      Aspire.Hosting.Testing also runs in run mode, but that Docker-only job
+//      never installs the web deps, so it must not try to launch Vite.
+// It waits for the API and reaches it same-origin through a Vite dev proxy (see
+// apps/web/vite.config.ts) so the SPA's relative /api/* calls and the /api/collab
+// WebSocket need no CORS. Aspire assigns the listen port via the PORT env var and
+// injects the API address via service discovery (WithReference).
+var repoRoot = Path.Combine(builder.AppHostDirectory, "..", "..");
+if (builder.ExecutionContext.IsRunMode)
+{
+    if (Directory.Exists(Path.Combine(repoRoot, "node_modules")))
+    {
+        builder.AddNpmApp("web", "../../apps/web", "dev")
+            .WithReference(api)
+            .WaitFor(api)
+            .WithHttpEndpoint(env: "PORT")
+            .WithExternalHttpEndpoints();
+    }
+    else
+    {
+        Console.WriteLine(
+            "[cadence] Skipping the 'web' resource: node_modules is missing. " +
+            "Run `npm ci` at the repo root to dev-serve the SPA under `aspire run`.");
+    }
+}
 
 builder.Build().Run();
 

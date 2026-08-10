@@ -132,3 +132,43 @@ pinned (CI/dev default) a deterministic band-split engine drives the same
 `IStemSeparator` seam, keeping tests hermetic. Phase 1 ships a **standalone** web
 surface (`apps/web/src/stems/`) — the composer integration (stem → editable mixer
 track) is a Phase 2 follow-up. See [`stems.md`](stems.md).
+
+## Local development (one-command `aspire run`)
+
+`dotnet run --project src/Cadence.AppHost` (equivalently `aspire run`) brings up
+the full local stack — Postgres, Redis, Azurite, the API, the stem-separation
+worker — **and** the `apps/web` Vite/React SPA, so the developer-facing UI is one
+command away (effort #79). The SPA is an Aspire **NodeJS** resource:
+
+```csharp
+builder.AddNpmApp("web", "../../apps/web", "dev")
+    .WithReference(api).WaitFor(api)
+    .WithHttpEndpoint(env: "PORT")
+    .WithExternalHttpEndpoints();
+```
+
+Aspire assigns the listen port via `PORT` (Vite reads it) and injects the API's
+address as the service-discovery variable `services__api__http__0`. A small
+**Vite dev proxy** (`apps/web/vite.config.ts`) forwards `/api` — REST **and** the
+`/api/collab` WebSocket (`ws: true`) — to that address, so the browser stays
+**same-origin**: no CORS and no client base-URL wiring, matching the SPA's
+existing relative `/api/*` calls and the collaboration socket.
+
+Two guards keep this scoped to local development:
+
+- **Run mode only** (`builder.ExecutionContext.IsRunMode`) — the published
+  manifest (`azd` / `aspire publish`) has **no `web` resource**; the SPA ships via
+  its own build/Tauri packaging. `AddNpmApp` **auto-starts** (no
+  `WithExplicitStart`), unlike the marketing `site/`.
+- **Dependencies present** — the resource is added only when the repo-root
+  `node_modules` exists (npm workspaces hoist the SPA's deps there). This makes
+  `npm ci` the one-time prerequisite and keeps `web` out of the Docker-only
+  backend integration harness (`Aspire.Hosting.Testing` also runs in run mode but
+  never installs the web deps). When it is missing under a real run, the AppHost
+  logs a one-line `npm ci` hint and simply omits the SPA.
+
+`Aspire.Hosting.NodeJs` is pinned via CPM to the latest version the restore feed
+publishes; its `AddNpmApp`/`NodeAppResource` build only on stable hosting
+primitives, so it runs cleanly on the 13.4.x AppHost. The AppHost is
+`RestoreLockedMode=false`, so its committed `packages.lock.json` carries the new
+package (and host-RID entries) without breaking cross-OS locked restore.
