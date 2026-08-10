@@ -8,6 +8,8 @@
  */
 import type { CadencePlugin, PluginContributions } from '../types'
 import { BUILTIN_INSTRUMENTS } from './instruments'
+import { SYNTH_VOICE_INSTRUMENTS } from './synthVoices'
+import { DRUM_KIT_INSTRUMENTS } from './drumKits'
 import { BUILTIN_FORMATS } from './formats'
 import { BUILTIN_AI_PROVIDERS } from './aiProviders'
 import { BUILTIN_EFFECTS } from './effects'
@@ -15,7 +17,11 @@ import { BUILTIN_EFFECTS } from './effects'
 /** The contributions bundled by the core plugin. */
 export function coreContributions(): PluginContributions {
   return {
-    instruments: BUILTIN_INSTRUMENTS,
+    instruments: [
+      ...BUILTIN_INSTRUMENTS,
+      ...SYNTH_VOICE_INSTRUMENTS,
+      ...DRUM_KIT_INSTRUMENTS,
+    ],
     formats: BUILTIN_FORMATS,
     aiProviders: BUILTIN_AI_PROVIDERS,
     effects: BUILTIN_EFFECTS,

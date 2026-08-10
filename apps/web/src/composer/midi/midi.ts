@@ -18,6 +18,7 @@ import {
   createTrack,
   newId,
 } from '../model/project'
+import { getInstrument } from '../instruments/registry'
 
 /** General MIDI percussion channel (0-based). */
 const DRUM_CHANNEL = 9
@@ -34,7 +35,9 @@ export function projectToMidiBytes(project: Project): Uint8Array {
   for (const track of project.tracks) {
     const midiTrack = midi.addTrack()
     midiTrack.name = track.name
-    if (track.instrumentId === 'drum-kit') {
+    // Route any drum-kind instrument (built-in or plugin) to the GM percussion
+    // channel, not just the original `drum-kit` id.
+    if (getInstrument(track.instrumentId).kind === 'drum') {
       midiTrack.channel = DRUM_CHANNEL
     }
     for (const note of track.notes) {

@@ -76,6 +76,20 @@ describe('migrateProject', () => {
     expect(project.tempo).toBe(DEFAULT_TEMPO)
   })
 
+  it('preserves a registry-known instrument id from the expanded library', () => {
+    // Instruments contributed beyond the original three must round-trip through
+    // load instead of being silently reset to the default poly synth. This is
+    // the coercion that would otherwise break every newly added instrument.
+    const project = migrateProject({
+      tracks: [
+        { instrumentId: 'electric-piano', notes: [] },
+        { instrumentId: 'drum-kit-808', notes: [] },
+      ],
+    })
+    expect(project.tracks[0].instrumentId).toBe('electric-piano')
+    expect(project.tracks[1].instrumentId).toBe('drum-kit-808')
+  })
+
   it('clamps a corrupted tempo into the playable range', () => {
     // Tempo 0 would make 60/bpm durations Infinity and freeze the playhead.
     expect(migrateProject({ tempo: 0 }).tempo).toBe(20)

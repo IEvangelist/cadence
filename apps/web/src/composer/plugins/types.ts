@@ -58,6 +58,13 @@ export interface InstrumentDefinition {
   description: string
   /** True when the instrument plays multiple simultaneous notes. */
   polyphonic: boolean
+  /**
+   * Optional category label used to group the instrument in pickers (e.g.
+   * `Keys`, `Bass`, `Pads`). Purely presentational — omit it and the instrument
+   * falls into the default group. Backward compatible: older instruments and
+   * third-party plugins that don't set it keep working unchanged.
+   */
+  group?: string
 }
 
 /** A playable voice for one track. Times are absolute audio-context seconds. */

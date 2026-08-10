@@ -25,6 +25,7 @@ function toDefinition(c: InstrumentContribution): InstrumentDefinition {
     kind: c.kind,
     description: c.description,
     polyphonic: c.polyphonic,
+    group: c.group,
   }
 }
 
@@ -50,12 +51,6 @@ export function getInstrumentContribution(id: string): InstrumentContribution {
 export function getInstrument(id: string): InstrumentDefinition {
   return toDefinition(getInstrumentContribution(id))
 }
-
-/**
- * Snapshot of the built-in instruments at load time. Prefer
- * {@link listInstruments} for a live view that includes plugin instruments.
- */
-export const INSTRUMENTS: readonly InstrumentDefinition[] = listInstruments()
 
 /** General-MIDI-style names for the drum map pitches the kit responds to. */
 export const DRUM_MAP: Readonly<Record<number, string>> = {

@@ -5,35 +5,27 @@
  * behind the injectable `OfflineRenderer` seam in `formats/audioExport.ts` and is
  * excluded from unit coverage (exercised via the browser/e2e path instead).
  *
- * Voice construction mirrors `audio/engine.ts` (poly/FM synths + a simple
- * kick/noise drum kit) so an export sounds like playback.
+ * Voice construction is delegated to each instrument's registered `createVoice`
+ * factory (the same seam `audio/engine.ts` uses for realtime playback), so an
+ * export sounds like playback for every instrument — built-in or plugin — with
+ * no per-instrument special-casing here.
  */
 import * as Tone from 'tone'
-import { type Project, type Track, pitchToName } from '../model/project'
-import { getInstrument } from '../instruments/registry'
+import { type Project, type Track } from '../model/project'
+import { getInstrumentContribution } from '../instruments/registry'
+import { type InstrumentVoice } from '../plugins/types'
 import { beatsToSeconds } from '../timing/timing'
 import { type RenderedAudio } from '../formats/audioExport'
 
-type Trigger = (pitch: number, durationSeconds: number, time: number, velocity: number) => void
-
-function createOfflineVoice(track: Track): Trigger {
-  const def = getInstrument(track.instrumentId)
-  if (def.kind === 'drum') {
-    const kick = new Tone.MembraneSynth().toDestination()
-    const noise = new Tone.NoiseSynth().toDestination()
-    return (pitch, duration, time, velocity) => {
-      if (pitch <= 36) kick.triggerAttackRelease('C1', duration, time, velocity)
-      else noise.triggerAttackRelease(duration, time, velocity)
-    }
-  }
-  const synth =
-    track.instrumentId === 'fm-synth'
-      ? new Tone.PolySynth(Tone.FMSynth).toDestination()
-      : new Tone.PolySynth(Tone.Synth).toDestination()
-  synth.volume.value = -8
-  return (pitch, duration, time, velocity) => {
-    synth.triggerAttackRelease(pitchToName(pitch), duration, time, velocity)
-  }
+function createOfflineVoice(track: Track, tempo: number): InstrumentVoice {
+  // A per-track output routed to the offline destination, mirroring the realtime
+  // engine's per-track gain so voices connect somewhere real.
+  const output = new Tone.Gain(1).toDestination()
+  return getInstrumentContribution(track.instrumentId).createVoice({
+    output,
+    track,
+    tempo,
+  })
 }
 
 /** Render a project offline and return its raw channel data. */
@@ -46,11 +38,11 @@ export async function renderProjectOffline(
     () => {
       for (const track of project.tracks) {
         if (track.muted || track.notes.length === 0) continue
-        const trigger = createOfflineVoice(track)
+        const voice = createOfflineVoice(track, project.tempo)
         for (const note of track.notes) {
           const start = beatsToSeconds(note.start, project.tempo)
           const duration = beatsToSeconds(note.duration, project.tempo)
-          trigger(note.pitch, duration, start, note.velocity)
+          voice.trigger(note.pitch, duration, start, note.velocity)
         }
       }
     },
