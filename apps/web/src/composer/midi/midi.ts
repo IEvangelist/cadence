@@ -18,7 +18,7 @@ import {
   createTrack,
   newId,
 } from '../model/project'
-import { getInstrument } from '../instruments/registry'
+import { getInstrument } from '../instruments/lookup'
 
 /** General MIDI percussion channel (0-based). */
 const DRUM_CHANNEL = 9

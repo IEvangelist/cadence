@@ -18,7 +18,7 @@ import {
   type Track,
   newId,
 } from './project'
-import { getInstrument } from '../instruments/registry'
+import { getInstrument } from '../instruments/lookup'
 
 export class ProjectParseError extends Error {
   constructor(message: string) {

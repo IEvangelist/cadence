@@ -12,7 +12,7 @@
  */
 import * as Tone from 'tone'
 import { type Project, type Track } from '../model/project'
-import { getInstrumentContribution } from '../instruments/registry'
+import { getInstrumentContribution } from '../instruments/lookup'
 import { type InstrumentVoice } from '../plugins/types'
 import { beatsToSeconds } from '../timing/timing'
 import { type RenderedAudio } from '../formats/audioExport'
