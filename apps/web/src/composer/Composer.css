@@ -473,7 +473,10 @@ select:focus-visible {
 
 .pr-grid {
   position: relative;
-  flex: none;
+  /* Grow to fill the scroll viewport so a short song doesn't leave a stunted
+     grid floating in empty panel space; the song length acts as the minimum
+     (via inline min-width) so longer songs still overflow and scroll. */
+  flex: 1 0 auto;
   background-color: var(--color-surface-raised);
   background-image:
     linear-gradient(to right, var(--color-border) 1px, transparent 1px),
@@ -501,15 +504,20 @@ select:focus-visible {
 .pr-note {
   position: absolute;
   box-sizing: border-box;
-  border: 1px solid rgba(0, 0, 0, 0.35);
-  border-radius: var(--radius-sm);
+  border: 1px solid rgba(0, 0, 0, 0.45);
+  /* Near-square corners + a bright left cap so a note's start and end read
+     clearly. Rounded corners previously made both boundaries ambiguous. */
+  border-radius: 1px;
+  border-left: 3px solid rgba(255, 255, 255, 0.9);
   padding: 0;
   cursor: grab;
 }
 
 .pr-note.is-selected {
   outline: 2px solid var(--color-neutral-0);
-  box-shadow: var(--shadow-md);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 2px var(--color-accent), var(--shadow-md);
+  z-index: 3;
 }
 
 /* Ghost notes for a pending AI suggestion — visually distinct from real notes. */
@@ -547,9 +555,17 @@ select:focus-visible {
   position: absolute;
   right: 0;
   top: 0;
-  width: 6px;
+  width: 10px;
   height: 100%;
   cursor: ew-resize;
+  /* A visible grip so the resize (end) edge is easy to grab and read. */
+  border-right: 3px solid rgba(255, 255, 255, 0.9);
+  border-radius: 0 1px 1px 0;
+}
+
+.pr-note:hover .pr-note-resize,
+.pr-note.is-selected .pr-note-resize {
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.4));
 }
 
 .pr-playhead {

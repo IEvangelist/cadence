@@ -61,6 +61,18 @@ function lengthForNoteEnd(current: number, noteEnd: number): number {
   return Math.ceil(noteEnd / BEATS_PER_BAR) * BEATS_PER_BAR
 }
 
+/**
+ * Keep the loop region covering the whole timeline. The transport "↻ Loop" is a
+ * plain whole-song toggle (there is no A/B sub-region UI), so a frozen `loop.end`
+ * would silence any note placed past it — e.g. the demo ships looping [0, 8) and
+ * notes added to the right, or an AI melody appended after the existing one,
+ * would fall outside the loop and never sound. Growing `end` with the timeline
+ * keeps every note audible whether or not looping is currently enabled.
+ */
+function loopForLength(loop: LoopRegion, lengthBeats: number): LoopRegion {
+  return loop.end >= lengthBeats ? loop : { ...loop, end: lengthBeats }
+}
+
 function mapTrack(
   project: Project,
   trackId: string,
@@ -75,9 +87,19 @@ export function composerReducer(
 ): ComposerState {
   switch (action.type) {
     case 'load-project': {
+      // Self-heal a project saved before the whole-song-loop invariant existed:
+      // if its stored loop.end froze behind the timeline (e.g. old code grew
+      // lengthBeats on note edits but not loop.end), notes past it would be
+      // silent on load until the next edit. Growing it here is local-only — the
+      // CRDT `sync-remote` path below stays pure so collaboration echo-safety and
+      // convergence are unaffected.
+      const project = {
+        ...action.project,
+        loop: loopForLength(action.project.loop, action.project.lengthBeats),
+      }
       return {
-        project: action.project,
-        selectedTrackId: action.project.tracks[0]?.id ?? '',
+        project,
+        selectedTrackId: project.tracks[0]?.id ?? '',
         selectedNoteIds: [],
       }
     }
@@ -119,7 +141,14 @@ export function composerReducer(
 
     case 'set-length': {
       const lengthBeats = Math.max(BEATS_PER_BAR, action.lengthBeats)
-      return { ...state, project: { ...state.project, lengthBeats } }
+      return {
+        ...state,
+        project: {
+          ...state.project,
+          lengthBeats,
+          loop: loopForLength(state.project.loop, lengthBeats),
+        },
+      }
     }
 
     case 'add-track': {
@@ -200,6 +229,7 @@ export function composerReducer(
         project: {
           ...state.project,
           lengthBeats,
+          loop: loopForLength(state.project.loop, lengthBeats),
           tracks: mapTrack(state.project, action.trackId, (t) => ({
             ...t,
             notes: [...t.notes, note],
@@ -227,6 +257,7 @@ export function composerReducer(
         project: {
           ...state.project,
           lengthBeats,
+          loop: loopForLength(state.project.loop, lengthBeats),
           tracks: mapTrack(state.project, action.trackId, (t) => ({
             ...t,
             notes: [...t.notes, ...notes],
@@ -247,7 +278,7 @@ export function composerReducer(
           return next
         }),
       }))
-      return { ...state, project: { ...state.project, lengthBeats: end, tracks } }
+      return { ...state, project: { ...state.project, lengthBeats: end, loop: loopForLength(state.project.loop, end), tracks } }
     }
 
     case 'remove-note': {
