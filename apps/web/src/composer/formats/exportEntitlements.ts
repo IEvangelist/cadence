@@ -35,6 +35,9 @@ export const exportEntitlementView: ExportEntitlementView = {
  * This is the single client-side export gate; the composer consumes its boolean
  * result at the render→encode boundary via the existing `watermarkExports`
  * option, so no composer internals are threaded through.
+ *
+ * The decision is action-agnostic — it reads only the `watermarkExports` flag —
+ * so WAV and MP3 share one gate (full parity: free = watermarked, paid = clean).
  */
 export function watermarkExportsFor(entitlements: Entitlements | null): boolean {
   if (!entitlements) return true

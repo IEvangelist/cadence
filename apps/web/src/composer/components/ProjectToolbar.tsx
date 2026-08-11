@@ -82,6 +82,7 @@ export function ProjectToolbar({
     importMusicXml,
     importProjectFile,
     exportWav,
+    exportMp3,
     shareSnapshot,
     formats,
     exportFormat,
@@ -126,6 +127,11 @@ export function ProjectToolbar({
     if (value === 'wav') {
       const bytes = await exportWav()
       if (bytes) download(bytes, exportName('.wav'), 'audio/wav')
+      return
+    }
+    if (value === 'mp3') {
+      const bytes = await exportMp3()
+      if (bytes) download(bytes, exportName('.mp3'), 'audio/mpeg')
       return
     }
     const format = formats.find((f) => f.id === value)
@@ -244,6 +250,7 @@ export function ProjectToolbar({
             </option>
           ))}
           <option value="wav">Audio (.wav)</option>
+          <option value="mp3">Audio (.mp3)</option>
         </select>
       </label>
 

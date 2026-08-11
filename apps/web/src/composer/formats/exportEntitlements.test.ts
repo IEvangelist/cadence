@@ -69,4 +69,16 @@ describe('exportEntitlementView', () => {
     const nonBooleanFlag = { watermarkExports: 1 } as unknown as Entitlements
     expect(exportEntitlementView.appliesWatermark(action, nonBooleanFlag)).toBe(true)
   })
+
+  it('gates mp3 identically to wav (full parity)', () => {
+    for (const tier of ['Free', 'Pro', 'Studio']) {
+      const set = entitlements(tier)
+      expect(exportEntitlementView.appliesWatermark('mp3', set)).toBe(
+        exportEntitlementView.appliesWatermark('wav', set),
+      )
+    }
+    // A free mp3 is watermarked; a paid mp3 is clean — same as wav.
+    expect(exportEntitlementView.appliesWatermark('mp3', entitlements('Free'))).toBe(true)
+    expect(exportEntitlementView.appliesWatermark('mp3', entitlements('Pro'))).toBe(false)
+  })
 })

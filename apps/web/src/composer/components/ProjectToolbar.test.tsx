@@ -155,6 +155,28 @@ describe('<ProjectToolbar /> — multi-format export', () => {
     expect(audioRenderer).toHaveBeenCalledOnce()
   })
 
+  it('renders audio to a downloadable .mp3 via the injected renderer', async () => {
+    const download = vi.fn()
+    const audioRenderer = vi.fn(async (_p, durationSeconds: number, rate: number) => {
+      const frames = Math.max(1, Math.round(durationSeconds * rate))
+      const channel = new Float32Array(frames)
+      for (let i = 0; i < frames; i += 1) channel[i] = Math.sin((2 * Math.PI * 440 * i) / rate) * 0.5
+      return { sampleRate: rate, channels: [channel] }
+    })
+    render(<Harness download={download} options={{ audioRenderer }} />)
+    selectValue('Export as', 'mp3')
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1))
+    const [data, filename, mime] = download.mock.calls[0]
+    expect(filename).toMatch(/\.mp3$/)
+    expect(mime).toBe('audio/mpeg')
+    const bytes = data as Uint8Array
+    expect(bytes.byteLength).toBeGreaterThan(0)
+    // Valid MP3 frame sync header (0xFF 0xEx).
+    expect(bytes[0]).toBe(0xff)
+    expect(bytes[1] & 0xe0).toBe(0xe0)
+    expect(audioRenderer).toHaveBeenCalledOnce()
+  })
+
   it('reports a friendly status when audio rendering is unavailable', async () => {
     render(<Harness download={vi.fn()} />)
     selectValue('Export as', 'wav')
