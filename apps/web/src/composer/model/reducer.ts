@@ -73,6 +73,18 @@ function loopForLength(loop: LoopRegion, lengthBeats: number): LoopRegion {
   return loop.end >= lengthBeats ? loop : { ...loop, end: lengthBeats }
 }
 
+/** Furthest note end (in beats) across every track; 0 for an empty project. */
+function contentEnd(project: Project): number {
+  let end = 0
+  for (const track of project.tracks) {
+    for (const note of track.notes) {
+      const noteEnd = note.start + note.duration
+      if (noteEnd > end) end = noteEnd
+    }
+  }
+  return end
+}
+
 function mapTrack(
   project: Project,
   trackId: string,
@@ -87,15 +99,23 @@ export function composerReducer(
 ): ComposerState {
   switch (action.type) {
     case 'load-project': {
-      // Self-heal a project saved before the whole-song-loop invariant existed:
-      // if its stored loop.end froze behind the timeline (e.g. old code grew
-      // lengthBeats on note edits but not loop.end), notes past it would be
-      // silent on load until the next edit. Growing it here is local-only — the
-      // CRDT `sync-remote` path below stays pure so collaboration echo-safety and
-      // convergence are unaffected.
+      // Self-heal a project loaded from storage / a share link so it always plays
+      // all the way through. Two stale shapes are repaired here (both local-only —
+      // the CRDT `sync-remote` path below stays PURE so collaboration echo-safety
+      // and convergence are unaffected):
+      //   1. `lengthBeats` froze behind the actual notes — e.g. a doc saved before
+      //      the timeline-grows-with-notes invariant, or one hand-edited/imported —
+      //      so recompute it from the furthest note end.
+      //   2. `loop.end` froze behind the timeline — the "↻ Loop" toggle is a plain
+      //      whole-song loop, so a short `loop.end` silences every note past it.
+      // Growing length first, then the loop to cover it, guarantees playback reaches
+      // the last note however the project was produced.
+      const incoming = action.project
+      const lengthBeats = lengthForNoteEnd(incoming.lengthBeats, contentEnd(incoming))
       const project = {
-        ...action.project,
-        loop: loopForLength(action.project.loop, action.project.lengthBeats),
+        ...incoming,
+        lengthBeats,
+        loop: loopForLength(incoming.loop, lengthBeats),
       }
       return {
         project,

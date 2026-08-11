@@ -126,4 +126,14 @@ describe('beatsToBarsBeatsSixteenths', () => {
   it('clamps negatives to zero', () => {
     expect(beatsToBarsBeatsSixteenths(-2)).toBe('0:0:0')
   })
+
+  it('rounds the sixteenth for display without changing the scheduler default', () => {
+    const beats = 1 / 3 // sixteenth = 1.3333333333333333
+    // Default (scheduler) keeps full precision.
+    expect(beatsToBarsBeatsSixteenths(beats).startsWith('0:0:1.33333')).toBe(true)
+    // Display readout asks for 3 decimals.
+    expect(beatsToBarsBeatsSixteenths(beats, 4, 3)).toBe('0:0:1.333')
+    // Whole sixteenths stay clean (no trailing zeros) when rounded.
+    expect(beatsToBarsBeatsSixteenths(4, 4, 3)).toBe('1:0:0')
+  })
 })

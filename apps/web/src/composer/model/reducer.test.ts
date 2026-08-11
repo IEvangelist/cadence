@@ -187,6 +187,22 @@ describe('loop follows the timeline (whole-song loop)', () => {
     expect(state.project.loop.end).toBe(20)
   })
 
+  it('recomputes lengthBeats + loop.end when loaded notes run past a stale stored length', () => {
+    // The "still doesn't play all the way through" report: a saved project whose
+    // stored lengthBeats AND loop.end both froze at 8 while a note actually runs
+    // to beat 37. Length is recomputed from the furthest note (rounded up to a
+    // bar → 40) and the loop grows to cover it, so playback reaches the last note.
+    const stale = createEmptyProject('stale')
+    const track = createTrack({ name: 'Synth' }, 'track_a')
+    track.notes = [createNote({ pitch: 60, start: 36, duration: 1 }, 'n1')]
+    stale.tracks = [track]
+    stale.lengthBeats = 8
+    stale.loop = { enabled: true, start: 0, end: 8 }
+    const state = composerReducer(seed(), { type: 'load-project', project: stale })
+    expect(state.project.lengthBeats).toBe(40)
+    expect(state.project.loop.end).toBe(40)
+  })
+
   it('does NOT grow loop.end on sync-remote (CRDT convergence stays echo-safe)', () => {
     // The collaboration path must adopt a converged doc verbatim — growing
     // loop.end here would emit a spurious update and break echo-safety.
