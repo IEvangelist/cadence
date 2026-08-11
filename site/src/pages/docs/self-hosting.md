@@ -9,8 +9,29 @@ description: Deploy the Cadence Aspire backend to Azure Container Apps with azd,
 Cadence's backend deploys to **Azure Container Apps** using
 [`azd`](https://learn.microsoft.com/azure/developer/azure-developer-cli/) and the
 **Aspire azd integration**. There is no hand-authored Bicep to drift from the
-app — azd generates the infrastructure from the Aspire AppHost model. This page
-mirrors [`infra/README.md`](https://github.com/IEvangelist/cadence/blob/main/infra/README.md).
+app — azd generates the infrastructure from the Aspire AppHost model. The
+authoritative service graph is
+[`src/Cadence.AppHost/AppHost.cs`](https://github.com/IEvangelist/cadence/blob/main/src/Cadence.AppHost/AppHost.cs);
+[`infra/README.md`](https://github.com/IEvangelist/cadence/blob/main/infra/README.md)
+carries the full go-live runbook.
+
+## Run the backend locally
+
+You do **not** need any Azure resources to run Cadence locally. From the repo
+root:
+
+```bash
+aspire run
+```
+
+The AppHost brings up the full local stack — Postgres, Redis, the Azurite blob
+emulator, the API, and the stem-separation worker — and, when their prerequisites
+are present, also serves the `apps/web` SPA (and can start the `apps/desktop`
+Tauri shell). This works because the AppHost declares its cloud resources with
+local fallbacks: `.RunAsContainer()` on Postgres/Redis and `.RunAsEmulator()` on
+storage apply to **run mode only**. See
+[Getting started](../getting-started/) for prerequisites (the .NET SDK, Node,
+Docker, and the optional Rust toolchain).
 
 ## How it works
 
@@ -29,16 +50,48 @@ When azd sees an Aspire AppHost it generates a Container Apps environment plus a
 container app per project, and provisions the backing resources exactly as the
 AppHost declares them:
 
-| Resource | AppHost declaration | Provisioned as |
+| Resource | AppHost declaration | Provisioned on publish |
 |---|---|---|
-| PostgreSQL | `AddPostgres("postgres").AddDatabase("cadencedb")` | Postgres container in the Container Apps environment |
-| Redis | `AddRedis("redis")` | Redis container in the Container Apps environment |
-| Blob storage | `AddAzureStorage("storage").AddBlobs("blobs")` | Azure Storage account + Blob service |
-| API | `AddProject<Cadence_Api>("api")` | Container app (image built by azd) |
+| PostgreSQL | `AddAzurePostgresFlexibleServer("postgres").RunAsContainer()` | Azure Database for PostgreSQL flexible server (managed, durable) |
+| Redis | `AddAzureRedis("redis").RunAsContainer()` | Azure Cache for Redis (managed) |
+| Blob storage | `AddAzureStorage("storage").RunAsEmulator().AddBlobs("blobs")` | Azure Storage account + Blob service |
+| API | `AddProject<Cadence_Api>("api").WithExternalHttpEndpoints()` | Container app with **external** (internet-facing) ingress |
+| Separation worker | `AddProject<Cadence_SeparationWorker>("separation")` | Container app (no inbound ingress) |
 
-The AppHost is the single source of truth. To move Postgres/Redis to managed Azure
-services later (`AddAzurePostgresFlexibleServer` / `AddAzureRedis`), edit the
-AppHost — azd picks up the change on the next `azd provision`.
+The `.RunAsContainer()` / `.RunAsEmulator()` calls keep local `aspire run` on
+containers and the Azurite emulator; on **publish** azd emits the managed Azure
+services above, so production data is durable across revision restarts. The API's
+`WithExternalHttpEndpoints()` gives it public ingress so the GitHub Pages SPA — a
+different origin — can reach it; cross-origin browser access is then gated by the
+`Cors:AllowedOrigins` policy (see [Required configuration](#required-configuration)).
+The AppHost is the single source of truth: change a resource there and azd picks
+it up on the next `azd provision`.
+
+## Required configuration
+
+The API binds a handful of configuration sections. Everything ships with safe,
+non-secret defaults for local development (see
+[`appsettings.json`](https://github.com/IEvangelist/cadence/blob/main/src/Cadence.Api/appsettings.json));
+you supply the rest per environment. **Never commit real secrets** — provide them
+through environment variables, .NET user-secrets (local), or Key Vault
+(deployed). Use `Section__Key` (double underscore) for environment-variable form.
+
+| Section / key | Default | Purpose |
+|---|---|---|
+| `Cors:AllowedOrigins` | `["https://ievangelist.github.io"]` | Browser origins allowed to call the API with credentials. Add custom domains / preview origins here. |
+| `Authentication:Web:BaseUrl` | `https://localhost:5173` | The SPA origin the API redirects back to after an OAuth sign-in. |
+| `Authentication:GitHub:ClientId` / `ClientSecret` | empty | GitHub OAuth app credentials. The provider is enabled only when **both** are set. |
+| `Authentication:Google:ClientId` / `ClientSecret` | empty | Google OAuth credentials (same opt-in rule). |
+| `Authentication:Microsoft:ClientId` / `ClientSecret` | empty | Microsoft account OAuth credentials (same opt-in rule). |
+| `Billing:Stripe:SecretKey` / `PublishableKey` / `WebhookSecret` / `PriceId` | empty | Stripe API keys, the webhook signing secret, and the price id for the paid (Pro) plan. |
+| `Billing:SuccessUrl` / `CancelUrl` / `PortalReturnUrl` | empty | Post-checkout and billing-portal return URLs. |
+| `ApiDocs:Enabled` | `true` | Serve `/openapi/v1.json` and `/scalar`. Set to `false` to hide the API reference on a hardened deployment. |
+| `Stems:ModelUri` / `Stems:ModelSha256` | unset | Optional pinned Demucs ONNX model URI (HTTPS) and its SHA-256. Unset uses the deterministic band-split fallback. Other `Stems:*` knobs (upload size, duration, container) have sensible defaults and are not secrets. |
+
+Connection strings for Postgres, Redis, and Blob storage are injected by the
+Aspire AppHost (locally and on publish), so you do not set them by hand. Stripe
+settings are forwarded from the AppHost's configuration to the API only when
+present, so a local run needs none of them.
 
 ## Deploy from your machine
 
