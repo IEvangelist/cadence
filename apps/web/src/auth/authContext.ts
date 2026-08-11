@@ -21,7 +21,9 @@ export interface AuthContextValue {
   error: string | null
   /** The underlying client (used for external sign-in URLs and profile calls). */
   client: AuthClient
-  /** Register a local account and sign in. */
+  /** Register a local account. Resolves once the verification email is queued;
+   *  the account is activated by the emailed link, not by this call — so it does
+   *  NOT sign the browser in and never reveals whether the email already existed. */
   register: (email: string, password: string, displayName?: string) => Promise<void>
   /** Sign in with a local account. */
   signIn: (email: string, password: string) => Promise<void>

@@ -29,6 +29,7 @@ export function AuthBar({ onShowProfile, profileActive }: AuthBarProps) {
   const [displayName, setDisplayName] = useState('')
   const [magicEmail, setMagicEmail] = useState('')
   const [magicSent, setMagicSent] = useState(false)
+  const [registerSent, setRegisterSent] = useState(false)
   const [busy, setBusy] = useState(false)
 
   if (auth.status === 'loading') {
@@ -62,11 +63,16 @@ export function AuthBar({ onShowProfile, profileActive }: AuthBarProps) {
     try {
       if (mode === 'signin') {
         await auth.signIn(email, password)
+        setOpen(false)
+        setPassword('')
       } else {
+        // Registration no longer signs in — it sends a verification email. Keep the
+        // panel open and confirm the email was sent (identically for any address,
+        // so this reveals nothing about whether the account already existed).
         await auth.register(email, password, displayName || undefined)
+        setRegisterSent(true)
+        setPassword('')
       }
-      setOpen(false)
-      setPassword('')
     } catch {
       // The error is surfaced via auth.error below.
     } finally {
@@ -127,7 +133,10 @@ export function AuthBar({ onShowProfile, profileActive }: AuthBarProps) {
                 required
                 autoComplete="email"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) => {
+                  setEmail(event.target.value)
+                  setRegisterSent(false)
+                }}
               />
             </div>
 
@@ -146,12 +155,22 @@ export function AuthBar({ onShowProfile, profileActive }: AuthBarProps) {
             <button type="submit" className="btn btn-primary" disabled={busy}>
               {mode === 'signin' ? 'Sign in' : 'Create account'}
             </button>
+
+            {mode === 'register' && registerSent && (
+              <p className="auth-note" role="status">
+                Check your email for a link to verify your account and finish
+                signing up.
+              </p>
+            )}
           </form>
 
           <button
             type="button"
             className="auth-link"
-            onClick={() => setMode((value) => (value === 'signin' ? 'register' : 'signin'))}
+            onClick={() => {
+              setRegisterSent(false)
+              setMode((value) => (value === 'signin' ? 'register' : 'signin'))
+            }}
           >
             {mode === 'signin'
               ? 'New here? Create an account'

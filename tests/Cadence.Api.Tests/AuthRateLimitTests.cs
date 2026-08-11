@@ -176,6 +176,41 @@ public class AuthRateLimitTests
         Assert.Equal(1, spy.VerifyCount);
     }
 
+    // #75: under Azure Container Apps autoscale the per-email magic-link cap must be
+    // GLOBAL across replicas, not enforced independently per instance. Two factories
+    // sharing ONE counter store model two replicas sharing one Redis: the 3/hour
+    // budget is consumed jointly and the 4th send is rejected on EITHER instance.
+    [Fact]
+    public async Task MagicLinkSendEmail_Cap_IsShared_AcrossApiInstances()
+    {
+        var sharedStore = new InMemoryRateLimitCounterStore();
+        var config = new Dictionary<string, string?>
+        {
+            // Keep the per-IP budget out of the way; this test is about the per-email cap.
+            ["RateLimiting:MagicLinkSend:PermitLimit"] = "100",
+            ["RateLimiting:MagicLinkSend:WindowSeconds"] = "60",
+            ["RateLimiting:MagicLinkSendEmail:PermitLimit"] = "3",
+            ["RateLimiting:MagicLinkSendEmail:WindowSeconds"] = "3600",
+        };
+        await using var replicaA = new CadenceApiFactory { RateLimitCounterStore = sharedStore, ConfigOverrides = config };
+        await using var replicaB = new CadenceApiFactory { RateLimitCounterStore = sharedStore, ConfigOverrides = config };
+        var clientA = replicaA.CreateClient();
+        var clientB = replicaB.CreateClient();
+        const string email = "shared.cap@example.com";
+
+        // Three sends are allowed across the two replicas combined.
+        Assert.Equal(HttpStatusCode.Accepted, await SendMagicLinkAsync(clientA, email));
+        Assert.Equal(HttpStatusCode.Accepted, await SendMagicLinkAsync(clientB, email));
+        Assert.Equal(HttpStatusCode.Accepted, await SendMagicLinkAsync(clientA, email));
+
+        // The global budget is now exhausted: the 4th send is rejected on BOTH replicas.
+        Assert.Equal(HttpStatusCode.TooManyRequests, await SendMagicLinkAsync(clientB, email));
+        Assert.Equal(HttpStatusCode.TooManyRequests, await SendMagicLinkAsync(clientA, email));
+
+        // A different email still has its own full budget on either replica.
+        Assert.Equal(HttpStatusCode.Accepted, await SendMagicLinkAsync(clientB, "shared.cap-other@example.com"));
+    }
+
     private static async Task<HttpStatusCode> SendMagicLinkAsync(HttpClient client, string email)
     {
         using var response = await client.PostAsJsonAsync("/api/auth/magic-link", new MagicLinkRequest(email));

@@ -66,7 +66,7 @@ describe('AuthBar', () => {
     expect(signIn).toHaveBeenCalledWith('a@b.com', 'secret12')
   })
 
-  it('toggles to register mode and submits with a display name', () => {
+  it('toggles to register mode, submits, and confirms a verification email was sent', async () => {
     const register = vi.fn(async () => undefined)
     renderBar(makeValue({ register }))
 
@@ -78,6 +78,8 @@ describe('AuthBar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
 
     expect(register).toHaveBeenCalledWith('a@b.com', 'secret12', 'Ada')
+    // #76: register does not sign in — the UI must tell the user to check their email.
+    expect(await screen.findByText(/Check your email/)).toBeInTheDocument()
   })
 
   it('requests a magic link and confirms it was sent', async () => {

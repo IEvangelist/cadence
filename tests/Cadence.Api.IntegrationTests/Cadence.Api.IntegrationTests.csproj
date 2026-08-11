@@ -28,9 +28,12 @@
   <!--
     Referencing the AppHost lets Aspire.Hosting.Testing generate the strongly
     typed Projects.Cadence_AppHost metadata used to boot the full app graph.
+    Cadence.Api is referenced directly so the Redis rate-limit integration test can
+    exercise the real RedisRateLimitCounterStore against the app's Redis resource.
   -->
   <ItemGroup>
     <ProjectReference Include="..\..\src\Cadence.AppHost\Cadence.AppHost.csproj" />
+    <ProjectReference Include="..\..\src\Cadence.Api\Cadence.Api.csproj" />
   </ItemGroup>
 
   <ItemGroup>

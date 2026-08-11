@@ -85,14 +85,16 @@ export function AuthProvider({ children, client: injected, onAuthChange }: AuthP
     async (email: string, password: string, displayName?: string) => {
       setError(null)
       try {
-        const me = await client.register(email, password, displayName)
-        await applyUser(me)
+        // Registration is neutral and deferred: the server returns 202 with no
+        // cookie and emails a verification link. We must NOT apply a user or flip
+        // to authenticated here — the session only begins after the user verifies.
+        await client.register(email, password, displayName)
       } catch (err) {
         setError(messageFor(err, 'Registration failed.'))
         throw err
       }
     },
-    [client, applyUser],
+    [client],
   )
 
   const requestMagicLink = useCallback(

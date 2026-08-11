@@ -52,6 +52,25 @@ describe('AuthClient', () => {
     })
   })
 
+  it('register() resolves on a neutral 202 without reading a body', async () => {
+    // The server returns 202 with no body for both new and existing emails;
+    // register() must resolve (not throw, not attempt to parse JSON) and post the
+    // full credential payload.
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 202 }))
+    const client = new AuthClient(fetchImpl, '')
+
+    await expect(client.register('a@b.com', 'secret12', 'Ada')).resolves.toBeUndefined()
+
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit?]
+    expect(url).toBe('/api/auth/register')
+    expect(init?.method).toBe('POST')
+    expect(JSON.parse(init?.body as string)).toEqual({
+      email: 'a@b.com',
+      password: 'secret12',
+      displayName: 'Ada',
+    })
+  })
+
   it('register() surfaces the first validation error', async () => {
     const client = new AuthClient(
       async () => json({ errors: { identity: ['Passwords must be 8 characters.'] } }, 400),

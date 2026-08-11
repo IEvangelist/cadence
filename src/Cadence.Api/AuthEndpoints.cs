@@ -36,6 +36,7 @@ public static class AuthEndpoints
         var group = app.MapGroup("/api/auth").WithTags("Auth");
 
         group.MapPost("/register", RegisterAsync);
+        group.MapGet("/register/verify", VerifyRegistrationAsync);
         group.MapPost("/login", LoginAsync)
             .RequireRateLimiting(LoginRateLimitPolicy);
         group.MapPost("/logout", LogoutAsync).RequireAuthorization();
@@ -54,13 +55,59 @@ public static class AuthEndpoints
     private static async Task<IResult> RegisterAsync(
         RegisterRequest request,
         UserManager<ApplicationUser> users,
-        SignInManager<ApplicationUser> signIn,
-        CadenceDbContext db)
+        CadenceDbContext db,
+        IAccountEmailQueue emailQueue,
+        IPasswordHasher<ApplicationUser> hasher,
+        IConfiguration configuration)
     {
+        // #76: registration must NOT reveal whether an email already has an account.
+        // Both a brand-new and an already-registered address get the IDENTICAL
+        // 202 Accepted (no body, no auth cookie); sign-in is decoupled and only
+        // happens once the emailed verification link is followed. Every early return
+        // below is existence-independent so new and existing addresses stay
+        // byte-for-byte indistinguishable in status and body.
+        if (string.IsNullOrWhiteSpace(request.Email))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["email"] = ["An email address is required."],
+            });
+        }
+
+        // Validate password strength against a transient user, so a weak password is
+        // rejected the SAME way (400) for a new and an existing address — the check
+        // never touches the database and therefore can't leak existence.
+        var probe = new ApplicationUser { UserName = request.Email, Email = request.Email };
+        foreach (var validator in users.PasswordValidators)
+        {
+            var check = await validator.ValidateAsync(users, probe, request.Password);
+            if (!check.Succeeded)
+            {
+                return Results.ValidationProblem(AccountHelpers.ToValidationErrors(check));
+            }
+        }
+
+        var existing = await users.FindByEmailAsync(request.Email);
+        if (existing is not null)
+        {
+            // Known address: never disclose it. Spend the same password-hashing cost
+            // the new-account path pays (timing parity), enqueue a neutral notice so
+            // the real owner learns of the attempt out-of-band, and return the same
+            // 202 with no cookie.
+            _ = hasher.HashPassword(probe, request.Password);
+            emailQueue.Enqueue((serviceProvider, cancellationToken) =>
+                serviceProvider.GetRequiredService<IAccountEmailSender>()
+                    .SendAlreadyRegisteredAsync(request.Email, cancellationToken));
+            return Results.Accepted();
+        }
+
         var user = new ApplicationUser
         {
             UserName = request.Email,
             Email = request.Email,
+            // The account starts unconfirmed and is activated by the verification
+            // link, so the register response can stay neutral (no immediate sign-in).
+            EmailConfirmed = false,
             DisplayName = string.IsNullOrWhiteSpace(request.DisplayName)
                 ? AccountHelpers.DeriveDisplayName(request.Email)
                 : request.DisplayName!,
@@ -69,21 +116,58 @@ public static class AuthEndpoints
         var result = await users.CreateAsync(user, request.Password);
         if (!result.Succeeded)
         {
-            // Duplicate-account failures are deliberately collapsed to the same
-            // generic validation shape as other registration problems. Returning a
-            // full always-accepted flow would hide more, but it would also break the
-            // current successful-registration contract (200 + MeResponse + sign-in).
+            // A duplicate at this point means we lost a create race with a concurrent
+            // registration: fold it into the existing-address behavior so the two
+            // remain indistinguishable rather than surfacing a create error.
             if (AccountHelpers.IsDuplicateAccount(result))
             {
-                return AccountHelpers.NeutralRegistrationProblem();
+                emailQueue.Enqueue((serviceProvider, cancellationToken) =>
+                    serviceProvider.GetRequiredService<IAccountEmailSender>()
+                        .SendAlreadyRegisteredAsync(request.Email, cancellationToken));
+                return Results.Accepted();
             }
 
             return Results.ValidationProblem(AccountHelpers.ToValidationErrors(result));
         }
 
         await AccountHelpers.EnsureProfileAsync(db, user);
+
+        var token = await users.GenerateEmailConfirmationTokenAsync(user);
+        var link = $"{AccountHelpers.WebBaseUrl(configuration)}/api/auth/register/verify" +
+                   $"?email={Uri.EscapeDataString(request.Email)}&token={Uri.EscapeDataString(token)}";
+        emailQueue.Enqueue((serviceProvider, cancellationToken) =>
+            serviceProvider.GetRequiredService<IAccountEmailSender>()
+                .SendRegistrationVerificationAsync(request.Email, link, token, cancellationToken));
+
+        return Results.Accepted();
+    }
+
+    private static async Task<IResult> VerifyRegistrationAsync(
+        string email,
+        string token,
+        UserManager<ApplicationUser> users,
+        SignInManager<ApplicationUser> signIn,
+        CadenceDbContext db,
+        IConfiguration configuration)
+    {
+        // Activation step for the async register flow. Mirrors the magic-link verify
+        // pattern: an unknown email or an invalid token redirects to the same neutral
+        // error page (no enumeration), a valid token confirms the email and signs in.
+        var user = await users.FindByEmailAsync(email);
+        if (user is null)
+        {
+            return Results.Redirect(AccountHelpers.FailureUrl(configuration));
+        }
+
+        var result = await users.ConfirmEmailAsync(user, token);
+        if (!result.Succeeded)
+        {
+            return Results.Redirect(AccountHelpers.FailureUrl(configuration));
+        }
+
+        await AccountHelpers.EnsureProfileAsync(db, user);
         await signIn.SignInAsync(user, isPersistent: true);
-        return Results.Ok(await AccountHelpers.BuildMeAsync(db, user));
+        return Results.Redirect(AccountHelpers.SuccessUrl(configuration));
     }
 
     private static async Task<IResult> LoginAsync(
@@ -132,9 +216,8 @@ public static class AuthEndpoints
 
     private static async Task<IResult> RequestMagicLinkAsync(
         MagicLinkRequest request,
-        UserManager<ApplicationUser> users,
-        IMagicLinkSender sender,
         IConfiguration configuration,
+        IAccountEmailQueue emailQueue,
         [FromKeyedServices(MagicLinkSendEmailLimiterKey)] PartitionedRateLimiter<string> emailLimiter)
     {
         // A missing/blank email is treated as a no-op success: this endpoint
@@ -153,21 +236,37 @@ public static class AuthEndpoints
             return Results.StatusCode(StatusCodes.Status429TooManyRequests);
         }
 
-        // Only send a link to an address that already has an account. We must NOT
-        // create accounts here: an unauthenticated caller could otherwise mass-
-        // create accounts for arbitrary/victim emails (resource exhaustion, email
-        // squatting) and set up an account for a later external-login hijack.
-        var user = await users.FindByEmailAsync(request.Email);
-        if (user is not null)
+        // #77: close the send timing side-channel. The request path now performs the
+        // SAME work for every address — normalize, acquire the limiter, enqueue one
+        // job, return 202 — and the account lookup + token generation + network send
+        // all run later on the background dispatcher. Because the existence-dependent
+        // work is off the hot path, its duration can no longer be observed to tell a
+        // known address from an unknown one. An unknown address still sends nothing:
+        // the job simply finds no user and returns.
+        var email = request.Email;
+        var baseUrl = AccountHelpers.WebBaseUrl(configuration);
+        emailQueue.Enqueue(async (serviceProvider, cancellationToken) =>
         {
+            var users = serviceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var user = await users.FindByEmailAsync(email);
+            if (user is null)
+            {
+                // Only send a link to an address that already has an account. We must
+                // NOT create accounts here: an unauthenticated caller could otherwise
+                // mass-create accounts for arbitrary/victim emails (resource
+                // exhaustion, email squatting) and set up a later external-login hijack.
+                return;
+            }
+
             var token = await users.GenerateUserTokenAsync(
                 user, AccountHelpers.MagicLinkProvider, AccountHelpers.MagicLinkPurpose);
 
-            var link = $"{AccountHelpers.WebBaseUrl(configuration)}/api/auth/magic-link/verify" +
-                       $"?email={Uri.EscapeDataString(request.Email)}&token={Uri.EscapeDataString(token)}";
+            var link = $"{baseUrl}/api/auth/magic-link/verify" +
+                       $"?email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(token)}";
 
-            await sender.SendMagicLinkAsync(request.Email, link, token);
-        }
+            var sender = serviceProvider.GetRequiredService<IAccountEmailSender>();
+            await sender.SendMagicLinkAsync(email, link, token, cancellationToken);
+        });
 
         // Always 202 regardless of whether the account existed (no enumeration).
         return Results.Accepted();

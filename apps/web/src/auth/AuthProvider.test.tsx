@@ -11,7 +11,7 @@ function fakeClient(overrides: Partial<AuthClient> = {}): AuthClient {
     me: vi.fn(async () => null),
     providers: vi.fn(async () => [] as string[]),
     login: vi.fn(async () => user),
-    register: vi.fn(async () => user),
+    register: vi.fn(async () => undefined),
     requestMagicLink: vi.fn(async () => undefined),
     logout: vi.fn(async () => undefined),
     externalSignInUrl: vi.fn((p: string) => `/api/auth/external/${p}`),
@@ -96,15 +96,19 @@ describe('AuthProvider / useAuth', () => {
     expect(screen.getByTestId('status')).toHaveTextContent('anonymous')
   })
 
-  it('register signs the user in', async () => {
+  it('register does not sign the user in (verification required)', async () => {
     const client = fakeClient()
     renderWith(client)
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('anonymous'))
 
     fireEvent.click(screen.getByText('register'))
 
-    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'))
-    expect(client.register).toHaveBeenCalledWith('a@b.com', 'pw', 'Ada')
+    await waitFor(() => expect(client.register).toHaveBeenCalledWith('a@b.com', 'pw', 'Ada'))
+    // #76: registration is neutral and deferred — the session must stay anonymous
+    // until the emailed verification link is followed.
+    expect(screen.getByTestId('status')).toHaveTextContent('anonymous')
+    expect(screen.getByTestId('user')).toHaveTextContent('none')
+    expect(client.me).toHaveBeenCalledTimes(1)
   })
 
   it('requestMagicLink calls the client', async () => {

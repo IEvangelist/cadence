@@ -76,20 +76,25 @@ Create an OAuth app with each provider and set its **callback URL** to
 The API port is assigned by Aspire — check the AppHost dashboard. In production,
 swap `https://localhost:<api-port>` for the deployed API origin.
 
-## Magic-link delivery
+## Account email delivery
 
-The magic-link **sender is a seam** (`IMagicLinkSender`). The default
-`LoggingMagicLinkSender` writes the link to the logs — perfect for local dev and
+All account emails — magic-link sign-in links **and** registration verification
+links — go through one seam (`IAccountEmailSender`). The default
+`LoggingAccountEmailSender` writes the link to the logs — perfect for local dev and
 integration tests, so **no email provider or secret** is required to try
 passwordless sign-in. Wire a real transactional-email implementation by
-registering it in `AddCadenceIdentity`.
+registering it in `AddCadenceIdentity`. Sends run on a background queue
+(`IAccountEmailQueue`), not inline, so endpoint latency doesn't depend on whether
+the address exists.
 
 Tokens are high-entropy, opaque values from a dedicated data-protector token
 provider, embed a **15-minute expiry**, and are **single-use** (verifying rotates
 the security stamp). The verify endpoint is throttled by a **per-email rate
-limiter** (`429` when exceeded). The request endpoint always returns
-`202 Accepted` whether or not the account exists, so it can't enumerate emails,
-and it never creates an account for an unknown address.
+limiter** (`429` when exceeded). Both `register` and `magic-link` always return
+`202 Accepted` — identical status, empty body, and no auth cookie — whether or not
+the account exists, so neither can enumerate emails. Registration doesn't sign you
+in: it emails a verification link, and the account is activated only when that link
+is followed (`GET /api/auth/register/verify`).
 
 ## Profiles, tiers & the entitlement seam
 

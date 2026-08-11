@@ -9,6 +9,10 @@
     <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.4.6" />
     <PackageVersion Include="Aspire.Hosting.Redis" Version="13.4.6" />
     <PackageVersion Include="Aspire.Hosting.Azure.Storage" Version="13.4.6" />
+    <!-- Redis client integration: registers IConnectionMultiplexer wired to the
+         "redis" resource, used to back the auth rate limiters with a distributed
+         (cross-replica) fixed-window store. Pulls StackExchange.Redis transitively. -->
+    <PackageVersion Include="Aspire.StackExchange.Redis" Version="13.4.6" />
     <!--
       Node.js hosting integration (AddNpmApp) for the apps/web dev server. The
       curated feed publishes this package only up to 9.5.2 (the core Aspire

@@ -71,16 +71,6 @@ internal static class AccountHelpers
     public static bool IsDuplicateAccount(IdentityResult result) =>
         result.Errors.Any(e => e.Code is "DuplicateUserName" or "DuplicateEmail");
 
-    /// <summary>Build a generic registration failure that does not disclose account existence.</summary>
-    public static IResult NeutralRegistrationProblem() =>
-        Results.ValidationProblem(new Dictionary<string, string[]>
-        {
-            ["registration"] =
-            [
-                "Registration could not be completed. Please check your details and try again.",
-            ],
-        });
-
     /// <summary>Base URL the SPA is served from, used for post-auth redirects.</summary>
     public static string WebBaseUrl(IConfiguration configuration) =>
         configuration["Authentication:Web:BaseUrl"]?.TrimEnd('/') ?? string.Empty;

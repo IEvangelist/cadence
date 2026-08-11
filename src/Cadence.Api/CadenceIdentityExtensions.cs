@@ -44,10 +44,18 @@ public static class CadenceIdentityExtensions
             // the 6-digit default email provider — see MagicLinkTokenProvider).
             .AddTokenProvider<MagicLinkTokenProvider>(AccountHelpers.MagicLinkProvider);
 
-        // Tier/display-name claims + entitlement + magic-link seams.
+        // Tier/display-name claims + entitlement + account-email seams.
         services.AddScoped<IUserClaimsPrincipalFactory<ApplicationUser>, TierClaimsPrincipalFactory>();
         services.AddScoped<IEntitlementService, TierEntitlementService>();
-        services.AddSingleton<IMagicLinkSender, LoggingMagicLinkSender>();
+        services.AddSingleton<IAccountEmailSender, LoggingAccountEmailSender>();
+
+        // Background dispatch for account emails: the same instance is the queue
+        // (injected into handlers) and the hosted consumer that drains it. Sending
+        // off the request thread is what makes the magic-link/register send paths
+        // constant-time with respect to account existence (#77).
+        services.AddSingleton<AccountEmailDispatcher>();
+        services.AddSingleton<IAccountEmailQueue>(sp => sp.GetRequiredService<AccountEmailDispatcher>());
+        services.AddHostedService(sp => sp.GetRequiredService<AccountEmailDispatcher>());
 
         // Outside Development/Testing (both served over plain HTTP by the test host
         // and local dev), always mark the auth cookies Secure so they are never

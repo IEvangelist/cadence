@@ -97,11 +97,16 @@ export class AuthClient {
     return (await response.json()) as Me
   }
 
-  /** Register a local account; the response signs the browser in. */
-  async register(email: string, password: string, displayName?: string): Promise<Me> {
+  /**
+   * Register a local account. Registration is deliberately neutral: the server
+   * returns an identical `202 Accepted` (no body, no auth cookie) whether or not
+   * the address already exists, and emails a verification link. It never signs
+   * the browser in and never reveals whether the account already existed — the
+   * account is activated by following the emailed link, not by this call.
+   */
+  async register(email: string, password: string, displayName?: string): Promise<void> {
     const response = await this.postJson('/api/auth/register', { email, password, displayName })
     if (!response.ok) throw new AuthError(response.status, await readError(response, 'Registration failed.'))
-    return (await response.json()) as Me
   }
 
   /** Sign in with a local account. */
