@@ -58,11 +58,13 @@ app.MapDefaultEndpoints();
 app.UseCadenceTelemetry();
 
 // API reference documentation: the OpenAPI document plus the human-facing Scalar
-// reference UI. Cadence APIs ship with Scalar, so this is enabled in every
-// environment by default; operators can turn it off (for example in production)
-// by setting ApiDocs:Enabled=false. Scalar reads the app's OpenAPI JSON at
+// reference UI. The API is internet-facing (Aspire WithExternalHttpEndpoints), so
+// the full contract must NOT be published by default in production: docs default
+// ON in Development (for DX) and OFF in every other environment, and an operator
+// can force either state via ApiDocs:Enabled (appsettings.Production.json also
+// pins it off, belt-and-suspenders). Scalar reads the app's OpenAPI JSON at
 // /openapi/v1.json and renders the interactive reference at /scalar.
-if (app.Configuration.GetValue("ApiDocs:Enabled", true))
+if (CadenceApiDocs.ResolveEnabled(app.Configuration, app.Environment))
 {
     app.MapOpenApi();
     app.MapScalarApiReference();
@@ -97,6 +99,15 @@ var forwardedHeadersOptions = new ForwardedHeadersOptions
 forwardedHeadersOptions.KnownIPNetworks.Clear();
 forwardedHeadersOptions.KnownProxies.Clear();
 app.UseForwardedHeaders(forwardedHeadersOptions);
+
+// Baseline HTTP security response headers for the internet-facing API: HSTS
+// (outside Development, and only over HTTPS) plus anti-sniffing/anti-clickjacking
+// headers on every response. Placed after forwarded headers (so HSTS sees the
+// real X-Forwarded-Proto scheme) and before CORS (so the headers also ride along
+// on the preflight response UseCors short-circuits), without reordering the
+// existing forwarded-headers -> CORS -> rate limiter -> websockets -> authN ->
+// authZ pipeline.
+app.UseCadenceSecurityHeaders();
 
 // Emit CORS headers (and short-circuit preflight) before rate limiting and auth
 // so the GitHub Pages SPA can reach the API from its own origin. Applies the
