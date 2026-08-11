@@ -179,6 +179,57 @@ public class StemsEndpointTests
     }
 
     [Fact]
+    public async Task Create_SpoofedContentType_NonAudioBytes_Returns415()
+    {
+        await using var factory = new CadenceApiFactory();
+        var client = factory.CreateClient();
+        var me = await client.RegisterAndReadMeAsync("stems.spoof@example.com");
+        await PromoteToProAsync(factory, me.Id);
+
+        // A client sends arbitrary non-audio bytes under an allowed audio/wav header.
+        // The declared type passes the allow-list, but the sniffed magic bytes do not
+        // match any audio container, so the upload is rejected as 415.
+        byte[] notAudio = [.. "NOPE this is plain text, not an audio container at all"u8];
+        var response = await UploadAsync(client, notAudio, contentType: "audio/wav");
+
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+    }
+
+    // Genuine container signatures for the non-WAV allowed formats. Each is paired
+    // with the content type it would arrive under; none is a RIFF/WAVE payload, so
+    // they exercise the magic-byte gate without hitting the WAV duration parse.
+    public static TheoryData<byte[], string> GenuineAudioSignatures()
+    {
+        byte[] flac = [.. "fLaC"u8, 0x00, 0x00, 0x00, 0x22, 1, 2, 3, 4];
+        byte[] ogg = [.. "OggS"u8, 0x00, 0x02, 0x00, 0x00, 1, 2, 3, 4];
+        byte[] id3Mp3 = [.. "ID3"u8, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0A, 1, 2, 3];
+        byte[] mp4 = [0x00, 0x00, 0x00, 0x18, .. "ftyp"u8, .. "M4A "u8, 0, 0, 0, 0];
+        return new TheoryData<byte[], string>
+        {
+            { flac, "audio/flac" },
+            { ogg, "audio/ogg" },
+            { id3Mp3, "audio/mpeg" },
+            { mp4, "audio/mp4" },
+        };
+    }
+
+    [Theory]
+    [MemberData(nameof(GenuineAudioSignatures))]
+    public async Task Create_GenuineAudioSignature_Returns202(byte[] payload, string contentType)
+    {
+        await using var factory = new CadenceApiFactory();
+        var client = factory.CreateClient();
+        var me = await client.RegisterAndReadMeAsync($"stems.sig.{Guid.NewGuid():N}@example.com");
+        await PromoteToProAsync(factory, me.Id);
+
+        // Bytes whose header matches an allowed audio container pass the sniff and are
+        // queued (the worker decodes them); they are not WAV, so no duration parse.
+        var response = await UploadAsync(client, payload, contentType: contentType, name: "mix.audio");
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+    }
+
+    [Fact]
     public async Task FullLifecycle_UploadProcessListGetDownload()
     {
         await using var factory = new CadenceApiFactory();
