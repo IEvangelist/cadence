@@ -1,0 +1,103 @@
+/*
+ * Cadence site — self-hosted @font-face wiring.
+ *
+ * Served verbatim from /public (never bundled), so the relative url('./*.woff2')
+ * references resolve against /cadence/fonts/ under the GitHub Pages base path.
+ * Design tokens (which family is active) live in src/styles/tokens.css; this file
+ * only maps family names to the physical latin-subset variable woff2 files.
+ *
+ * Each real face is paired with a metric-adjusted `local('Arial')` fallback whose
+ * size-adjust / ascent / descent overrides were computed from the actual font
+ * metrics (capsize/next-font method) so `font-display: swap` causes no layout
+ * shift (CLS) when the webfont arrives. See docs/type-eval/README.md.
+ *
+ * All five families are SIL Open Font License 1.1 — see ./LICENSES.md.
+ */
+
+/* ------------------------------------------------------------ Display faces */
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  src: url('./bricolage-grotesque-var-latin.woff2') format('woff2');
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  src: url('./fraunces-var-latin.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Sora';
+  src: url('./sora-var-latin.woff2') format('woff2');
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* --------------------------------------------------------------- Body faces */
+@font-face {
+  font-family: 'Inter';
+  src: url('./inter-var-latin.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Manrope';
+  src: url('./manrope-var-latin.woff2') format('woff2');
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ---------------------------------------- Metric-matched fallbacks (no CLS) */
+@font-face {
+  font-family: 'Bricolage Grotesque Fallback';
+  src: local('Arial');
+  size-adjust: 100.53%;
+  ascent-override: 92.51%;
+  descent-override: 26.86%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Fraunces Fallback';
+  src: local('Arial');
+  size-adjust: 115.32%;
+  ascent-override: 84.81%;
+  descent-override: 22.11%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Sora Fallback';
+  src: local('Arial');
+  size-adjust: 113.46%;
+  ascent-override: 85.49%;
+  descent-override: 25.56%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Inter Fallback';
+  src: local('Arial');
+  size-adjust: 106.98%;
+  ascent-override: 90.55%;
+  descent-override: 22.55%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Manrope Fallback';
+  src: local('Arial');
+  size-adjust: 99.65%;
+  ascent-override: 106.98%;
+  descent-override: 30.11%;
+  line-gap-override: 0%;
+}

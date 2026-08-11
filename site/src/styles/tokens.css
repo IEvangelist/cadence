@@ -61,9 +61,14 @@
   --gradient-brand: linear-gradient(120deg, #7a2ff0 0%, #4361f0 55%, #12bddc 100%);
   --gradient-brand-soft: linear-gradient(120deg, #8a47ff 0%, #3b82f6 100%);
 
-  /* ---- Typography ---- */
-  --font-display: 'Space Grotesk', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-body: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  /* ---- Typography ----
+   * Self-hosted OFL faces are wired in /public/fonts/fonts.css and preloaded for
+   * the active pairing (see src/lib/typeface.ts + BaseLayout). Every family has a
+   * metric-matched "* Fallback" (local Arial, size-adjusted) so font-display:swap
+   * causes no CLS. Default pairing (Candidate A, issue #78): Bricolage Grotesque
+   * (display) + Inter (body). Alternatives are selectable via [data-typeface]. */
+  --font-display: 'Bricolage Grotesque', 'Bricolage Grotesque Fallback', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-body: 'Inter', 'Inter Fallback', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'Cascadia Code', ui-monospace, 'SFMono-Regular', Menlo, monospace;
 
   --font-weight-regular: 400;
@@ -157,6 +162,28 @@
   --color-info: #1d66c9;
 
   color-scheme: light dark;
+}
+
+/* ---- Typeface pairings (issue #78) ----
+ * Flip the active pairing by changing ACTIVE_TYPEFACE in src/lib/typeface.ts —
+ * it sets <html data-typeface> AND updates the preload hints in one place. The
+ * explicit `bricolage` block mirrors the :root default so the attribute is
+ * always authoritative (e.g. when the eval script swaps it at runtime). */
+:root[data-typeface='bricolage'] {
+  --font-display: 'Bricolage Grotesque', 'Bricolage Grotesque Fallback', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-body: 'Inter', 'Inter Fallback', 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* Candidate B — expressive serif display + warm humanist body. */
+:root[data-typeface='fraunces'] {
+  --font-display: 'Fraunces', 'Fraunces Fallback', Georgia, 'Times New Roman', serif;
+  --font-body: 'Manrope', 'Manrope Fallback', 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* Candidate C — clean geometric display + Inter body. */
+:root[data-typeface='sora'] {
+  --font-display: 'Sora', 'Sora Fallback', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-body: 'Inter', 'Inter Fallback', 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
 /* ---- Semantic tokens: DARK ---- */
