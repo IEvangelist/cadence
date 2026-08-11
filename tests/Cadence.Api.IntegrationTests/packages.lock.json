@@ -76,10 +76,10 @@
         "resolved": "3.1.5",
         "contentHash": "tKi7dSTwP4m5m9eXPM2Ime4Kn7xNf4x4zT9sdLO/G4hZVnQCRiMTWoSZqI/pYTVeI27oPPqHBKYI/DjJ9GsYgA=="
       },
-      "Aspire.Dashboard.Sdk.linux-x64": {
+      "Aspire.Dashboard.Sdk.win-x64": {
         "type": "Transitive",
         "resolved": "13.4.6",
-        "contentHash": "D1wLblOuViLyFXn4cVf/Y+ww2g8s0GnuRmsJCEXCxSFBhao59+6FgUMa8YSZ/Qd4Byj+ZQS+7/6ndbhgJpu8kQ=="
+        "contentHash": "IoN5kv4uMniYyETegmD3/5lW2TpsA4RXRZfgIEAD7gN93P92hhkUiqa+0DC2GrJLD3Voz1/Drmpnq/pQ5WzBow=="
       },
       "Aspire.Hosting": {
         "type": "Transitive",
@@ -194,10 +194,53 @@
           "System.IO.Hashing": "10.0.8"
         }
       },
-      "Aspire.Hosting.Orchestration.linux-x64": {
+      "Aspire.Hosting.Azure.KeyVault": {
         "type": "Transitive",
         "resolved": "13.4.6",
-        "contentHash": "zPPL4sZwp8WS8SvncVQfAXVFIIX/00jGe5v220pKjzZgLrBloQUmesHegESkqxTtSA5VBUhlalJgBWKeInEICA=="
+        "contentHash": "Hi56vb6QbP8azMrBMb6WUVdica5flfz0zRqKrJhj9GfY5z0KZBGokKvCOBd/dEf+N7+PLKIIk5HEJLZ6/0YzLg==",
+        "dependencies": {
+          "AspNetCore.HealthChecks.Uris": "9.0.0",
+          "Aspire.Hosting.Azure": "13.4.6",
+          "Azure.Core": "1.55.0",
+          "Azure.Identity": "1.21.0",
+          "Azure.Provisioning": "1.5.0",
+          "Azure.Provisioning.KeyVault": "1.1.0",
+          "Azure.ResourceManager.Authorization": "1.1.6",
+          "Azure.ResourceManager.Resources": "1.11.2",
+          "Azure.Security.KeyVault.Secrets": "4.11.0",
+          "Google.Protobuf": "3.34.1",
+          "Grpc.AspNetCore": "2.80.0",
+          "Grpc.Net.ClientFactory": "2.80.0",
+          "Grpc.Tools": "2.80.0",
+          "Humanizer.Core": "3.0.10",
+          "JsonPatch.Net": "3.3.0",
+          "KubernetesClient": "19.0.2",
+          "Microsoft.Extensions.Configuration.Abstractions": "10.0.8",
+          "Microsoft.Extensions.Configuration.Binder": "10.0.8",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.8",
+          "Microsoft.Extensions.Diagnostics.HealthChecks": "8.0.27",
+          "Microsoft.Extensions.FileSystemGlobbing": "10.0.8",
+          "Microsoft.Extensions.Hosting": "10.0.8",
+          "Microsoft.Extensions.Hosting.Abstractions": "10.0.8",
+          "Microsoft.Extensions.Http": "10.0.8",
+          "Microsoft.Extensions.Logging": "10.0.8",
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.8",
+          "Microsoft.Extensions.Options": "10.0.8",
+          "Microsoft.Extensions.Primitives": "10.0.8",
+          "ModelContextProtocol": "1.3.0",
+          "Newtonsoft.Json": "13.0.4",
+          "OpenTelemetry.Exporter.OpenTelemetryProtocol": "1.15.3",
+          "OpenTelemetry.Extensions.Hosting": "1.15.3",
+          "Polly.Core": "8.6.6",
+          "Semver": "3.0.0",
+          "StreamJsonRpc": "2.25.29",
+          "System.IO.Hashing": "10.0.8"
+        }
+      },
+      "Aspire.Hosting.Orchestration.win-x64": {
+        "type": "Transitive",
+        "resolved": "13.4.6",
+        "contentHash": "TjpiZb4VAr7w/ViDq08kX2lXVo5eSDaQpGaLFMRas/0Q2jmuVOWoYFidmuXMbTf2InXVJO0pVjtwhJI2nNXihw=="
       },
       "AspNetCore.HealthChecks.Azure.Storage.Blobs": {
         "type": "Transitive",
@@ -283,6 +326,33 @@
           "Azure.Provisioning": "1.1.0"
         }
       },
+      "Azure.Provisioning.PostgreSql": {
+        "type": "Transitive",
+        "resolved": "1.1.1",
+        "contentHash": "nAcxs1iRtbZHSwxKliHQz7GCQiNDhkUvL7tzLiKc7R2Kp7sO1k5Q6k8B77Ka2ul7eMHSmp5wtSmZiq8t2gqg5A==",
+        "dependencies": {
+          "Azure.Core": "1.46.2",
+          "Azure.Provisioning": "1.1.0"
+        }
+      },
+      "Azure.Provisioning.Redis": {
+        "type": "Transitive",
+        "resolved": "1.1.0",
+        "contentHash": "kkafeDrP4dGMqAiHXnun4Tge2diYEhRG03s4ms2jGgtLyks+AVyj+W/GebPDg58dSKaM4egGvtacGRZTpjkSpw==",
+        "dependencies": {
+          "Azure.Core": "1.46.2",
+          "Azure.Provisioning": "1.1.0"
+        }
+      },
+      "Azure.Provisioning.RedisEnterprise": {
+        "type": "Transitive",
+        "resolved": "1.1.0",
+        "contentHash": "SDWJtrRfwjcdQWIlZxXMSAD9MI1BzAOXjljbdbBsNP6d47Pp+zVQc3dd/Wo5vdfDoDxAKejjdeC5PHgIUR/kqg==",
+        "dependencies": {
+          "Azure.Core": "1.50.0",
+          "Azure.Provisioning": "1.3.0"
+        }
+      },
       "Azure.Provisioning.Storage": {
         "type": "Transitive",
         "resolved": "1.1.2",
@@ -326,21 +396,12 @@
           "Azure.Core": "1.54.0"
         }
       },
-      "Azure.Storage.Blobs": {
-        "type": "Transitive",
-        "resolved": "12.28.0",
-        "contentHash": "OK6slT3Hq3Yp2HWA0e23YHheHzKNbYjBZOwdT4fQ1iMH6I/8e6X8kAJLuKqVUeFBy160QSwhsynA3HxhVSHEcg==",
-        "dependencies": {
-          "Azure.Core": "1.51.1",
-          "Azure.Storage.Common": "12.27.0"
-        }
-      },
       "Azure.Storage.Common": {
         "type": "Transitive",
-        "resolved": "12.27.0",
-        "contentHash": "PBucMNzot6cYyN0isdte50iPCefJ4Ylg0B+KP4kxmqsc3ciOiDYh1MwVV6fPZPjoPnPvNRLN9TI6J5hgNf4huA==",
+        "resolved": "12.28.0",
+        "contentHash": "5l8YhNrks38zKLGFW2BBFLwieyamH/xauABSASsdpZv79G0f+n2n22IjkRmUqCmALSupkwRHh2LOhbW3yj5Qgw==",
         "dependencies": {
-          "Azure.Core": "1.51.1",
+          "Azure.Core": "1.55.0",
           "System.IO.Hashing": "10.0.3"
         }
       },
@@ -1180,12 +1241,113 @@
       "cadence.apphost": {
         "type": "Project",
         "dependencies": {
-          "Aspire.Dashboard.Sdk.linux-x64": "[13.4.6, )",
+          "Aspire.Dashboard.Sdk.win-x64": "[13.4.6, )",
           "Aspire.Hosting.AppHost": "[13.4.6, )",
+          "Aspire.Hosting.Azure.PostgreSQL": "[13.4.6, )",
+          "Aspire.Hosting.Azure.Redis": "[13.4.6, )",
           "Aspire.Hosting.Azure.Storage": "[13.4.6, )",
-          "Aspire.Hosting.Orchestration.linux-x64": "[13.4.6, )",
+          "Aspire.Hosting.NodeJs": "[9.5.2, )",
+          "Aspire.Hosting.Orchestration.win-x64": "[13.4.6, )",
           "Aspire.Hosting.PostgreSQL": "[13.4.6, )",
           "Aspire.Hosting.Redis": "[13.4.6, )"
+        }
+      },
+      "Aspire.Hosting.Azure.PostgreSQL": {
+        "type": "CentralTransitive",
+        "requested": "[13.4.6, )",
+        "resolved": "13.4.6",
+        "contentHash": "BFG6gGzf09kWicY8DAPjfCs73UlMLlZEN3sVC7Brxam8FCmhiRJwr3OXSCbDccNgd70vzYdWWI+Cko5zXBygtg==",
+        "dependencies": {
+          "AspNetCore.HealthChecks.NpgSql": "9.0.0",
+          "AspNetCore.HealthChecks.Uris": "9.0.0",
+          "Aspire.Hosting.Azure": "13.4.6",
+          "Aspire.Hosting.Azure.KeyVault": "13.4.6",
+          "Aspire.Hosting.PostgreSQL": "13.4.6",
+          "Azure.Core": "1.55.0",
+          "Azure.Identity": "1.21.0",
+          "Azure.Provisioning": "1.5.0",
+          "Azure.Provisioning.KeyVault": "1.1.0",
+          "Azure.Provisioning.PostgreSql": "1.1.1",
+          "Azure.ResourceManager.Authorization": "1.1.6",
+          "Azure.ResourceManager.Resources": "1.11.2",
+          "Azure.Security.KeyVault.Secrets": "4.11.0",
+          "Google.Protobuf": "3.34.1",
+          "Grpc.AspNetCore": "2.80.0",
+          "Grpc.Net.ClientFactory": "2.80.0",
+          "Grpc.Tools": "2.80.0",
+          "Humanizer.Core": "3.0.10",
+          "JsonPatch.Net": "3.3.0",
+          "KubernetesClient": "19.0.2",
+          "Microsoft.Extensions.Configuration.Abstractions": "10.0.8",
+          "Microsoft.Extensions.Configuration.Binder": "10.0.8",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.8",
+          "Microsoft.Extensions.Diagnostics.HealthChecks": "8.0.27",
+          "Microsoft.Extensions.FileSystemGlobbing": "10.0.8",
+          "Microsoft.Extensions.Hosting": "10.0.8",
+          "Microsoft.Extensions.Hosting.Abstractions": "10.0.8",
+          "Microsoft.Extensions.Http": "10.0.8",
+          "Microsoft.Extensions.Logging": "10.0.8",
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.8",
+          "Microsoft.Extensions.Options": "10.0.8",
+          "Microsoft.Extensions.Primitives": "10.0.8",
+          "ModelContextProtocol": "1.3.0",
+          "Newtonsoft.Json": "13.0.4",
+          "OpenTelemetry.Exporter.OpenTelemetryProtocol": "1.15.3",
+          "OpenTelemetry.Extensions.Hosting": "1.15.3",
+          "Polly.Core": "8.6.6",
+          "Semver": "3.0.0",
+          "StreamJsonRpc": "2.25.29",
+          "System.IO.Hashing": "10.0.8"
+        }
+      },
+      "Aspire.Hosting.Azure.Redis": {
+        "type": "CentralTransitive",
+        "requested": "[13.4.6, )",
+        "resolved": "13.4.6",
+        "contentHash": "/LSiVMIs17Ndc/VDvZaOiQHXWyxCML+4tYyLlzdjoa5fmIlXUN63DNhuPO5YLUN6QkiCwcgJigNYWTnkzlLztA==",
+        "dependencies": {
+          "AspNetCore.HealthChecks.Redis": "9.0.0",
+          "AspNetCore.HealthChecks.Uris": "9.0.0",
+          "Aspire.Hosting.Azure": "13.4.6",
+          "Aspire.Hosting.Azure.KeyVault": "13.4.6",
+          "Aspire.Hosting.Redis": "13.4.6",
+          "Azure.Core": "1.55.0",
+          "Azure.Identity": "1.21.0",
+          "Azure.Provisioning": "1.5.0",
+          "Azure.Provisioning.KeyVault": "1.1.0",
+          "Azure.Provisioning.Redis": "1.1.0",
+          "Azure.Provisioning.RedisEnterprise": "1.1.0",
+          "Azure.ResourceManager.Authorization": "1.1.6",
+          "Azure.ResourceManager.Resources": "1.11.2",
+          "Azure.Security.KeyVault.Secrets": "4.11.0",
+          "Google.Protobuf": "3.34.1",
+          "Grpc.AspNetCore": "2.80.0",
+          "Grpc.Net.ClientFactory": "2.80.0",
+          "Grpc.Tools": "2.80.0",
+          "Humanizer.Core": "3.0.10",
+          "JsonPatch.Net": "3.3.0",
+          "KubernetesClient": "19.0.2",
+          "Microsoft.Extensions.Configuration.Abstractions": "10.0.8",
+          "Microsoft.Extensions.Configuration.Binder": "10.0.8",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.8",
+          "Microsoft.Extensions.Diagnostics.HealthChecks": "8.0.27",
+          "Microsoft.Extensions.FileSystemGlobbing": "10.0.8",
+          "Microsoft.Extensions.Hosting": "10.0.8",
+          "Microsoft.Extensions.Hosting.Abstractions": "10.0.8",
+          "Microsoft.Extensions.Http": "10.0.8",
+          "Microsoft.Extensions.Logging": "10.0.8",
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.8",
+          "Microsoft.Extensions.Options": "10.0.8",
+          "Microsoft.Extensions.Primitives": "10.0.8",
+          "ModelContextProtocol": "1.3.0",
+          "Newtonsoft.Json": "13.0.4",
+          "OpenTelemetry.Exporter.OpenTelemetryProtocol": "1.15.3",
+          "OpenTelemetry.Extensions.Hosting": "1.15.3",
+          "Polly.Core": "8.6.6",
+          "Semver": "3.0.0",
+          "StackExchange.Redis": "2.13.1",
+          "StreamJsonRpc": "2.25.29",
+          "System.IO.Hashing": "10.0.8"
         }
       },
       "Aspire.Hosting.Azure.Storage": {
@@ -1236,6 +1398,38 @@
           "Semver": "3.0.0",
           "StreamJsonRpc": "2.25.29",
           "System.IO.Hashing": "10.0.8"
+        }
+      },
+      "Aspire.Hosting.NodeJs": {
+        "type": "CentralTransitive",
+        "requested": "[9.5.2, )",
+        "resolved": "9.5.2",
+        "contentHash": "VCoWkWBwsBJGgWdoaL8bMM/KLtmVMizGGLy3XvrqqFAa1yTG+Rk7LD4AKv3fz0Lcms4/Qy6/SN49zTz73fVUlw==",
+        "dependencies": {
+          "AspNetCore.HealthChecks.Uris": "9.0.0",
+          "Aspire.Hosting": "9.5.2",
+          "Google.Protobuf": "3.32.0",
+          "Grpc.AspNetCore": "2.71.0",
+          "Grpc.Net.ClientFactory": "2.71.0",
+          "Grpc.Tools": "2.72.0",
+          "Humanizer.Core": "2.14.1",
+          "JsonPatch.Net": "3.3.0",
+          "KubernetesClient": "17.0.14",
+          "Microsoft.Extensions.Configuration.Abstractions": "8.0.0",
+          "Microsoft.Extensions.Configuration.Binder": "8.0.2",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "8.0.2",
+          "Microsoft.Extensions.Diagnostics.HealthChecks": "8.0.20",
+          "Microsoft.Extensions.Hosting": "8.0.1",
+          "Microsoft.Extensions.Hosting.Abstractions": "8.0.1",
+          "Microsoft.Extensions.Http": "8.0.1",
+          "Microsoft.Extensions.Logging.Abstractions": "8.0.3",
+          "Microsoft.Extensions.Options": "8.0.2",
+          "Microsoft.Extensions.Primitives": "8.0.0",
+          "Newtonsoft.Json": "13.0.3",
+          "Polly.Core": "8.6.3",
+          "Semver": "3.0.0",
+          "StreamJsonRpc": "2.22.11",
+          "System.IO.Hashing": "9.0.8"
         }
       },
       "Aspire.Hosting.PostgreSQL": {
@@ -1313,6 +1507,16 @@
           "StackExchange.Redis": "2.13.1",
           "StreamJsonRpc": "2.25.29",
           "System.IO.Hashing": "10.0.8"
+        }
+      },
+      "Azure.Storage.Blobs": {
+        "type": "CentralTransitive",
+        "requested": "[12.29.1, )",
+        "resolved": "12.29.1",
+        "contentHash": "pWh7xZBto8YcwiO853AB3uijTfVqs9PDte0Bu9/Zd8O9nwKiitWm0Jej1vsNkmYUzeG1552f8vJPjmtW30pBUQ==",
+        "dependencies": {
+          "Azure.Core": "1.55.0",
+          "Azure.Storage.Common": "12.28.0"
         }
       },
       "Microsoft.Extensions.Http.Resilience": {

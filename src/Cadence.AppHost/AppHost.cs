@@ -2,13 +2,29 @@ using Microsoft.Extensions.Configuration;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-// Relational store for projects, users, and metadata.
-var postgres = builder.AddPostgres("postgres");
+// Relational store for projects, users, and metadata. Published as an Azure
+// Database for PostgreSQL flexible server so production data survives
+// container-app revision restarts (a plain container app has no durable volume).
+// RunAsContainer keeps `aspire run` (and the integration-test harness) on a local
+// Postgres container, so local dev needs no Azure resources.
+var postgres = builder.AddAzurePostgresFlexibleServer("postgres")
+    .RunAsContainer();
 var cadenceDb = postgres.AddDatabase("cadencedb");
 
 // Presence and caching. (Auth rate limiting is currently in-process per replica,
-// not Redis-backed; cross-replica limiting is tracked as a follow-up.)
-var redis = builder.AddRedis("redis");
+// not Redis-backed; cross-replica limiting is tracked as a follow-up.) Published
+// as an Azure Cache for Redis (managed + durable), the offering #56 calls for;
+// RunAsContainer keeps local dev on a Redis container.
+//
+// AddAzureRedis is [Obsolete] in Aspire 13.4.6, which now steers new code to
+// AddAzureManagedRedis. That provisions the distinct (and pricier) "Azure Managed
+// Redis" product, whereas #56 specifies "Azure Cache for Redis" and go-live cost
+// is gated. We therefore keep AddAzureRedis deliberately and scope-suppress the
+// obsolete warning rather than switch products; revisit if/when the API is removed.
+#pragma warning disable CS0618 // Type or member is obsolete
+var redis = builder.AddAzureRedis("redis")
+    .RunAsContainer();
+#pragma warning restore CS0618
 
 // Audio/asset blob storage, backed by the Azurite emulator in development.
 var storage = builder.AddAzureStorage("storage").RunAsEmulator();
@@ -22,6 +38,11 @@ var blobs = storage.AddBlobs("blobs");
 // tables — see CollaborationEndpoints. No extra resource, image, or secret is
 // required; it rides on the existing API reference and database.
 var api = builder.AddProject<Projects.Cadence_Api>("api")
+    // Publish the API with an external (internet-facing) ingress so the GitHub
+    // Pages SPA — a different origin from the container app — can reach it. Without
+    // this the generated ACA app is internal-only. Cross-origin browser access is
+    // then gated by the server-side CORS policy in Cadence.Api (Cors:AllowedOrigins).
+    .WithExternalHttpEndpoints()
     .WithReference(cadenceDb)
     .WaitFor(cadenceDb)
     .WithReference(redis)

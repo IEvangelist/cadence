@@ -15,6 +15,22 @@ builder.Services.AddOpenApi();
 // Container Apps replicas (see CadenceRateLimitingExtensions / #75).
 builder.AddCadenceRateLimiting();
 
+// Cross-origin access for the browser SPA. In production the SPA is served from
+// GitHub Pages (https://ievangelist.github.io) — a different origin from the
+// deployed API — so the API must opt that origin into credentialed CORS
+// (the identity cookie flows with the cross-origin API/WebSocket calls). The
+// allowed origins are configurable via Cors:AllowedOrigins and default to the
+// public Pages origin; credentials require explicit origins (never a wildcard).
+var corsAllowedOrigins = CadenceCors.ResolveAllowedOrigins(builder.Configuration);
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(CadenceCors.PolicyName, policy => policy
+        .WithOrigins(corsAllowedOrigins)
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials());
+});
+
 // Postgres-backed persistence (skipped in the Testing environment, where the
 // test host registers an in-memory SQLite context instead).
 builder.AddCadencePersistence();
@@ -81,6 +97,11 @@ var forwardedHeadersOptions = new ForwardedHeadersOptions
 forwardedHeadersOptions.KnownIPNetworks.Clear();
 forwardedHeadersOptions.KnownProxies.Clear();
 app.UseForwardedHeaders(forwardedHeadersOptions);
+
+// Emit CORS headers (and short-circuit preflight) before rate limiting and auth
+// so the GitHub Pages SPA can reach the API from its own origin. Applies the
+// named policy configured from Cors:AllowedOrigins above.
+app.UseCors(CadenceCors.PolicyName);
 
 app.UseRateLimiter();
 app.UseWebSockets();

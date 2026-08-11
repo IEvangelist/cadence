@@ -8,6 +8,15 @@
   <ItemGroup Label="Aspire hosting integrations">
     <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.4.6" />
     <PackageVersion Include="Aspire.Hosting.Redis" Version="13.4.6" />
+    <!--
+      Azure managed variants for go-live. The AppHost calls
+      AddAzurePostgresFlexibleServer(...).RunAsContainer() and
+      AddAzureRedis(...).RunAsContainer(): the published manifest emits durable
+      managed Azure resources (data survives ACA revision restarts) while
+      `aspire run` continues to use local Postgres/Redis containers.
+    -->
+    <PackageVersion Include="Aspire.Hosting.Azure.PostgreSQL" Version="13.4.6" />
+    <PackageVersion Include="Aspire.Hosting.Azure.Redis" Version="13.4.6" />
     <PackageVersion Include="Aspire.Hosting.Azure.Storage" Version="13.4.6" />
     <!-- Redis client integration: registers IConnectionMultiplexer wired to the
          "redis" resource, used to back the auth rate limiters with a distributed
