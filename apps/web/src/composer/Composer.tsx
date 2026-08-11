@@ -6,6 +6,7 @@ import { useMixer } from './hooks/useMixer'
 import { usePanelLayout } from './hooks/usePanelLayout'
 import { usePlugins } from './plugins/usePlugins'
 import { ProjectToolbar } from './components/ProjectToolbar'
+import { MidiControls } from './components/MidiControls'
 import { TransportBar } from './components/TransportBar'
 import { TrackPanel } from './components/TrackPanel'
 import { AssistantPanel } from './components/AssistantPanel'
@@ -90,6 +91,7 @@ export function Composer({
     <section className="composer" aria-label="Composer" id="composer-main" tabIndex={-1}>
       <div className="composer-topbar">
         <ProjectToolbar controller={controller} />
+        <MidiControls controller={controller} />
         {canShare && <ShareProjectButton projectId={project.id} />}
       </div>
       {collaboration.active && (

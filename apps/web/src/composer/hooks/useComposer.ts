@@ -42,6 +42,12 @@ import {
 } from '../formats/share'
 import { type AudioEngine, type TransportState, createAudioEngine } from '../audio/engine'
 import type { MixerController } from '../audio/mixerController'
+import { type MidiAccessLike, type MidiInputInfo, normalizeVelocity } from '../midi/webMidi'
+import { type MidiCapture, recordedNoteFrom } from '../midi/record'
+import { useMidiInput } from './useMidiInput'
+
+/** Beats a live-MIDI monitor note rings for (matches the preview default). */
+const MIDI_MONITOR_DURATION = 0.5
 
 export interface UseComposerOptions {
   createEngine?: () => AudioEngine
@@ -57,6 +63,13 @@ export interface UseComposerOptions {
    * byte-clean exports. Server-authoritative — this only drives the export.
    */
   watermarkExports?: boolean
+  /**
+   * Whether live MIDI hardware input is enabled. Defaults to `true`; pass `false`
+   * to fully opt out (the UI then reports MIDI as unsupported/off).
+   */
+  midiEnabled?: boolean
+  /** Injectable Web MIDI access request for tests/e2e (defaults to navigator). */
+  requestMidiAccess?: () => Promise<MidiAccessLike | null>
 }
 
 /**
@@ -67,6 +80,28 @@ export interface UseComposerOptions {
 export interface NoteRevealRequest {
   noteIds: string[]
   token: number
+}
+
+/**
+ * Live MIDI hardware input surface (#111). INTERNAL — the frozen public
+ * {@link ComposerPublicApi} intentionally excludes it.
+ */
+export interface ComposerMidi {
+  /** Whether Web MIDI exists in this browser; `false` hides/disables the UI. */
+  supported: boolean
+  /** Currently connected input devices. */
+  inputs: MidiInputInfo[]
+  /** Chosen input id (auto-selected to the first device when unset). */
+  selectedInputId: string | null
+  selectInput: (id: string | null) => void
+  /** True when the selected device is present and receiving. */
+  connected: boolean
+  /** Whether record-arm is engaged. */
+  armed: boolean
+  toggleArmed: () => void
+  /** Whether recorded notes snap to the transport grid (opt-in, off by default). */
+  quantize: boolean
+  setQuantize: (on: boolean) => void
 }
 
 export interface ComposerController {
@@ -166,6 +201,11 @@ export interface ComposerController {
   importFormat: (id: string, data: string, name?: string) => void
   /** The #44 mixer controller (per-track strips, inserts, master bus, automation). */
   mixer: MixerController
+  /**
+   * Live MIDI hardware input (#111). INTERNAL to the app — deliberately excluded
+   * from the frozen public {@link ComposerPublicApi} contract surface.
+   */
+  midi: ComposerMidi
 }
 
 function defaultProject(options: UseComposerOptions): Project {
@@ -213,6 +253,25 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   useEffect(() => {
     projectRef.current = state.project
   }, [state.project])
+
+  // --- Live MIDI input (#111) -------------------------------------------------
+  // Additive and #97-safe: monitoring reuses engine.previewNote (the existing
+  // preview/trigger seam) and recording commits through the existing insert-notes
+  // reducer action. Nothing here subscribes to the engine or builds an audio path.
+  const [midiArmed, setMidiArmed] = useState(false)
+  const [midiQuantize, setMidiQuantize] = useState(false)
+  // Open note-ons keyed by MIDI note number, awaiting their matching note-off.
+  const captureRef = useRef(new Map<number, MidiCapture>())
+  const midiArmedRef = useRef(midiArmed)
+  const midiQuantizeRef = useRef(midiQuantize)
+  const snapRef = useRef(snap)
+  const selectedTrackIdRef = useRef(state.selectedTrackId)
+  useEffect(() => {
+    midiArmedRef.current = midiArmed
+    midiQuantizeRef.current = midiQuantize
+    snapRef.current = snap
+    selectedTrackIdRef.current = state.selectedTrackId
+  }, [midiArmed, midiQuantize, snap, state.selectedTrackId])
 
   // Subscribe to transport state + reschedule whenever the project changes.
   useEffect(() => {
@@ -397,6 +456,56 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     },
     [engine, state],
   )
+
+  // Live-monitor an incoming MIDI note through the EXISTING preview seam, and —
+  // only while armed and the transport is rolling — capture it for recording.
+  const handleMidiNoteOn = useCallback(
+    (note: number, rawVelocity: number) => {
+      const project = projectRef.current
+      const track =
+        project.tracks.find((t) => t.id === selectedTrackIdRef.current) ?? project.tracks[0]
+      if (track) {
+        engine.previewNote(track, note, MIDI_MONITOR_DURATION, normalizeVelocity(rawVelocity))
+      }
+      if (!midiArmedRef.current || engine.state !== 'playing') return
+      const trackId = selectedTrackIdRef.current
+      if (!trackId) return
+      captureRef.current.set(note, {
+        trackId,
+        pitch: note,
+        startBeat: engine.positionBeats(),
+        velocity: rawVelocity,
+      })
+    },
+    [engine],
+  )
+  // Close an open capture on note-off and commit it via the EXISTING insert path
+  // so undo/serialize/collaboration all keep working unchanged.
+  const handleMidiNoteOff = useCallback(
+    (note: number) => {
+      const capture = captureRef.current.get(note)
+      if (!capture) return
+      captureRef.current.delete(note)
+      const recorded = recordedNoteFrom(capture, engine.positionBeats(), {
+        enabled: midiQuantizeRef.current,
+        grid: snapRef.current,
+      })
+      insertNotes(capture.trackId, [recorded])
+    },
+    [engine, insertNotes],
+  )
+  const midiInput = useMidiInput({
+    enabled: options.midiEnabled ?? true,
+    requestAccess: options.requestMidiAccess,
+    onNoteOn: handleMidiNoteOn,
+    onNoteOff: handleMidiNoteOff,
+  })
+  // Discard any half-captured notes when disarmed or the transport stops, so a
+  // held key can't dangle across takes.
+  useEffect(() => {
+    if (!midiArmed || transportState !== 'playing') captureRef.current.clear()
+  }, [midiArmed, transportState])
+  const toggleMidiArmed = useCallback(() => setMidiArmed((armed) => !armed), [])
 
   const notify = useCallback((message: string) => setStatus(message), [])
 
@@ -621,5 +730,16 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     exportFormat,
     importFormat,
     mixer: engine.mixer,
+    midi: {
+      supported: midiInput.supported,
+      inputs: midiInput.inputs,
+      selectedInputId: midiInput.selectedInputId,
+      selectInput: midiInput.selectInput,
+      connected: midiInput.connected,
+      armed: midiArmed,
+      toggleArmed: toggleMidiArmed,
+      quantize: midiQuantize,
+      setQuantize: setMidiQuantize,
+    },
   }
 }

@@ -44,7 +44,7 @@ export interface AudioEngine {
   /** Current transport position in beats (wraps within an active loop). */
   positionBeats(): number
   /** Audition a single note immediately (for keyboard/preview feedback). */
-  previewNote(track: Track, pitch: number, durationBeats?: number): void
+  previewNote(track: Track, pitch: number, durationBeats?: number, velocity?: number): void
   /** Subscribe to transport state changes; returns an unsubscribe function. */
   onStateChange(listener: (state: TransportState) => void): () => void
   /**
@@ -297,7 +297,7 @@ export class ToneAudioEngine implements AudioEngine {
     return beats
   }
 
-  previewNote(track: Track, pitch: number, durationBeats = 0.5): void {
+  previewNote(track: Track, pitch: number, durationBeats = 0.5, velocity = 0.9): void {
     // Auditions come from a user gesture, so it is safe (and required on first
     // interaction) to resume the audio context before triggering the voice.
     void Tone.start()
@@ -305,7 +305,7 @@ export class ToneAudioEngine implements AudioEngine {
     // is always audible regardless of the track's mute/solo/gain state.
     const voice = this.buildVoice(track, this.voiceBus)
     const duration = beatsToSeconds(durationBeats, this.tempo)
-    voice.trigger(pitch, duration, Tone.now(), 0.9)
+    voice.trigger(pitch, duration, Tone.now(), velocity)
     // Free the one-shot preview voice after it has rung out.
     setTimeout(() => voice.dispose(), (duration + 0.5) * 1000)
   }
