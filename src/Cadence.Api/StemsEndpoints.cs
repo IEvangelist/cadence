@@ -93,6 +93,18 @@ public static class StemsEndpoints
                 statusCode: StatusCodes.Status400BadRequest);
         }
 
+        // Defense in depth: the Content-Type allow-list above is only a cheap first
+        // gate — a client can send arbitrary bytes under an audio/* header. Sniff the
+        // actual leading bytes so the payload must really be one of the audio
+        // containers the pipeline understands; a spoofed type is rejected as 415.
+        if (!LooksLikeAllowedAudio(bytes))
+        {
+            return Results.Problem(
+                title: "Unsupported media type",
+                detail: "The upload's contents are not a recognized audio file (expected WAV, MP3, FLAC, OGG, or MP4/AAC).",
+                statusCode: StatusCodes.Status415UnsupportedMediaType);
+        }
+
         // A payload that presents as a RIFF/WAVE container must be a parseable PCM
         // WAV: a malformed one is a client error (400), never an unhandled 500 from
         // the header scan. For a decodable WAV we also know the exact length and can
@@ -212,6 +224,48 @@ public static class StemsEndpoints
         bytes.Length >= 12 &&
         bytes[..4].SequenceEqual("RIFF"u8) &&
         bytes.Slice(8, 4).SequenceEqual("WAVE"u8);
+
+    // Magic-byte sniff (defense in depth for the Content-Type gate): does the header
+    // begin with one of the audio container signatures the pipeline accepts? Only the
+    // leading bytes are inspected — never the whole upload. Detects WAV (RIFF/WAVE),
+    // FLAC (fLaC), OGG (OggS), MP3 (ID3v2 tag or an MPEG/ADTS frame sync), and the
+    // ISO-BMFF ftyp box that fronts MP4/M4A/AAC.
+    private static bool LooksLikeAllowedAudio(ReadOnlySpan<byte> header)
+    {
+        // WAV: a RIFF container tagged WAVE.
+        if (LooksLikeRiffWave(header))
+        {
+            return true;
+        }
+
+        // FLAC ("fLaC") and OGG ("OggS") stream markers.
+        if (header.Length >= 4 &&
+            (header[..4].SequenceEqual("fLaC"u8) || header[..4].SequenceEqual("OggS"u8)))
+        {
+            return true;
+        }
+
+        // MP3 with a leading ID3v2 tag.
+        if (header.Length >= 3 && header[..3].SequenceEqual("ID3"u8))
+        {
+            return true;
+        }
+
+        // Raw MPEG/ADTS frame sync: 11 set bits (0xFF followed by 0xExx). Covers
+        // tagless MP3 and ADTS-framed AAC.
+        if (header.Length >= 2 && header[0] == 0xFF && (header[1] & 0xE0) == 0xE0)
+        {
+            return true;
+        }
+
+        // MP4 / M4A / AAC: an ISO base-media "ftyp" box (4-byte size, then the tag).
+        if (header.Length >= 8 && header.Slice(4, 4).SequenceEqual("ftyp"u8))
+        {
+            return true;
+        }
+
+        return false;
+    }
 
     private static async Task<byte[]?> ReadCappedAsync(Stream body, long cap, CancellationToken cancellationToken)
     {
