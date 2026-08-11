@@ -984,7 +984,7 @@ export const SYNTH_VOICE_INSTRUMENTS: InstrumentContribution[] = [
   // -------------------------------------------------------------------------
   {
     id: 'analog-pad',
-    name: 'Analog Pad',
+    name: 'Vintage Pad',
     kind: 'synth',
     description: 'A classic detuned analog pad — warm, wide, and slowly evolving.',
     polyphonic: true,
