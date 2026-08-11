@@ -17,14 +17,26 @@ namespace Cadence.Api.Tests;
 /// <summary>
 /// A <see cref="WebApplicationFactory{TEntryPoint}"/> that boots the API in the
 /// "Testing" environment (so the Aspire Npgsql component is skipped) and binds
-/// <see cref="CadenceDbContext"/> to a single, shared, in-memory SQLite
-/// connection. SQLite gives relational fidelity (constraints, unique indexes,
-/// cascade deletes) without Docker; keeping one open connection for the factory's
-/// lifetime keeps the schema alive across request scopes.
+/// <see cref="CadenceDbContext"/> to a uniquely-named, shared-cache, in-memory
+/// SQLite database. SQLite gives relational fidelity (constraints, unique indexes,
+/// cascade deletes) without Docker.
+/// <para>
+/// The database is addressed by a connection <em>string</em> (not a shared
+/// connection object), so EF Core opens its own connection per operation. A held-
+/// open keep-alive connection keeps the shared-cache database — and its schema —
+/// alive for the factory's lifetime. This lets the background email dispatcher and
+/// the request thread each use their own connection instead of racing on one, which
+/// is what fixes the intermittent "database is locked" (#126). A unique name per
+/// factory instance isolates parallel xUnit classes from each other. See
+/// <see cref="SqliteTestDatabase"/>.
+/// </para>
 /// </summary>
 public sealed class CadenceApiFactory : WebApplicationFactory<Program>
 {
-    private readonly SqliteConnection _connection = new("DataSource=:memory:");
+    private readonly string _connectionString = SqliteTestDatabase.NewConnectionString();
+    private readonly SqliteConnection _keepAlive;
+
+    public CadenceApiFactory() => _keepAlive = SqliteTestDatabase.OpenKeepAlive(_connectionString);
 
     /// <summary>Captures account emails (magic-link, verification) so tests can drive the flow.</summary>
     public CapturingAccountEmailSender AccountEmails { get; } = new();
@@ -71,7 +83,6 @@ public sealed class CadenceApiFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
-        _connection.Open();
 
         // Registration now defers sign-in, so the RegisterAsync test seed authenticates
         // through the (rate-limited) login endpoint. Under the in-process TestServer
@@ -94,7 +105,7 @@ public sealed class CadenceApiFactory : WebApplicationFactory<Program>
 
         builder.ConfigureServices(services =>
         {
-            services.AddDbContext<CadenceDbContext>(options => options.UseSqlite(_connection));
+            services.AddDbContext<CadenceDbContext>(options => options.UseSqlite(_connectionString));
             services.AddSingleton<IAccountEmailSender>(AccountEmails);
             services.AddSingleton<IStemStorage>(StemStorage);
 
@@ -142,7 +153,7 @@ public sealed class CadenceApiFactory : WebApplicationFactory<Program>
         base.Dispose(disposing);
         if (disposing)
         {
-            _connection.Dispose();
+            _keepAlive.Dispose();
         }
     }
 }
