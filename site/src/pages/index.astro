@@ -78,6 +78,9 @@ const shots = [
     src: '/screenshots/import-export-share.webp',
     width: 1600,
     height: 68,
+    // This capture is an extra-wide, short project toolbar. It reads as a
+    // full-width strip below its copy rather than squeezed into a grid column.
+    wide: true,
     title: 'Yours to take anywhere',
     body:
       'Round-trip MIDI and MusicXML, export WAV and MP3, save portable .cadence.json projects, and hand someone a shareable listen link — all from the project toolbar.',
@@ -267,7 +270,7 @@ const description =
     <div class="showcase">
       {
         shots.map((s) => (
-          <article class="showcase-row">
+          <article class={`showcase-row${'wide' in s && s.wide ? ' showcase-row--wide' : ''}`}>
             <figure class="shot">
               <img
                 src={href(s.src)}
@@ -508,6 +511,10 @@ const description =
     .showcase-row:nth-child(even) .shot {
       order: 2;
     }
+    /* The wide row opts out of the split — it stays a single full-width column. */
+    .showcase-row--wide {
+      grid-template-columns: 1fr;
+    }
   }
 
   .shot {
@@ -528,6 +535,63 @@ const description =
     width: auto;
     height: auto;
     border-radius: var(--radius-md);
+  }
+
+  /* One showcase row ("Yours to take anywhere") opts out of the two-column
+     layout: the copy stacks on top and the extra-wide toolbar capture spans the
+     full content width below it. The intrinsic width/height attrs stay on the
+     <img> (no CLS); we only lift the height cap so it reads as a full-width strip. */
+  .showcase-row--wide .showcase-copy {
+    order: 1;
+  }
+
+  .showcase-row--wide .shot {
+    order: 2;
+  }
+
+  .showcase-row--wide .shot img {
+    width: 100%;
+    max-height: none;
+  }
+
+  /* Scroll-linked reveal for the wide row: it sweeps in from the right, holds
+     centered while it's in view, then drifts out to the left — driven by the
+     element's own view() timeline, no JS. Only transform + opacity (GPU-friendly).
+     Browsers without view() support (Firefox/Safari) and anyone who prefers
+     reduced motion fall back to the row simply being static and fully visible. */
+  @keyframes showcase-wide-reveal {
+    0% {
+      opacity: 0;
+      transform: translate3d(3rem, 0, 0);
+    }
+    35%,
+    65% {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+    100% {
+      opacity: 0;
+      transform: translate3d(-3rem, 0, 0);
+    }
+  }
+
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      /* Clip the horizontal sweep so it can never widen the page (the responsive
+         suite asserts no horizontal overflow from mobile to desktop). overflow:
+         clip does not create a scroll container, so the row's view() timeline
+         still resolves against the viewport. */
+      .showcase {
+        overflow-x: clip;
+      }
+
+      .showcase-row--wide {
+        animation-name: showcase-wide-reveal;
+        animation-fill-mode: both;
+        animation-timing-function: linear;
+        animation-timeline: view();
+      }
+    }
   }
 
   .showcase-copy .icon {
