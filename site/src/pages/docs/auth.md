@@ -103,8 +103,9 @@ Every account has a `UserProfile` and a **subscription tier** that defaults to
 minimal `IEntitlementService` seam:
 
 ```csharp
-bool HasEntitlement(ClaimsPrincipal user, string entitlement);
-SubscriptionTier GetTier(ClaimsPrincipal user);
+SubscriptionTier GetTier(ClaimsPrincipal principal);
+Entitlements GetEntitlements(ClaimsPrincipal principal);
+bool IsEntitled(ClaimsPrincipal principal, string feature);
 ```
 
 This is the seam **billing (effort #8) builds on**. The tier is now driven by a

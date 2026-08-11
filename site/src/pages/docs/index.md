@@ -23,6 +23,10 @@ own instance.
 - **[Architecture](architecture/)** — the desktop shell, the SPA, and the Aspire
   service graph (API, Postgres, Redis, Blob).
 - **[Features](features/)** — what Cadence does today, tier by tier.
+- **[Plugin SDK](plugin-sdk/)** — author a composer plugin: instruments, effects,
+  formats, AI providers, commands, and panels.
+- **[API reference](api-reference/)** — reach the OpenAPI/Scalar docs and browse
+  the REST endpoint groups.
 - **[Self-hosting & deploy](self-hosting/)** — the `azd` flow that deploys the
   Aspire backend to Azure Container Apps.
 - **[Authentication](auth/)** — the sign-in methods and how to configure OAuth.
