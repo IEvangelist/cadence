@@ -10,6 +10,7 @@ import {
 } from './crdt'
 import {
   type Project,
+  SCHEMA_VERSION,
   createEmptyProject,
   createNote,
   createTrack,
@@ -25,7 +26,7 @@ function sampleProject(): Project {
     createNote({ pitch: 64, start: 1, duration: 1, velocity: 0.7 }, 'note_2'),
   ]
   return {
-    schemaVersion: 1,
+    schemaVersion: SCHEMA_VERSION,
     id: 'proj_1',
     name: 'Round trip',
     tempo: 128,

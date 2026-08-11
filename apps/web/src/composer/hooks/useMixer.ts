@@ -10,7 +10,8 @@
  * means the composer core (engine/reducer/store) needs no automation-specific edits.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import type { AutomationLane, MasterBusState, TrackInsert } from '../contract/mixing'
+import type { MasterBusState, TrackInsert } from '../contract/mixing'
+import type { AutomationLane, AutomationTarget } from '../model/automation'
 import { defaultPluginHost } from '../plugins/defaultHost'
 import type { ComposerController } from './useComposer'
 
@@ -43,6 +44,12 @@ export interface MixerViewModel {
   effectName: (effectId: string) => string
   /** Current playhead in beats (for the "write at playhead" affordances). */
   positionBeats: number
+  /** Project length in beats — the automation lane's horizontal span. */
+  lengthBeats: number
+  /** Editing grid (beats) automation points snap to. */
+  snap: number
+  /** The project's persisted automation lanes (source of truth for the lane UI). */
+  automation: readonly AutomationLane[]
 
   setTrackGain: (trackId: string, gainDb: number) => void
   setTrackPan: (trackId: string, pan: number) => void
@@ -57,11 +64,27 @@ export interface MixerViewModel {
   setLimiterEnabled: (enabled: boolean) => void
   setLimiterThreshold: (thresholdDb: number) => void
 
+  /** Write the track's current gain as a point at the playhead. */
   writeTrackGainAutomation: (trackId: string) => void
+  /** Write the track's current pan as a point at the playhead. */
   writeTrackPanAutomation: (trackId: string) => void
-  clearTrackAutomation: (trackId: string) => void
+  /** Write the master's current gain as a point at the playhead. */
   writeMasterGainAutomation: () => void
-  clearMasterAutomation: () => void
+  /** Add or replace an automation point at an explicit beat/value (lane drawing). */
+  writeAutomationPoint: (
+    target: AutomationTarget,
+    trackId: string | undefined,
+    beat: number,
+    value: number,
+  ) => void
+  /** Remove the automation point at `beat` from a lane. */
+  removeAutomationPoint: (
+    target: AutomationTarget,
+    trackId: string | undefined,
+    beat: number,
+  ) => void
+  /** Clear an entire automation lane. */
+  clearAutomationLane: (target: AutomationTarget, trackId?: string) => void
 }
 
 const listEffectOptions = (): MixerEffectOption[] =>
@@ -71,8 +94,25 @@ const laneMatchesTrack = (lane: AutomationLane, trackId: string): boolean =>
   (lane.target === 'trackGain' || lane.target === 'trackPan') && lane.trackId === trackId
 
 export function useMixer(controller: ComposerController): MixerViewModel {
-  const { mixer, project, transportState, positionBeats } = controller
+  const {
+    mixer,
+    project,
+    transportState,
+    positionBeats,
+    snap,
+    writeAutomationPoint: dispatchWritePoint,
+    removeAutomationPoint: dispatchRemovePoint,
+    clearAutomationLane: dispatchClearLane,
+  } = controller
   const view = useSyncExternalStore(mixer.subscribe, mixer.getView, mixer.getView)
+
+  // The project owns automation (persisted + serialized); the controller only
+  // mirrors it for playback. Memoize so a project with no lanes stays referentially
+  // stable across renders.
+  const automation = useMemo<readonly AutomationLane[]>(
+    () => project.automation ?? [],
+    [project.automation],
+  )
 
   const [availableEffects, setAvailableEffects] = useState<MixerEffectOption[]>(listEffectOptions)
   useEffect(
@@ -87,6 +127,13 @@ export function useMixer(controller: ComposerController): MixerViewModel {
     positionRef.current = positionBeats
   }, [positionBeats])
 
+  // Mirror the project's persisted automation into the controller so playback
+  // (applyAutomationAt) samples exactly the lanes the user has drawn and saved.
+  // This is the #44 mixer overlay — it never touches the frozen #97 note seam.
+  useEffect(() => {
+    mixer.setAutomation(automation)
+  }, [mixer, automation])
+
   // Drive automation from the transport: apply interpolated values while playing,
   // then release back to the manual snapshot values when playback stops/pauses.
   useEffect(() => {
@@ -97,7 +144,7 @@ export function useMixer(controller: ComposerController): MixerViewModel {
   }, [mixer, transportState])
 
   const tracks = useMemo<MixerTrackView[]>(() => {
-    const { snapshot, insertsByTrack, automation } = view
+    const { snapshot, insertsByTrack } = view
     return project.tracks.map((track) => {
       const state = snapshot.tracks[track.id]
       return {
@@ -112,11 +159,11 @@ export function useMixer(controller: ComposerController): MixerViewModel {
         automated: automation.some((lane) => laneMatchesTrack(lane, track.id)),
       }
     })
-  }, [view, project.tracks])
+  }, [view, project.tracks, automation])
 
   const masterAutomated = useMemo(
-    () => view.automation.some((lane) => lane.target === 'masterGain'),
-    [view.automation],
+    () => automation.some((lane) => lane.target === 'masterGain'),
+    [automation],
   )
 
   const effectLabels = useMemo(() => {
@@ -164,31 +211,38 @@ export function useMixer(controller: ComposerController): MixerViewModel {
   const writeTrackGainAutomation = useCallback(
     (trackId: string) => {
       const value = mixer.getSnapshot().tracks[trackId]?.gainDb ?? 0
-      mixer.writeAutomationPoint('trackGain', trackId, { beat: positionRef.current, value })
+      dispatchWritePoint('trackGain', trackId, { beat: positionRef.current, value })
     },
-    [mixer],
+    [mixer, dispatchWritePoint],
   )
   const writeTrackPanAutomation = useCallback(
     (trackId: string) => {
       const value = mixer.getSnapshot().tracks[trackId]?.pan ?? 0
-      mixer.writeAutomationPoint('trackPan', trackId, { beat: positionRef.current, value })
+      dispatchWritePoint('trackPan', trackId, { beat: positionRef.current, value })
     },
-    [mixer],
-  )
-  const clearTrackAutomation = useCallback(
-    (trackId: string) => {
-      mixer.clearAutomationLane('trackGain', trackId)
-      mixer.clearAutomationLane('trackPan', trackId)
-    },
-    [mixer],
+    [mixer, dispatchWritePoint],
   )
   const writeMasterGainAutomation = useCallback(() => {
-    mixer.writeAutomationPoint('masterGain', undefined, {
+    dispatchWritePoint('masterGain', undefined, {
       beat: positionRef.current,
       value: mixer.getSnapshot().master.gainDb,
     })
-  }, [mixer])
-  const clearMasterAutomation = useCallback(() => mixer.clearAutomationLane('masterGain'), [mixer])
+  }, [mixer, dispatchWritePoint])
+
+  const writeAutomationPoint = useCallback(
+    (target: AutomationTarget, trackId: string | undefined, beat: number, value: number) =>
+      dispatchWritePoint(target, trackId, { beat, value }),
+    [dispatchWritePoint],
+  )
+  const removeAutomationPoint = useCallback(
+    (target: AutomationTarget, trackId: string | undefined, beat: number) =>
+      dispatchRemovePoint(target, trackId, beat),
+    [dispatchRemovePoint],
+  )
+  const clearAutomationLane = useCallback(
+    (target: AutomationTarget, trackId?: string) => dispatchClearLane(target, trackId),
+    [dispatchClearLane],
+  )
 
   return {
     tracks,
@@ -197,6 +251,9 @@ export function useMixer(controller: ComposerController): MixerViewModel {
     availableEffects,
     effectName,
     positionBeats,
+    lengthBeats: project.lengthBeats,
+    snap,
+    automation,
     setTrackGain,
     setTrackPan,
     toggleSolo,
@@ -209,8 +266,9 @@ export function useMixer(controller: ComposerController): MixerViewModel {
     setLimiterThreshold,
     writeTrackGainAutomation,
     writeTrackPanAutomation,
-    clearTrackAutomation,
     writeMasterGainAutomation,
-    clearMasterAutomation,
+    writeAutomationPoint,
+    removeAutomationPoint,
+    clearAutomationLane,
   }
 }

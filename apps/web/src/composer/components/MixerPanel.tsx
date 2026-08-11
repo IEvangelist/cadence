@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import type { MixerViewModel } from '../hooks/useMixer'
+import { automationValueRange } from '../model/automation'
+import { AutomationLane } from './AutomationLane'
 
 interface MixerPanelProps {
   mixer: MixerViewModel
@@ -31,9 +33,12 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
   const {
     tracks,
     master,
-    masterAutomated,
     availableEffects,
     effectName,
+    positionBeats,
+    lengthBeats,
+    snap,
+    automation,
     setTrackGain,
     setTrackPan,
     toggleSolo,
@@ -46,10 +51,16 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
     setLimiterThreshold,
     writeTrackGainAutomation,
     writeTrackPanAutomation,
-    clearTrackAutomation,
     writeMasterGainAutomation,
-    clearMasterAutomation,
+    writeAutomationPoint,
+    removeAutomationPoint,
+    clearAutomationLane,
   } = mixer
+
+  const gainRange = automationValueRange('trackGain')
+  const panRange = automationValueRange('trackPan')
+  const pointsFor = (target: 'trackGain' | 'trackPan' | 'masterGain', trackId?: string) =>
+    automation.find((lane) => lane.target === target && lane.trackId === trackId)?.points ?? []
 
   // Per-track "add insert" selection (defaults to the first available effect).
   const [pendingInsert, setPendingInsert] = useState<Record<string, string>>({})
@@ -173,23 +184,38 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
 
             <div className="mixer-automation">
               <span className="mixer-automation-title">Automation</span>
-              <div className="mixer-automation-buttons">
-                <button type="button" className="btn btn-ghost" onClick={() => writeTrackGainAutomation(track.id)}>
-                  Gain @ playhead
-                </button>
-                <button type="button" className="btn btn-ghost" onClick={() => writeTrackPanAutomation(track.id)}>
-                  Pan @ playhead
-                </button>
-                {track.automated && (
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={() => clearTrackAutomation(track.id)}
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
+              <AutomationLane
+                label="Volume"
+                target="trackGain"
+                trackId={track.id}
+                points={pointsFor('trackGain', track.id)}
+                lengthBeats={lengthBeats}
+                snap={snap}
+                positionBeats={positionBeats}
+                min={gainRange.min}
+                max={gainRange.max}
+                formatValue={formatDb}
+                onAddAtPlayhead={() => writeTrackGainAutomation(track.id)}
+                onWritePoint={(beat, value) => writeAutomationPoint('trackGain', track.id, beat, value)}
+                onRemovePoint={(beat) => removeAutomationPoint('trackGain', track.id, beat)}
+                onClear={() => clearAutomationLane('trackGain', track.id)}
+              />
+              <AutomationLane
+                label="Pan"
+                target="trackPan"
+                trackId={track.id}
+                points={pointsFor('trackPan', track.id)}
+                lengthBeats={lengthBeats}
+                snap={snap}
+                positionBeats={positionBeats}
+                min={panRange.min}
+                max={panRange.max}
+                formatValue={formatPan}
+                onAddAtPlayhead={() => writeTrackPanAutomation(track.id)}
+                onWritePoint={(beat, value) => writeAutomationPoint('trackPan', track.id, beat, value)}
+                onRemovePoint={(beat) => removeAutomationPoint('trackPan', track.id, beat)}
+                onClear={() => clearAutomationLane('trackPan', track.id)}
+              />
             </div>
           </fieldset>
         ))}
@@ -235,16 +261,21 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
 
         <div className="mixer-automation">
           <span className="mixer-automation-title">Automation</span>
-          <div className="mixer-automation-buttons">
-            <button type="button" className="btn btn-ghost" onClick={writeMasterGainAutomation}>
-              Gain @ playhead
-            </button>
-            {masterAutomated && (
-              <button type="button" className="btn btn-ghost" onClick={clearMasterAutomation}>
-                Clear
-              </button>
-            )}
-          </div>
+          <AutomationLane
+            label="Master gain"
+            target="masterGain"
+            points={pointsFor('masterGain')}
+            lengthBeats={lengthBeats}
+            snap={snap}
+            positionBeats={positionBeats}
+            min={gainRange.min}
+            max={gainRange.max}
+            formatValue={formatDb}
+            onAddAtPlayhead={writeMasterGainAutomation}
+            onWritePoint={(beat, value) => writeAutomationPoint('masterGain', undefined, beat, value)}
+            onRemovePoint={(beat) => removeAutomationPoint('masterGain', undefined, beat)}
+            onClear={() => clearAutomationLane('masterGain')}
+          />
         </div>
       </fieldset>
 

@@ -23,6 +23,7 @@ import {
   initialState,
   selectedTrack as selectSelectedTrack,
 } from '../model/reducer'
+import type { AutomationPoint, AutomationTarget } from '../model/automation'
 import {
   type ProjectStore,
   type StoredProjectMeta,
@@ -159,6 +160,27 @@ export interface ComposerController {
   renameTrack: (trackId: string, name: string) => void
   setInstrument: (trackId: string, instrumentId: InstrumentId) => void
   toggleMute: (trackId: string) => void
+
+  /**
+   * Write (or replace) an automation point on a `(target, trackId)` lane. Master
+   * targets omit `trackId`. Dispatches a reducer action so the edit persists via
+   * autosave. INTERNAL to the app — not part of the frozen public
+   * {@link ComposerPublicApi} contract surface, and deliberately applied on the
+   * #44 mixer side, never the frozen #97 note-playback seam.
+   */
+  writeAutomationPoint: (
+    target: AutomationTarget,
+    trackId: string | undefined,
+    point: AutomationPoint,
+  ) => void
+  /** Remove the automation point at `beat` from a `(target, trackId)` lane. */
+  removeAutomationPoint: (
+    target: AutomationTarget,
+    trackId: string | undefined,
+    beat: number,
+  ) => void
+  /** Clear an entire automation lane. */
+  clearAutomationLane: (target: AutomationTarget, trackId?: string) => void
 
   setProjectName: (name: string) => void
   newProject: () => void
@@ -541,6 +563,22 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     [],
   )
 
+  const writeAutomationPoint = useCallback(
+    (target: AutomationTarget, trackId: string | undefined, point: AutomationPoint) =>
+      dispatch({ type: 'write-automation-point', target, trackId, point }),
+    [],
+  )
+  const removeAutomationPoint = useCallback(
+    (target: AutomationTarget, trackId: string | undefined, beat: number) =>
+      dispatch({ type: 'remove-automation-point', target, trackId, beat }),
+    [],
+  )
+  const clearAutomationLane = useCallback(
+    (target: AutomationTarget, trackId?: string) =>
+      dispatch({ type: 'clear-automation-lane', target, trackId }),
+    [],
+  )
+
   const setProjectName = useCallback(
     (name: string) => dispatch({ type: 'set-project-name', name }),
     [],
@@ -711,6 +749,9 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     renameTrack,
     setInstrument,
     toggleMute,
+    writeAutomationPoint,
+    removeAutomationPoint,
+    clearAutomationLane,
     setProjectName,
     newProject,
     loadDemo,

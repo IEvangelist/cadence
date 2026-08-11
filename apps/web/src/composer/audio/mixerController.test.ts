@@ -105,6 +105,29 @@ describe('mixerController (state-only)', () => {
     expect(mixer.getView().automation).toHaveLength(0)
   })
 
+  it('replaces the whole lane set via setAutomation (playback mirror)', () => {
+    const mixer = createMixerController()
+    mixer.writeAutomationPoint('trackGain', 't1', { beat: 0, value: -6 })
+    mixer.setAutomation([
+      { target: 'masterGain', points: [{ beat: 0, value: -2 }] },
+      { target: 'trackPan', trackId: 't2', points: [{ beat: 1, value: 0.5 }] },
+    ])
+    const view = mixer.getView().automation
+    expect(view).toEqual([
+      { target: 'masterGain', points: [{ beat: 0, value: -2 }] },
+      { target: 'trackPan', trackId: 't2', points: [{ beat: 1, value: 0.5 }] },
+    ])
+  })
+
+  it('clones lanes passed to setAutomation so later external edits do not leak in', () => {
+    const mixer = createMixerController()
+    const points = [{ beat: 0, value: -2 }]
+    const lanes = [{ target: 'masterGain' as const, points }]
+    mixer.setAutomation(lanes)
+    points.push({ beat: 4, value: 0 })
+    expect(mixer.getView().automation[0].points).toHaveLength(1)
+  })
+
   it('notifies subscribers on change and stops after unsubscribe', () => {
     const mixer = createMixerController()
     const listener = vi.fn()

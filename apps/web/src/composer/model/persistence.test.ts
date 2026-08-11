@@ -123,3 +123,46 @@ describe('migrateProject', () => {
     expect(() => migrateProject(null)).toThrow(ProjectParseError)
   })
 })
+
+describe('automation persistence', () => {
+  it('defaults a legacy document with no automation to an empty array', () => {
+    expect(migrateProject({ name: 'Legacy' }).automation).toEqual([])
+  })
+
+  it('preserves and sanitizes valid automation lanes', () => {
+    const project = migrateProject({
+      name: 'Automated',
+      tracks: [{ id: 't1', instrumentId: 'poly-synth', notes: [] }],
+      automation: [
+        { target: 'trackGain', trackId: 't1', points: [{ beat: 4, value: 0 }, { beat: 0, value: -6 }] },
+        { target: 'masterGain', points: [{ beat: 0, value: -2 }] },
+      ],
+    })
+    expect(project.automation).toEqual([
+      { target: 'trackGain', trackId: 't1', points: [{ beat: 0, value: -6 }, { beat: 4, value: 0 }] },
+      { target: 'masterGain', points: [{ beat: 0, value: -2 }] },
+    ])
+  })
+
+  it('drops malformed lanes and clamps out-of-range point values', () => {
+    const project = migrateProject({
+      automation: [
+        { target: 'bogus', trackId: 't1', points: [{ beat: 0, value: 1 }] }, // unknown target
+        { target: 'trackGain', points: [{ beat: 0, value: 0 }] }, // no trackId
+        { target: 'trackGain', trackId: 't1', points: [] }, // empty
+        { target: 'trackPan', trackId: 't1', points: [{ beat: 0, value: 9 }] }, // clamp -> 1
+      ],
+    })
+    expect(project.automation).toEqual([
+      { target: 'trackPan', trackId: 't1', points: [{ beat: 0, value: 1 }] },
+    ])
+  })
+
+  it('round-trips automation through serialize/parse', () => {
+    const project = migrateProject({
+      tracks: [{ id: 't1', instrumentId: 'poly-synth', notes: [] }],
+      automation: [{ target: 'trackPan', trackId: 't1', points: [{ beat: 2, value: 0.5 }] }],
+    })
+    expect(parseProject(serializeProject(project))).toEqual(project)
+  })
+})

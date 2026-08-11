@@ -1333,6 +1333,101 @@ select:focus-visible {
   flex-wrap: wrap;
 }
 
+/* ---- #112 follow-up: draw/edit parameter automation lanes (#44 mixer) ---- */
+.automation-lane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.automation-lane__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.automation-lane__label {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.automation-lane__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* The plot is a positioning context for the SVG graph + overlaid point buttons. */
+.automation-lane__plot {
+  position: relative;
+  width: 100%;
+  height: 3rem;
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.automation-lane__graph {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+.automation-lane__line {
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 2px;
+}
+
+.automation-lane__playhead {
+  stroke: var(--color-accent);
+  stroke-width: 1px;
+  opacity: 0.8;
+}
+
+/* Point markers are real ≥24px buttons so they are keyboard-reachable and hittable. */
+.automation-lane__point {
+  position: absolute;
+  min-width: 24px;
+  min-height: 24px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--color-primary);
+  border-radius: 50%;
+  background: var(--color-surface-raised);
+  cursor: pointer;
+}
+
+.automation-lane__point::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+
+.automation-lane__point:hover {
+  border-color: var(--color-accent);
+}
+
+.automation-lane__point:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.automation-lane__hint {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
+}
+
 .mixer-status {
   margin: 0;
   font-size: var(--font-size-xs);

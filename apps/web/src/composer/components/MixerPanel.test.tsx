@@ -38,6 +38,9 @@ function makeViewModel(overrides: Partial<MixerViewModel> = {}): MixerViewModel 
     ],
     effectName: (id) => (id === 'reverb' ? 'Studio Reverb' : id),
     positionBeats: 0,
+    lengthBeats: 8,
+    snap: 1,
+    automation: [],
     setTrackGain: vi.fn(),
     setTrackPan: vi.fn(),
     toggleSolo: vi.fn(),
@@ -50,9 +53,10 @@ function makeViewModel(overrides: Partial<MixerViewModel> = {}): MixerViewModel 
     setLimiterThreshold: vi.fn(),
     writeTrackGainAutomation: vi.fn(),
     writeTrackPanAutomation: vi.fn(),
-    clearTrackAutomation: vi.fn(),
     writeMasterGainAutomation: vi.fn(),
-    clearMasterAutomation: vi.fn(),
+    writeAutomationPoint: vi.fn(),
+    removeAutomationPoint: vi.fn(),
+    clearAutomationLane: vi.fn(),
     ...overrides,
   }
 }
@@ -128,26 +132,48 @@ describe('MixerPanel', () => {
     expect(masterStrip().getByRole('slider', { name: /Ceiling/ })).toBeDisabled()
   })
 
-  it('writes and clears automation at the playhead', () => {
+  it('adds automation points at the playhead for each lane', () => {
     const mixer = makeViewModel()
     render(<MixerPanel mixer={mixer} />)
-    const strip = leadStrip()
-    fireEvent.click(strip.getByRole('button', { name: 'Gain @ playhead' }))
-    fireEvent.click(strip.getByRole('button', { name: 'Pan @ playhead' }))
-    fireEvent.click(strip.getByRole('button', { name: 'Clear' }))
+    const lead = leadStrip()
+    fireEvent.click(
+      within(lead.getByRole('group', { name: 'Volume automation' })).getByRole('button', {
+        name: 'Add point',
+      }),
+    )
+    fireEvent.click(
+      within(lead.getByRole('group', { name: 'Pan automation' })).getByRole('button', {
+        name: 'Add point',
+      }),
+    )
     expect(mixer.writeTrackGainAutomation).toHaveBeenCalledWith('t1')
     expect(mixer.writeTrackPanAutomation).toHaveBeenCalledWith('t1')
-    expect(mixer.clearTrackAutomation).toHaveBeenCalledWith('t1')
 
-    fireEvent.click(masterStrip().getByRole('button', { name: 'Gain @ playhead' }))
+    fireEvent.click(
+      within(masterStrip().getByRole('group', { name: 'Master gain automation' })).getByRole(
+        'button',
+        { name: 'Add point' },
+      ),
+    )
     expect(mixer.writeMasterGainAutomation).toHaveBeenCalled()
   })
 
-  it('hides the track clear button when there is no automation', () => {
+  it('removes and clears points through the lane callbacks', () => {
+    const mixer = makeViewModel({
+      automation: [{ target: 'trackGain', trackId: 't1', points: [{ beat: 0, value: -6 }] }],
+    })
+    render(<MixerPanel mixer={mixer} />)
+    const volume = within(leadStrip().getByRole('group', { name: 'Volume automation' }))
+    fireEvent.click(volume.getByRole('button', { name: /Remove Volume point at beat 0/ }))
+    expect(mixer.removeAutomationPoint).toHaveBeenCalledWith('trackGain', 't1', 0)
+    fireEvent.click(volume.getByRole('button', { name: 'Clear Volume automation' }))
+    expect(mixer.clearAutomationLane).toHaveBeenCalledWith('trackGain', 't1')
+  })
+
+  it('hides a lane clear button when the lane has no points', () => {
     const mixer = makeViewModel()
     render(<MixerPanel mixer={mixer} />)
-    // Bass has automated:false → no Clear button in its strip.
-    const bass = within(screen.getByRole('group', { name: /Bass/ }))
-    expect(bass.queryByRole('button', { name: 'Clear' })).toBeNull()
+    const volume = within(leadStrip().getByRole('group', { name: 'Volume automation' }))
+    expect(volume.queryByRole('button', { name: /Clear/ })).toBeNull()
   })
 })
