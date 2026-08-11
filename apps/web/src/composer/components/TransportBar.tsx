@@ -74,7 +74,7 @@ export function TransportBar({ controller }: TransportBarProps) {
       </label>
 
       <output className="position" aria-label="Playhead position">
-        {beatsToBarsBeatsSixteenths(positionBeats)}
+        {beatsToBarsBeatsSixteenths(positionBeats, 4, 3)}
       </output>
     </div>
   )

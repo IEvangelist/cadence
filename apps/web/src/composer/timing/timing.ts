@@ -127,13 +127,23 @@ export const SNAP_OPTIONS = [
 /**
  * Format a beat position as Tone.js "Bars:Beats:Sixteenths" transport time so
  * scheduled events follow the audio clock and rescale with tempo changes.
+ *
+ * `sixteenthDecimals` is a DISPLAY-only convenience: when set, the sixteenth is
+ * rounded to that many decimals (e.g. the transport readout passes 3). The
+ * scheduler omits it and keeps full precision for sample-accurate Tone.js times.
  */
-export function beatsToBarsBeatsSixteenths(beats: number, beatsPerBar = 4): string {
+export function beatsToBarsBeatsSixteenths(
+  beats: number,
+  beatsPerBar = 4,
+  sixteenthDecimals?: number,
+): string {
   const totalSixteenths = Math.max(0, beats) * 4
   const sixteenthsPerBar = beatsPerBar * 4
   const bars = Math.floor(totalSixteenths / sixteenthsPerBar)
   const rem = totalSixteenths - bars * sixteenthsPerBar
   const beat = Math.floor(rem / 4)
   const sixteenth = rem - beat * 4
-  return `${bars}:${beat}:${sixteenth}`
+  const shown =
+    sixteenthDecimals === undefined ? sixteenth : Number(sixteenth.toFixed(sixteenthDecimals))
+  return `${bars}:${beat}:${shown}`
 }
