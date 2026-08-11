@@ -157,6 +157,7 @@ export interface ComposerController {
   exportProjectFile: () => string
   importProjectFile: (text: string, name?: string) => void
   exportWav: () => Promise<Uint8Array | null>
+  exportMp3: () => Promise<Uint8Array | null>
   shareSnapshot: () => ShareSnapshot
   /** File formats contributed through the plugin host (built-in + plugins). */
   formats: FormatContribution[]
@@ -532,6 +533,24 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
       return null
     }
   }, [options.audioRenderer, options.watermarkExports])
+  // MP3 mirrors WAV: same offline render, same pre-encode watermark, same
+  // entitlement gate. The encoder module (LAME) is lazy-imported so it only loads
+  // when MP3 is actually exported.
+  const exportMp3 = useCallback(async (): Promise<Uint8Array | null> => {
+    setStatus('Rendering audio…')
+    try {
+      const { renderProjectToMp3 } = await import('../formats/mp3Export')
+      const { bytes } = await renderProjectToMp3(projectRef.current, {
+        renderOffline: options.audioRenderer,
+        watermark: options.watermarkExports ?? true,
+      })
+      setStatus('Exported MP3')
+      return bytes
+    } catch {
+      setStatus("Couldn't render audio in this environment")
+      return null
+    }
+  }, [options.audioRenderer, options.watermarkExports])
   const shareSnapshot = useCallback((): ShareSnapshot => {
     const snapshot = createShareSnapshot(projectRef.current)
     setStatus(
@@ -616,6 +635,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     exportProjectFile,
     importProjectFile,
     exportWav,
+    exportMp3,
     shareSnapshot,
     formats,
     exportFormat,

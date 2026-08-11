@@ -6,15 +6,14 @@
  * AI gate ({@link AiEntitlementView} in `contract/ai.ts`): a published view that
  * turns the server-authoritative entitlement set into a single export decision.
  *
- * WAV is the only rendered-audio export (MP3 is intentionally unsupported, and
- * MIDI/MusicXML/project/plugin formats are not audio), so `wav` is currently the
- * sole export action; the seam stays action-shaped so new audio formats can join
- * without a new gating model.
+ * WAV and MP3 are the rendered-audio exports (MIDI/MusicXML/project/plugin
+ * formats are not audio), so `wav` and `mp3` are the export actions; the seam
+ * stays action-shaped so new audio formats can join without a new gating model.
  */
 import type { Entitlements } from '../../billing/entitlementsClient'
 
 /** Audio export actions whose output is entitlement-gated for the watermark. */
-export type ExportAction = 'wav'
+export type ExportAction = 'wav' | 'mp3'
 
 export interface ExportEntitlementView {
   /**

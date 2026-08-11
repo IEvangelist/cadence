@@ -16,6 +16,7 @@
     "e2e:install": "playwright install chromium"
   },
   "dependencies": {
+    "@breezystack/lamejs": "1.2.7",
     "@magenta/music": "1.23.1",
     "@tensorflow/tfjs": "2.8.6",
     "@tensorflow/tfjs-backend-webgl": "2.8.6",

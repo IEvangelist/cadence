@@ -10,8 +10,9 @@
  *    `Tone.Offline` (see `audio/offlineRender.ts`), while tests pass a tiny mock
  *    so the round-trip runs under jsdom/CI.
  *
- * MP3 is intentionally not supported: there is no well-maintained, exact-pinned
- * pure-JS encoder, so WAV (lossless) is the shipped audio format.
+ * WAV is the lossless option; MP3 export is a sibling module (`mp3Export.ts`)
+ * that reuses this same render → watermark → encode split (see
+ * {@link defaultRenderOffline}, which both formats share).
  */
 import { type Project } from '../model/project'
 import { beatsToSeconds } from '../timing/timing'
@@ -134,9 +135,10 @@ let cachedRenderer: OfflineRenderer | null = null
 
 /**
  * Lazily import the real Tone.Offline renderer so its Web-Audio dependency never
- * loads under jsdom/tests (where a mock renderer is injected instead).
+ * loads under jsdom/tests (where a mock renderer is injected instead). Shared by
+ * both the WAV and MP3 exporters so they render identically.
  */
-async function defaultRenderOffline(
+export async function defaultRenderOffline(
   project: Project,
   durationSeconds: number,
   sampleRate: number,
