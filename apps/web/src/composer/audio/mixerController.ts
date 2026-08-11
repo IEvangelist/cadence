@@ -51,6 +51,8 @@ export interface MixerController extends MixerContract {
   /** Write (or replace) an automation point at a beat for a target. */
   writeAutomationPoint(target: AutomationTarget, trackId: string | undefined, point: AutomationPoint): void
   clearAutomationLane(target: AutomationTarget, trackId?: string): void
+  /** Replace the whole automation set (mirrors the project document for playback). */
+  setAutomation(lanes: readonly AutomationLane[]): void
   /** Apply interpolated automation for `beat` to the graph (playback). */
   applyAutomationAt(beat: number): void
   /** Restore manual (snapshot) values to the graph after automated playback. */
@@ -261,6 +263,12 @@ export function createMixerController(deps: MixerControllerDeps = {}): MixerCont
     },
     clearAutomationLane(target, trackId) {
       lanes = lanes.filter((lane) => !(lane.target === target && lane.trackId === trackId))
+      commit()
+    },
+    setAutomation(next) {
+      // Replace the playback mirror wholesale; clone so external edits can't mutate
+      // our copy. The project (via the reducer) remains the source of truth.
+      lanes = next.map((lane) => ({ ...lane, points: [...lane.points] }))
       commit()
     },
     applyAutomationAt(beat) {

@@ -12,6 +12,14 @@ import {
   type Project,
   type Track,
 } from './project'
+import {
+  type AutomationPoint,
+  type AutomationTarget,
+  clearLane,
+  clearTrackLanes,
+  removeLanePoint,
+  writeLanePoint,
+} from './automation'
 import { quantizeBeat } from '../timing/timing'
 
 export interface ComposerState {
@@ -46,6 +54,9 @@ export type ComposerAction =
     }
   | { type: 'select-notes'; noteIds: string[]; additive?: boolean }
   | { type: 'clear-selection' }
+  | { type: 'write-automation-point'; target: AutomationTarget; trackId?: string; point: AutomationPoint }
+  | { type: 'remove-automation-point'; target: AutomationTarget; trackId?: string; beat: number }
+  | { type: 'clear-automation-lane'; target: AutomationTarget; trackId?: string }
 
 /** Smallest allowed note length in beats (a 64th note). */
 export const MIN_NOTE_DURATION = 1 / 16
@@ -135,8 +146,10 @@ export function composerReducer(
     case 'sync-remote': {
       // Adopt a converged project from a collaborator without disturbing this
       // editor's cursor: keep the selected track/notes when they still exist,
-      // otherwise fall back to the first track / drop stale note ids.
-      const project = action.project
+      // otherwise fall back to the first track / drop stale note ids. Automation
+      // is NOT carried by the CRDT binding yet, so preserve this editor's local
+      // lanes rather than letting a remote sync wipe them (single-user for now).
+      const project = { ...action.project, automation: state.project.automation }
       const selectedTrackId = project.tracks.some((t) => t.id === state.selectedTrackId)
         ? state.selectedTrackId
         : (project.tracks[0]?.id ?? '')
@@ -196,7 +209,12 @@ export function composerReducer(
           : state.selectedTrackId
       return {
         ...state,
-        project: { ...state.project, tracks },
+        project: {
+          ...state.project,
+          tracks,
+          // Drop any automation lanes that pointed at the removed track.
+          automation: clearTrackLanes(state.project.automation ?? [], action.trackId),
+        },
         selectedTrackId,
         selectedNoteIds:
           state.selectedTrackId === action.trackId ? [] : state.selectedNoteIds,
@@ -365,6 +383,46 @@ export function composerReducer(
 
     case 'clear-selection': {
       return { ...state, selectedNoteIds: [] }
+    }
+
+    case 'write-automation-point': {
+      return {
+        ...state,
+        project: {
+          ...state.project,
+          automation: writeLanePoint(
+            state.project.automation ?? [],
+            action.target,
+            action.trackId,
+            action.point,
+          ),
+        },
+      }
+    }
+
+    case 'remove-automation-point': {
+      return {
+        ...state,
+        project: {
+          ...state.project,
+          automation: removeLanePoint(
+            state.project.automation ?? [],
+            action.target,
+            action.trackId,
+            action.beat,
+          ),
+        },
+      }
+    }
+
+    case 'clear-automation-lane': {
+      return {
+        ...state,
+        project: {
+          ...state.project,
+          automation: clearLane(state.project.automation ?? [], action.target, action.trackId),
+        },
+      }
     }
   }
 }

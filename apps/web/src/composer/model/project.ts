@@ -5,6 +5,7 @@
  * cleanly to storage/MIDI and stays trivial to reason about and test. A real
  * database/backend can persist these same shapes later without a rewrite.
  */
+import type { AutomationLane } from './automation'
 
 /** MIDI note number, 0–127. Middle C (C4) is 60. */
 export type Pitch = number
@@ -62,10 +63,17 @@ export interface Project {
   lengthBeats: number
   loop: LoopRegion
   tracks: Track[]
+  /**
+   * Mixer/track parameter automation over the transport timeline (track volume,
+   * track pan, master gain). Optional and additive: legacy documents omit it and
+   * are migrated to `[]`. Applied on the #44 mixer side during playback, never on
+   * the note-playback seam.
+   */
+  automation?: AutomationLane[]
 }
 
 /** Current persistence schema version. Bump when the shape changes. */
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 /** Pulses-per-quarter used for MIDI export/import. */
 export const DEFAULT_PPQ = 480
@@ -182,6 +190,7 @@ export function createEmptyProject(id: string = newId('project')): Project {
     lengthBeats: BEATS_PER_BAR * 4,
     loop: { enabled: false, start: 0, end: BEATS_PER_BAR * 4 },
     tracks: [createTrack({ name: 'Synth', instrumentId: 'poly-synth' })],
+    automation: [],
   }
 }
 
@@ -229,5 +238,6 @@ export function createDemoProject(id: string = newId('project')): Project {
         color: TRACK_COLORS[1],
       }),
     ],
+    automation: [],
   }
 }

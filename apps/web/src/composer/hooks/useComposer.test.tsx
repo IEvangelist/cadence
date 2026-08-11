@@ -143,6 +143,26 @@ describe('useComposer', () => {
     expect(hook.result.current.project.tracks).toHaveLength(1)
   })
 
+  it('writes, removes, and clears automation points on the project', () => {
+    const { hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+    act(() =>
+      hook.result.current.writeAutomationPoint('trackGain', trackId, { beat: 0, value: -6 }),
+    )
+    act(() =>
+      hook.result.current.writeAutomationPoint('trackGain', trackId, { beat: 4, value: 0 }),
+    )
+    expect(hook.result.current.project.automation).toEqual([
+      { target: 'trackGain', trackId, points: [{ beat: 0, value: -6 }, { beat: 4, value: 0 }] },
+    ])
+
+    act(() => hook.result.current.removeAutomationPoint('trackGain', trackId, 0))
+    expect(hook.result.current.project.automation?.[0].points).toEqual([{ beat: 4, value: 0 }])
+
+    act(() => hook.result.current.clearAutomationLane('trackGain', trackId))
+    expect(hook.result.current.project.automation).toEqual([])
+  })
+
   it('updates, selects, and removes notes and previews pitches', () => {
     const { engine, hook } = setup()
     const trackId = hook.result.current.selectedTrackId

@@ -511,3 +511,115 @@ describe('selection', () => {
     expect(state.selectedNoteIds).toEqual([])
   })
 })
+
+
+describe('automation', () => {
+  it('writes a point into a new track-gain lane', () => {
+    const state = composerReducer(seed(), {
+      type: 'write-automation-point',
+      target: 'trackGain',
+      trackId: 'track_a',
+      point: { beat: 4, value: -6 },
+    })
+    expect(state.project.automation).toEqual([
+      { target: 'trackGain', trackId: 'track_a', points: [{ beat: 4, value: -6 }] },
+    ])
+  })
+
+  it('replaces a point at the same beat instead of duplicating it', () => {
+    let state = composerReducer(seed(), {
+      type: 'write-automation-point',
+      target: 'trackGain',
+      trackId: 'track_a',
+      point: { beat: 4, value: -6 },
+    })
+    state = composerReducer(state, {
+      type: 'write-automation-point',
+      target: 'trackGain',
+      trackId: 'track_a',
+      point: { beat: 4, value: 0 },
+    })
+    expect(state.project.automation?.[0].points).toEqual([{ beat: 4, value: 0 }])
+  })
+
+  it('clamps written values to the target range', () => {
+    const state = composerReducer(seed(), {
+      type: 'write-automation-point',
+      target: 'trackPan',
+      trackId: 'track_a',
+      point: { beat: 0, value: 5 },
+    })
+    expect(state.project.automation?.[0].points[0].value).toBe(1)
+  })
+
+  it('removes a single point and prunes the emptied lane', () => {
+    let state = composerReducer(seed(), {
+      type: 'write-automation-point',
+      target: 'masterGain',
+      point: { beat: 2, value: -3 },
+    })
+    state = composerReducer(state, {
+      type: 'remove-automation-point',
+      target: 'masterGain',
+      beat: 2,
+    })
+    expect(state.project.automation).toEqual([])
+  })
+
+  it('clears a whole lane', () => {
+    let state = composerReducer(seed(), {
+      type: 'write-automation-point',
+      target: 'trackGain',
+      trackId: 'track_a',
+      point: { beat: 0, value: -6 },
+    })
+    state = composerReducer(state, {
+      type: 'write-automation-point',
+      target: 'trackGain',
+      trackId: 'track_a',
+      point: { beat: 4, value: 0 },
+    })
+    state = composerReducer(state, {
+      type: 'clear-automation-lane',
+      target: 'trackGain',
+      trackId: 'track_a',
+    })
+    expect(state.project.automation).toEqual([])
+  })
+
+  it('drops a track lane when the track is removed', () => {
+    let state = composerReducer(seed(), {
+      type: 'add-track',
+      track: createTrack({ name: 'Bass' }, 'track_b'),
+    })
+    state = composerReducer(state, {
+      type: 'write-automation-point',
+      target: 'trackGain',
+      trackId: 'track_b',
+      point: { beat: 0, value: -6 },
+    })
+    state = composerReducer(state, {
+      type: 'write-automation-point',
+      target: 'masterGain',
+      point: { beat: 0, value: -2 },
+    })
+    state = composerReducer(state, { type: 'remove-track', trackId: 'track_b' })
+    expect(state.project.automation).toEqual([
+      { target: 'masterGain', points: [{ beat: 0, value: -2 }] },
+    ])
+  })
+
+  it('preserves local automation across a sync-remote that carries none', () => {
+    let state = composerReducer(seed(), {
+      type: 'write-automation-point',
+      target: 'masterGain',
+      point: { beat: 0, value: -4 },
+    })
+    const remote = createEmptyProject('p')
+    remote.tracks = [createTrack({ name: 'Synth' }, 'track_a')]
+    state = composerReducer(state, { type: 'sync-remote', project: remote })
+    expect(state.project.automation).toEqual([
+      { target: 'masterGain', points: [{ beat: 0, value: -4 }] },
+    ])
+  })
+})

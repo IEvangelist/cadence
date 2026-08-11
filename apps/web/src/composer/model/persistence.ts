@@ -18,6 +18,7 @@ import {
   type Track,
   newId,
 } from './project'
+import { sanitizeAutomation } from './automation'
 import { getInstrument } from '../instruments/registry'
 
 export class ProjectParseError extends Error {
@@ -122,6 +123,7 @@ export function migrateProject(data: unknown): Project {
     lengthBeats,
     loop: coerceLoop(raw.loop, lengthBeats),
     tracks: tracks.length > 0 ? tracks : coerceTrackless(),
+    automation: sanitizeAutomation(raw.automation),
   }
 }
 
