@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using Cadence.Data.Entities;
 using Microsoft.AspNetCore.Identity;
@@ -11,10 +12,36 @@ internal static class AuthTestExtensions
     /// <summary>A password that satisfies the default Identity complexity rules.</summary>
     public const string ValidPassword = "Passw0rd!";
 
-    /// <summary>Register a new local account (auto-signs the client in on success).</summary>
-    public static Task<HttpResponseMessage> RegisterAsync(
+    /// <summary>
+    /// POST the raw registration request and return the untouched response, so tests
+    /// can assert on the endpoint's actual contract (202 for new/existing, 400 for
+    /// invalid input). Does NOT sign the client in.
+    /// </summary>
+    public static Task<HttpResponseMessage> PostRegisterAsync(
         this HttpClient client, string email, string? displayName = null, string password = ValidPassword) =>
         client.PostAsJsonAsync("/api/auth/register", new RegisterRequest(email, password, displayName));
+
+    /// <summary>
+    /// Register a local account and leave the client authenticated. Registration no
+    /// longer signs in (#76: it returns a neutral 202 and defers sign-in to email
+    /// verification), so this helper completes the flow with a login and returns the
+    /// login response — which carries the auth cookie exactly as the old register
+    /// response did. This keeps the many "seed an authenticated user" call sites
+    /// working unchanged. If registration itself is rejected (e.g. a weak password),
+    /// that response is returned as-is without attempting to sign in.
+    /// </summary>
+    public static async Task<HttpResponseMessage> RegisterAsync(
+        this HttpClient client, string email, string? displayName = null, string password = ValidPassword)
+    {
+        var register = await client.PostRegisterAsync(email, displayName, password);
+        if (register.StatusCode != HttpStatusCode.Accepted)
+        {
+            return register;
+        }
+
+        register.Dispose();
+        return await client.LoginAsync(email, password);
+    }
 
     /// <summary>Sign in with a local account.</summary>
     public static Task<HttpResponseMessage> LoginAsync(

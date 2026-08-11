@@ -1,7 +1,6 @@
 using Cadence.Api;
 using Microsoft.AspNetCore.HttpOverrides;
 using Scalar.AspNetCore;
-using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,70 +10,10 @@ builder.AddServiceDefaults();
 // OpenAPI document generation.
 builder.Services.AddOpenApi();
 
-builder.Services.AddKeyedSingleton<PartitionedRateLimiter<string>>(
-    AuthEndpoints.MagicLinkSendEmailLimiterKey,
-    (services, _) =>
-    {
-        var configuration = services.GetRequiredService<IConfiguration>();
-        var permitLimit = configuration.GetValue("RateLimiting:MagicLinkSendEmail:PermitLimit", 3);
-        var window = TimeSpan.FromSeconds(configuration.GetValue("RateLimiting:MagicLinkSendEmail:WindowSeconds", 3600));
-        return PartitionedRateLimiter.Create<string, string>(partitionKey =>
-            RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = permitLimit,
-                Window = window,
-                QueueLimit = 0,
-            }));
-    });
-
-// Throttle auth entry points before they reach Identity. Magic-link verification
-// is keyed by target email because token guessing volume should be bounded per
-// victim address; send/login also receive IP-scoped middleware limits.
-builder.Services.AddRateLimiter(options =>
-{
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.AddPolicy(AuthEndpoints.MagicLinkSendRateLimitPolicy, context =>
-    {
-        var configuration = context.RequestServices.GetRequiredService<IConfiguration>();
-        // Proxy-resolved client IP (see UseForwardedHeaders below); ingress IP in prod
-        // without it. "unknown" only when no peer/XFF is present (e.g. in-proc tests).
-        var partitionKey = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = configuration.GetValue("RateLimiting:MagicLinkSend:PermitLimit", 5),
-            Window = TimeSpan.FromSeconds(configuration.GetValue("RateLimiting:MagicLinkSend:WindowSeconds", 60)),
-            QueueLimit = 0,
-        });
-    });
-    options.AddPolicy(AuthEndpoints.MagicLinkVerifyRateLimitPolicy, context =>
-    {
-        // Normalize the email so casing/whitespace variants (Victim@x vs victim@x)
-        // share one budget instead of each getting an independent 10/min window.
-        var email = context.Request.Query["email"].ToString();
-        var partitionKey = string.IsNullOrWhiteSpace(email)
-            ? "anonymous"
-            : email.Trim().ToLowerInvariant();
-        return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 10,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0,
-        });
-    });
-    options.AddPolicy(AuthEndpoints.LoginRateLimitPolicy, context =>
-    {
-        var configuration = context.RequestServices.GetRequiredService<IConfiguration>();
-        // Proxy-resolved client IP (see UseForwardedHeaders below); ingress IP in prod
-        // without it. "unknown" only when no peer/XFF is present (e.g. in-proc tests).
-        var partitionKey = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = configuration.GetValue("RateLimiting:Login:PermitLimit", 10),
-            Window = TimeSpan.FromSeconds(configuration.GetValue("RateLimiting:Login:WindowSeconds", 60)),
-            QueueLimit = 0,
-        });
-    });
-});
+// Throttle the auth entry points before they reach Identity. Backed by the
+// Aspire-referenced Redis when present so the limits are GLOBAL across Azure
+// Container Apps replicas (see CadenceRateLimitingExtensions / #75).
+builder.AddCadenceRateLimiting();
 
 // Postgres-backed persistence (skipped in the Testing environment, where the
 // test host registers an in-memory SQLite context instead).

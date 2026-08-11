@@ -16,6 +16,9 @@
     <!-- Aspire client integration: wires the Blob service client to the "blobs"
          resource (Azurite in development) for mix/stem storage. -->
     <PackageReference Include="Aspire.Azure.Storage.Blobs" />
+    <!-- Aspire client integration: registers IConnectionMultiplexer wired to the
+         "redis" resource, backing the auth rate limiters with a distributed store. -->
+    <PackageReference Include="Aspire.StackExchange.Redis" />
     <!-- External OAuth providers. -->
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.MicrosoftAccount" />

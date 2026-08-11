@@ -74,13 +74,20 @@ Create an OAuth app with each provider and set its **callback URL** to
 The API port is assigned by Aspire; check the AppHost dashboard. In production,
 swap `https://localhost:<api-port>` for the deployed API origin.
 
-## Magic-link delivery
+## Account email delivery
 
-The magic-link **sender is a seam** (`IMagicLinkSender`). The default
-`LoggingMagicLinkSender` writes the link to the logs — perfect for local dev and
+All account emails — magic-link sign-in links **and** registration verification
+links — go through a single seam (`IAccountEmailSender`). The default
+`LoggingAccountEmailSender` writes the link to the logs — perfect for local dev and
 integration tests, and it means no email provider or secret is required to try
 passwordless sign-in. Wire a real transactional-email implementation (SendGrid,
 Azure Communication Services, …) by registering it in `AddCadenceIdentity`.
+
+Sends are dispatched through a background queue (`IAccountEmailQueue` /
+`AccountEmailDispatcher`) rather than awaited inline on the request thread. This
+keeps the latency of the `register` and `magic-link` endpoints independent of
+whether the address exists — closing a timing side-channel that would otherwise
+leak account existence despite the neutral `202` responses.
 
 Magic-link tokens are high-entropy, opaque values produced by a dedicated
 **data-protector token provider** (`MagicLinkTokenProvider`) — deliberately *not*
@@ -98,6 +105,17 @@ and password sign-in — a denial-of-service lever that the opaque token + rate
 limiter already make unnecessary. A **successful** magic-link sign-in, conversely,
 resets the failed-attempt count (a legitimate recovery path) and rotates the stamp.
 
+> **Rate-limit backing store:** when the API is wired to Redis (the AppHost's
+> `redis` reference), the auth limiters — the per-email magic-link **send** cap
+> (3/hour) and the per-IP throttles — keep their counters in Redis via atomic
+> `INCR`/`PEXPIRE`, so a budget is **global across replicas** and survives a restart
+> rather than resetting per instance (which under ACA autoscale would make the cap
+> N× looser). If Redis is momentarily unreachable the security-sensitive **send**
+> cap fails **closed** (deny), while the coarse per-IP throttles fail **open** so a
+> Redis blip can't lock legitimate users out of sign-in. With no Redis reference
+> (unit tests, minimal local runs) the limiters fall back to equivalent in-process
+> counters, preserving current behavior.
+
 > **Delivery note — link prefetching:** because the link is verified on `GET`,
 > mail-security prefetchers (Outlook SafeLinks, AV scanners) may fetch the URL
 > before the user clicks and, with single-use tokens, consume it so the real click
@@ -111,6 +129,18 @@ exists, so it can't be used to enumerate registered emails. It **never creates a
 account** for an unknown address — otherwise an unauthenticated caller could
 mass-create accounts for arbitrary/victim emails (resource exhaustion, email
 squatting) or pre-stage an account for an external-login hijack.
+
+### Registration is neutral and verification-gated
+
+`POST /api/auth/register` is **non-enumerating**: it returns an identical
+`202 Accepted` — same status, same empty body, **no `Set-Cookie`** — whether the
+address is new or already registered, so a caller can't tell the two apart.
+Registration no longer signs the browser in. Instead the server emails a
+verification link (through the seam above); the account is activated only when the
+user follows it (`GET /api/auth/register/verify`), which then establishes the
+session. When the address already exists, the same-shaped `202` is returned and a
+"you already have an account" notice is emailed instead — again revealing nothing
+to the caller.
 
 ### External-login account linking
 
@@ -164,7 +194,8 @@ database required). The API remains the runtime startup that applies them.
 
 | Endpoint | Auth | Purpose |
 |---|---|---|
-| `POST /api/auth/register` | anon | Create a local account and sign in |
+| `POST /api/auth/register` | anon | Begin registration; emails a verification link (neutral `202`, no sign-in) |
+| `GET  /api/auth/register/verify` | anon | Consume a registration link, activate the account, and sign in |
 | `POST /api/auth/login` | anon | Local sign in |
 | `POST /api/auth/logout` | user | Sign out |
 | `GET  /api/auth/me` | user | Current identity summary (id, email, display name, tier) |

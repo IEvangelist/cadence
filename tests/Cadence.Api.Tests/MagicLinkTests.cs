@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Cadence.Api.Tests;
 
@@ -27,14 +28,15 @@ public class MagicLinkTests(CadenceApiFactory factory) : IClassFixture<CadenceAp
     {
         const string email = "magic.unknown-noacct@example.com";
         await using var factory = new CadenceApiFactory();
-        var before = factory.MagicLinks.SentCount;
+        var before = factory.AccountEmails.SentCount;
 
         var response = await factory.CreateClient().PostAsJsonAsync(
             "/api/auth/magic-link", new MagicLinkRequest(email));
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        await factory.WaitForEmailsAsync();
         Assert.False(await factory.UserExistsAsync(email), "no account should be created");
-        Assert.Equal(before, factory.MagicLinks.SentCount);
+        Assert.Equal(before, factory.AccountEmails.SentCount);
     }
 
     // A malformed request that binds the email to null ({"email":null} / {}) must
@@ -56,14 +58,15 @@ public class MagicLinkTests(CadenceApiFactory factory) : IClassFixture<CadenceAp
         const string email = "magic.existing@example.com";
         await using var factory = new CadenceApiFactory();
         await factory.CreateClient().RegisterAsync(email);
-        var before = factory.MagicLinks.SentCount;
+        var before = factory.AccountEmails.SentCount;
 
         var response = await factory.CreateClient().PostAsJsonAsync(
             "/api/auth/magic-link", new MagicLinkRequest(email));
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        Assert.Equal(before + 1, factory.MagicLinks.SentCount);
-        Assert.Equal(email, factory.MagicLinks.LastEmail);
+        await factory.WaitForEmailsAsync();
+        Assert.Equal(before + 1, factory.AccountEmails.SentCount);
+        Assert.Equal(email, factory.AccountEmails.LastEmail);
     }
 
     [Fact]
@@ -82,6 +85,39 @@ public class MagicLinkTests(CadenceApiFactory factory) : IClassFixture<CadenceAp
         Assert.Equal(HttpStatusCode.Accepted, unknown.StatusCode);
     }
 
+    // #77: the send timing side-channel is closed by deferring the existence-
+    // dependent work (lookup + token generation + network send) to the background
+    // dispatcher. This test proves the request path performs EQUIVALENT work for
+    // both a known and an unknown address: each enqueues exactly one job. The
+    // observable outcome still differs (only the known address is actually sent to),
+    // but that difference no longer shows up as request latency.
+    [Fact]
+    public async Task RequestMagicLink_KnownAndUnknown_EnqueueEquivalentWork()
+    {
+        await using var factory = new CadenceApiFactory();
+        await factory.CreateClient().RegisterAsync("magic.timing-known@example.com");
+        await factory.WaitForEmailsAsync();
+
+        var dispatcher = factory.Services.GetRequiredService<AccountEmailDispatcher>();
+
+        var beforeKnown = dispatcher.EnqueuedCount;
+        await factory.CreateClient().PostAsJsonAsync(
+            "/api/auth/magic-link", new MagicLinkRequest("magic.timing-known@example.com"));
+        var knownEnqueued = dispatcher.EnqueuedCount - beforeKnown;
+
+        var beforeUnknown = dispatcher.EnqueuedCount;
+        await factory.CreateClient().PostAsJsonAsync(
+            "/api/auth/magic-link", new MagicLinkRequest("magic.timing-unknown@example.com"));
+        var unknownEnqueued = dispatcher.EnqueuedCount - beforeUnknown;
+
+        Assert.Equal(1, knownEnqueued);
+        Assert.Equal(1, unknownEnqueued);
+
+        await factory.WaitForEmailsAsync();
+        Assert.Equal(1, factory.AccountEmails.SentCount);
+        Assert.Equal("magic.timing-known@example.com", factory.AccountEmails.LastEmail);
+    }
+
     // Issue A: the URL-delivered token must be a high-entropy opaque value, NOT a
     // short numeric TOTP code that is feasible to brute-force.
     [Fact]
@@ -92,7 +128,8 @@ public class MagicLinkTests(CadenceApiFactory factory) : IClassFixture<CadenceAp
         await factory.CreateClient().RegisterAsync(email);
 
         await factory.CreateClient().PostAsJsonAsync("/api/auth/magic-link", new MagicLinkRequest(email));
-        var token = factory.MagicLinks.LastToken!;
+        await factory.WaitForEmailsAsync();
+        var token = factory.AccountEmails.LastToken!;
 
         Assert.True(token.Length > 20, $"token should be long/opaque but was '{token}'");
         Assert.Contains(token, t => !char.IsDigit(t));
@@ -107,7 +144,8 @@ public class MagicLinkTests(CadenceApiFactory factory) : IClassFixture<CadenceAp
 
         var client = CreateNonRedirectingClient(factory);
         await client.PostAsJsonAsync("/api/auth/magic-link", new MagicLinkRequest(email));
-        var token = factory.MagicLinks.LastToken!;
+        await factory.WaitForEmailsAsync();
+        var token = factory.AccountEmails.LastToken!;
 
         var verify = await client.GetAsync(VerifyUrl(email, token));
 
@@ -130,7 +168,8 @@ public class MagicLinkTests(CadenceApiFactory factory) : IClassFixture<CadenceAp
 
         var client = CreateNonRedirectingClient(factory);
         await client.PostAsJsonAsync("/api/auth/magic-link", new MagicLinkRequest(email));
-        var token = factory.MagicLinks.LastToken!;
+        await factory.WaitForEmailsAsync();
+        var token = factory.AccountEmails.LastToken!;
         var url = VerifyUrl(email, token);
 
         var first = await client.GetAsync(url);
@@ -201,7 +240,8 @@ public class MagicLinkTests(CadenceApiFactory factory) : IClassFixture<CadenceAp
             AllowAutoRedirect = false,
         });
         await client.PostAsJsonAsync("/api/auth/magic-link", new MagicLinkRequest(email));
-        var token = shortLived.MagicLinks.LastToken!;
+        await shortLived.WaitForEmailsAsync();
+        var token = shortLived.AccountEmails.LastToken!;
 
         await Task.Delay(1000);
 

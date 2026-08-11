@@ -1,4 +1,5 @@
 using Cadence.Api.Billing;
+using Cadence.Api.RateLimiting;
 using Cadence.Data;
 using Cadence.Data.Entities;
 using Cadence.Data.Stems;
@@ -25,8 +26,8 @@ public sealed class CadenceApiFactory : WebApplicationFactory<Program>
 {
     private readonly SqliteConnection _connection = new("DataSource=:memory:");
 
-    /// <summary>Captures magic-link tokens so tests can complete the flow.</summary>
-    public CapturingMagicLinkSender MagicLinks { get; } = new();
+    /// <summary>Captures account emails (magic-link, verification) so tests can drive the flow.</summary>
+    public CapturingAccountEmailSender AccountEmails { get; } = new();
 
     /// <summary>
     /// Optional override for the magic-link token lifespan, so a test can force a
@@ -59,10 +60,32 @@ public sealed class CadenceApiFactory : WebApplicationFactory<Program>
     /// </summary>
     public IPasswordHasher<ApplicationUser>? PasswordHasher { get; init; }
 
+    /// <summary>
+    /// Optional distributed rate-limit counter store. Supplying one (typically a
+    /// single instance shared between two factories) makes the auth limiters use the
+    /// Redis-style limiter path with a GLOBAL budget, so a test can prove the
+    /// per-email cap is enforced across two independent API "replicas" (#75).
+    /// </summary>
+    public IRateLimitCounterStore? RateLimitCounterStore { get; init; }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
         _connection.Open();
+
+        // Registration now defers sign-in, so the RegisterAsync test seed authenticates
+        // through the (rate-limited) login endpoint. Under the in-process TestServer
+        // every client shares the "unknown" client IP, so without generous defaults the
+        // shared per-IP login/send budgets would aggregate across a class fixture's many
+        // seeds and start returning 429. These high defaults keep seeding unthrottled;
+        // the rate-limit tests set their own low limits via ConfigOverrides, which are
+        // applied AFTER these and therefore win.
+        builder.ConfigureAppConfiguration(config => config.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["RateLimiting:Login:PermitLimit"] = "1000000",
+            ["RateLimiting:MagicLinkSend:PermitLimit"] = "1000000",
+            ["RateLimiting:MagicLinkSendEmail:PermitLimit"] = "1000000",
+        }));
 
         if (ConfigOverrides is { Count: > 0 } overrides)
         {
@@ -72,7 +95,7 @@ public sealed class CadenceApiFactory : WebApplicationFactory<Program>
         builder.ConfigureServices(services =>
         {
             services.AddDbContext<CadenceDbContext>(options => options.UseSqlite(_connection));
-            services.AddSingleton<IMagicLinkSender>(MagicLinks);
+            services.AddSingleton<IAccountEmailSender>(AccountEmails);
             services.AddSingleton<IStemStorage>(StemStorage);
 
             if (MagicLinkTokenLifespan is { } lifespan)
@@ -92,12 +115,27 @@ public sealed class CadenceApiFactory : WebApplicationFactory<Program>
                 services.AddSingleton(passwordHasher);
             }
 
+            if (RateLimitCounterStore is { } counterStore)
+            {
+                services.RemoveAll<IRateLimitCounterStore>();
+                services.AddSingleton(counterStore);
+            }
+
             using var provider = services.BuildServiceProvider();
             using var scope = provider.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<CadenceDbContext>();
             db.Database.EnsureCreated();
         });
     }
+
+    /// <summary>
+    /// Wait for the background account-email dispatcher to drain, so tests can
+    /// deterministically assert on send side effects that the request path now
+    /// performs asynchronously (magic-link send and registration emails).
+    /// </summary>
+    public Task WaitForEmailsAsync(TimeSpan? timeout = null) =>
+        Services.GetRequiredService<AccountEmailDispatcher>()
+            .WaitForIdleAsync(timeout ?? TimeSpan.FromSeconds(10));
 
     protected override void Dispose(bool disposing)
     {

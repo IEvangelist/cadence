@@ -84,7 +84,15 @@ public class AppHostIntegrationTests
             password = "Passw0rd!",
             displayName = "Integration User",
         });
-        Assert.Equal(HttpStatusCode.OK, register.StatusCode);
+        // #76: registration is neutral (202, no cookie); sign-in is a separate step.
+        Assert.Equal(HttpStatusCode.Accepted, register.StatusCode);
+
+        var login = await client.PostAsJsonAsync("/api/auth/login", new
+        {
+            email = "integration.user@example.com",
+            password = "Passw0rd!",
+        });
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
 
         var create = await client.PostAsJsonAsync("/api/projects", new
         {
