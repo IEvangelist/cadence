@@ -1430,3 +1430,70 @@ select:focus-visible {
   font-size: var(--font-size-sm);
   color: var(--color-text-subtle);
 }
+
+/* Live MIDI hardware controls (#111). */
+.midi-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.midi-controls-unsupported {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-sm);
+}
+
+.midi-indicator {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-text-subtle);
+  flex: none;
+}
+
+.midi-indicator[data-state='connected'] {
+  background: var(--color-success);
+  border-color: var(--color-success);
+}
+
+.midi-indicator[data-state='recording'] {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+  animation: midi-pulse 1.2s ease-in-out infinite;
+}
+
+.midi-indicator[data-state='unsupported'] {
+  background: transparent;
+}
+
+@keyframes midi-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .midi-indicator[data-state='recording'] {
+    animation: none;
+  }
+}
+
+.midi-select {
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  max-width: 12rem;
+}
+
+.midi-quantize {
+  gap: var(--space-1);
+  white-space: nowrap;
+}
