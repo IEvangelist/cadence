@@ -35,6 +35,9 @@ vi.mock('tone', () => {
     FMSynth: Voice,
     AMSynth: Voice,
     MonoSynth: Voice,
+    DuoSynth: Voice,
+    PluckSynth: Voice,
+    MembraneSynth: Voice,
   }
 })
 
@@ -54,6 +57,29 @@ describe('SYNTH_VOICE_INSTRUMENTS', () => {
       expect(inst.group).toBeTruthy()
       expect(inst.description.length).toBeGreaterThan(0)
       expect(typeof inst.createVoice).toBe('function')
+      // Ids persist inside saved projects, so every one must be kebab-case: a
+      // rename or a stray capital/underscore would break project round-trip.
+      expect(inst.id).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    }
+  })
+
+  it('ships a large, professional catalog spanning many instrument families', () => {
+    // The expanded library is the whole point of this module — lock in both the
+    // breadth (families) and the depth (a generous minimum preset count).
+    expect(SYNTH_VOICE_INSTRUMENTS.length).toBeGreaterThanOrEqual(40)
+    const groups = new Set(SYNTH_VOICE_INSTRUMENTS.map((i) => i.group))
+    for (const family of [
+      'Keys',
+      'Guitars & Plucked',
+      'Bass',
+      'Strings',
+      'Brass & Winds',
+      'Leads',
+      'Pads',
+      'Mallets & Plucks',
+      'Percussion',
+    ]) {
+      expect(groups.has(family)).toBe(true)
     }
   })
 

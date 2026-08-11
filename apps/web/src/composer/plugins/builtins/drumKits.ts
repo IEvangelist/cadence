@@ -25,6 +25,8 @@ interface DrumKitOptions {
   octaves: number
   /** Root note the kick is tuned to. */
   kickNote: string
+  /** Kick amplitude decay in seconds — longer = a more sustained, sub-heavy boom. */
+  kickDecay?: number
   /** Noise colour used for the snare body. */
   snareNoise: 'white' | 'pink' | 'brown'
   /** Snare amplitude decay in seconds. */
@@ -40,7 +42,7 @@ function createKitVoice(
   const kick = new Tone.MembraneSynth({
     pitchDecay: opts.pitchDecay,
     octaves: opts.octaves,
-    envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.2 },
+    envelope: { attack: 0.001, decay: opts.kickDecay ?? 0.4, sustain: 0.01, release: 1.2 },
   }).connect(ctx.output)
   const snare = new Tone.NoiseSynth({
     noise: { type: opts.snareNoise },
@@ -104,6 +106,60 @@ export const DRUM_KIT_INSTRUMENTS: InstrumentContribution[] = [
         snareNoise: 'pink',
         snareDecay: 0.18,
         hatDecay: 0.06,
+      }),
+  },
+  {
+    id: 'drum-kit-rock',
+    name: 'Rock Kit',
+    kind: 'drum',
+    description: 'A big rock kit: punchy sustained kick, cracking snare, sizzling hats.',
+    polyphonic: true,
+    group: 'Drums',
+    createVoice: (ctx) =>
+      createKitVoice(ctx, {
+        pitchDecay: 0.04,
+        octaves: 5,
+        kickNote: 'C1',
+        kickDecay: 0.5,
+        snareNoise: 'white',
+        snareDecay: 0.22,
+        hatDecay: 0.05,
+      }),
+  },
+  {
+    id: 'drum-kit-jazz-brushes',
+    name: 'Jazz Brushes',
+    kind: 'drum',
+    description: 'A soft brushed jazz kit: gentle kick, brushed snare wash, delicate hats.',
+    polyphonic: true,
+    group: 'Drums',
+    createVoice: (ctx) =>
+      createKitVoice(ctx, {
+        pitchDecay: 0.02,
+        octaves: 3,
+        kickNote: 'C2',
+        kickDecay: 0.3,
+        snareNoise: 'pink',
+        snareDecay: 0.3,
+        hatDecay: 0.12,
+      }),
+  },
+  {
+    id: 'drum-kit-trap',
+    name: 'Trap Kit',
+    kind: 'drum',
+    description: 'A booming trap kit: long 808 sub kick, tight snappy snare, crisp hats.',
+    polyphonic: true,
+    group: 'Drums',
+    createVoice: (ctx) =>
+      createKitVoice(ctx, {
+        pitchDecay: 0.1,
+        octaves: 7,
+        kickNote: 'C1',
+        kickDecay: 0.8,
+        snareNoise: 'white',
+        snareDecay: 0.15,
+        hatDecay: 0.03,
       }),
   },
 ]

@@ -84,10 +84,18 @@ describe('migrateProject', () => {
       tracks: [
         { instrumentId: 'electric-piano', notes: [] },
         { instrumentId: 'drum-kit-808', notes: [] },
+        { instrumentId: 'grand-piano', notes: [] },
+        { instrumentId: 'nylon-guitar', notes: [] },
+        { instrumentId: 'saxophone', notes: [] },
+        { instrumentId: 'drum-kit-trap', notes: [] },
       ],
     })
     expect(project.tracks[0].instrumentId).toBe('electric-piano')
     expect(project.tracks[1].instrumentId).toBe('drum-kit-808')
+    expect(project.tracks[2].instrumentId).toBe('grand-piano')
+    expect(project.tracks[3].instrumentId).toBe('nylon-guitar')
+    expect(project.tracks[4].instrumentId).toBe('saxophone')
+    expect(project.tracks[5].instrumentId).toBe('drum-kit-trap')
   })
 
   it('clamps a corrupted tempo into the playable range', () => {
