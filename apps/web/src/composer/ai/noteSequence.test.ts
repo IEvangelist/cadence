@@ -8,6 +8,7 @@ import {
   stepsToBeats,
   velocityToMidi,
 } from './noteSequence'
+import type { NoteSequence } from './noteSequence'
 import type { SuggestedNote } from './types'
 
 describe('velocity mapping', () => {
@@ -25,6 +26,13 @@ describe('velocity mapping', () => {
 
   it('defaults missing MIDI velocity to a musical value', () => {
     expect(midiToVelocity(undefined)).toBeCloseTo(0.8, 5)
+  })
+
+  it('treats a protobuf-default velocity of 0 as unset → audible', () => {
+    // Regression: Magenta MusicRNN continuations emit `velocity: 0` for every
+    // generated note. Mapping that to 0 made "Generate → Accept" insert silent
+    // notes that never played back. 0 must resolve to the audible default.
+    expect(midiToVelocity(0)).toBeCloseTo(0.8, 5)
   })
 })
 
@@ -130,5 +138,24 @@ describe('round-trip: notes -> NoteSequence -> notes', () => {
     const tail = noteSequenceToNotes(seq, { originBeats: 0, fromStep: 8 })
     expect(tail).toHaveLength(1)
     expect(tail[0]).toMatchObject({ pitch: 64, start: 2 })
+  })
+
+  it('maps raw model output with velocity 0 to audible notes (regression)', () => {
+    // Simulates a Magenta MusicRNN continuation: quantized notes whose velocity
+    // field is the protobuf default (0). Every resulting note must be audible.
+    const magentaOut: NoteSequence = {
+      notes: [
+        { pitch: 60, quantizedStartStep: 0, quantizedEndStep: 4, velocity: 0 },
+        { pitch: 64, quantizedStartStep: 4, quantizedEndStep: 8, velocity: 0 },
+        { pitch: 67, quantizedStartStep: 8, quantizedEndStep: 12, velocity: 0 },
+      ],
+      quantizationInfo: { stepsPerQuarter: STEPS_PER_QUARTER },
+      totalQuantizedSteps: 12,
+    }
+    const notes = noteSequenceToNotes(magentaOut, { originBeats: 0 })
+    expect(notes).toHaveLength(3)
+    for (const note of notes) {
+      expect(note.velocity).toBeGreaterThan(0)
+    }
   })
 })

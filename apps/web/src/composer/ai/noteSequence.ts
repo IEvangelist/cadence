@@ -45,9 +45,18 @@ export function velocityToMidi(velocity: number): number {
   return clamp(Math.round(clamp(velocity, 0, 1) * 127), 1, 127)
 }
 
-/** Convert a MIDI 0–127 velocity back to normalized 0–1. */
+/**
+ * Convert a MIDI 0–127 velocity back to normalized 0–1.
+ *
+ * Magenta `NoteSequence` notes carry a protobuf-default `velocity: 0` when the
+ * model doesn't emit one — MusicRNN continuations do exactly this for every
+ * note — and MIDI velocity 0 conventionally means "unset"/note-off rather than
+ * an audible note at zero gain. Treat 0 (and null/undefined) as unset → an
+ * audible default so generated notes actually sound. Mirrors the outbound floor
+ * in {@link velocityToMidi}, which never emits below 1.
+ */
 export function midiToVelocity(velocity: number | undefined): number {
-  if (velocity == null) return 0.8
+  if (!velocity) return 0.8
   return clamp(velocity / 127, 0, 1)
 }
 
