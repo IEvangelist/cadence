@@ -97,6 +97,16 @@ export interface ComposerController {
   ) => void
   updateNote: (trackId: string, noteId: string, changes: Partial<Note>) => void
   removeNote: (trackId: string, noteId: string) => void
+  /**
+   * Quantize note starts toward `grid` by `strength` (0..1). Pass `noteIds` to
+   * quantize just those notes (the current selection); omit it to quantize every
+   * note in the track. INTERNAL to the app — not part of the frozen public
+   * {@link ComposerController} contract surface.
+   */
+  quantizeNotes: (
+    trackId: string,
+    options: { grid: number; strength: number; noteIds?: string[] },
+  ) => void
   selectNote: (noteId: string | null) => void
   previewNote: (pitch: number) => void
   /**
@@ -359,6 +369,20 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     (trackId: string, noteId: string) => dispatch({ type: 'remove-note', trackId, noteId }),
     [],
   )
+  const quantizeNotes = useCallback(
+    (
+      trackId: string,
+      options: { grid: number; strength: number; noteIds?: string[] },
+    ) =>
+      dispatch({
+        type: 'quantize-notes',
+        trackId,
+        grid: options.grid,
+        strength: options.strength,
+        noteIds: options.noteIds,
+      }),
+    [],
+  )
   const selectNote = useCallback(
     (noteId: string | null) =>
       dispatch(
@@ -568,6 +592,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     insertNotes,
     updateNote,
     removeNote,
+    quantizeNotes,
     selectNote,
     previewNote,
     revealRequest,

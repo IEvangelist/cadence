@@ -349,6 +349,77 @@ describe('notes', () => {
   })
 })
 
+describe('quantize-notes', () => {
+  function withNotes(): ComposerState {
+    let state = seed()
+    for (const note of [
+      createNote({ pitch: 60, start: 0.24, duration: 1 }, 'n1'),
+      createNote({ pitch: 62, start: 1.1, duration: 1 }, 'n2'),
+      createNote({ pitch: 64, start: 2.4, duration: 1 }, 'n3'),
+    ]) {
+      state = composerReducer(state, { type: 'add-note', trackId: 'track_a', note })
+    }
+    return state
+  }
+
+  it('snaps every note in the track to the grid at full strength', () => {
+    const state = composerReducer(withNotes(), {
+      type: 'quantize-notes',
+      trackId: 'track_a',
+      grid: 1,
+      strength: 1,
+    })
+    expect(state.project.tracks[0].notes.map((n) => n.start)).toEqual([0, 1, 2])
+  })
+
+  it('only moves the given notes when noteIds is provided', () => {
+    const state = composerReducer(withNotes(), {
+      type: 'quantize-notes',
+      trackId: 'track_a',
+      grid: 1,
+      strength: 1,
+      noteIds: ['n2'],
+    })
+    const [n1, n2, n3] = state.project.tracks[0].notes
+    expect(n1.start).toBeCloseTo(0.24)
+    expect(n2.start).toBe(1)
+    expect(n3.start).toBeCloseTo(2.4)
+  })
+
+  it('eases notes partway at intermediate strength', () => {
+    const state = composerReducer(withNotes(), {
+      type: 'quantize-notes',
+      trackId: 'track_a',
+      grid: 1,
+      strength: 0.5,
+    })
+    // n1: 0.24 -> nearest 0, half strength -> 0.12
+    expect(state.project.tracks[0].notes[0].start).toBeCloseTo(0.12)
+  })
+
+  it('is a no-op for a non-positive grid', () => {
+    const before = withNotes()
+    const after = composerReducer(before, {
+      type: 'quantize-notes',
+      trackId: 'track_a',
+      grid: 0,
+      strength: 1,
+    })
+    expect(after).toBe(before)
+  })
+
+  it('preserves note durations and ids', () => {
+    const state = composerReducer(withNotes(), {
+      type: 'quantize-notes',
+      trackId: 'track_a',
+      grid: 1,
+      strength: 1,
+    })
+    expect(state.project.tracks[0].notes.map((n) => n.id)).toEqual(['n1', 'n2', 'n3'])
+    expect(state.project.tracks[0].notes.every((n) => n.duration === 1)).toBe(true)
+  })
+})
+
 describe('insert-notes', () => {
   it('appends the whole batch and selects every inserted note', () => {
     const state = composerReducer(seed(), {

@@ -3,13 +3,18 @@ import { MAX_PITCH, MIN_PITCH } from '../model/project'
 import {
   DEFAULT_LAYOUT,
   PITCH_ROWS,
+  ZOOM_MAX,
+  ZOOM_MIN,
   beatToX,
   beatsToBarsBeatsSixteenths,
   beatsToSeconds,
+  clampZoom,
   noteRect,
   pitchToRow,
   playheadBeat,
+  quantizeBeat,
   rowToPitch,
+  scaleLayout,
   secondsPerBeat,
   secondsToBeats,
   snap,
@@ -48,6 +53,50 @@ describe('snap', () => {
     expect(snap(2.345, 0)).toBe(2.345)
     expect(snapFloor(2.345, 0)).toBe(2.345)
     expect(snapFloor(-1, 0)).toBe(0)
+  })
+})
+
+describe('quantizeBeat', () => {
+  it('lands exactly on the grid at full strength', () => {
+    expect(quantizeBeat(0.3, 0.25, 1)).toBe(0.25)
+    expect(quantizeBeat(0.4, 0.25, 1)).toBe(0.5)
+  })
+
+  it('leaves the beat untouched at zero strength', () => {
+    expect(quantizeBeat(0.37, 0.25, 0)).toBe(0.37)
+  })
+
+  it('eases partway at intermediate strength', () => {
+    // start 0.4 -> nearest grid 0 (grid=1), half strength -> 0.2
+    expect(quantizeBeat(0.4, 1, 0.5)).toBeCloseTo(0.2)
+  })
+
+  it('clamps strength and passes through when grid <= 0', () => {
+    expect(quantizeBeat(0.3, 0.25, 5)).toBe(0.25)
+    expect(quantizeBeat(1.23, 0)).toBe(1.23)
+  })
+})
+
+describe('zoom', () => {
+  it('clamps zoom into the supported range', () => {
+    expect(clampZoom(1)).toBe(1)
+    expect(clampZoom(100)).toBe(ZOOM_MAX)
+    expect(clampZoom(0)).toBe(ZOOM_MIN)
+    expect(clampZoom(Number.NaN)).toBe(1)
+  })
+
+  it('scales a base layout independently on each axis without mutating it', () => {
+    const scaled = scaleLayout(DEFAULT_LAYOUT, 2, 0.5)
+    expect(scaled.beatWidth).toBe(DEFAULT_LAYOUT.beatWidth * 2)
+    expect(scaled.rowHeight).toBe(DEFAULT_LAYOUT.rowHeight * 0.5)
+    // Base layout is the shared, stable reference — it must be untouched.
+    expect(DEFAULT_LAYOUT).toEqual({ beatWidth: 48, rowHeight: 16 })
+  })
+
+  it('clamps out-of-range zoom factors when scaling', () => {
+    const scaled = scaleLayout(DEFAULT_LAYOUT, 999, 0)
+    expect(scaled.beatWidth).toBe(DEFAULT_LAYOUT.beatWidth * ZOOM_MAX)
+    expect(scaled.rowHeight).toBe(DEFAULT_LAYOUT.rowHeight * ZOOM_MIN)
   })
 })
 
