@@ -428,6 +428,70 @@ select:focus-visible {
   overflow: hidden;
 }
 
+.pr-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  flex: none;
+  padding: 0 var(--space-1) var(--space-2);
+  margin-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.pr-tool-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.pr-tool-group + .pr-tool-group {
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--color-border);
+}
+
+.pr-tool-label {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pr-tool-sub {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
+}
+
+.pr-btn-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.pr-btn-cluster .btn-sm {
+  min-width: 1.6rem;
+}
+
+.pr-zoom-readout {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
+  min-width: 5.5rem;
+  text-align: right;
+}
+
+.pr-quantize-strength {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.pr-quantize-strength input[type='range'] {
+  width: 4.5rem;
+}
+
 .pr-scroll {
   display: flex;
   max-height: 60vh;
@@ -553,19 +617,33 @@ select:focus-visible {
 
 .pr-note-resize {
   position: absolute;
-  right: 0;
   top: 0;
-  width: 10px;
+  width: 9px;
   height: 100%;
   cursor: ew-resize;
+}
+
+.pr-note-resize-end {
+  right: 0;
   /* A visible grip so the resize (end) edge is easy to grab and read. */
   border-right: 3px solid rgba(255, 255, 255, 0.9);
   border-radius: 0 1px 1px 0;
 }
 
-.pr-note:hover .pr-note-resize,
-.pr-note.is-selected .pr-note-resize {
-  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.4));
+.pr-note-resize-start {
+  left: 0;
+  border-left: 3px solid rgba(255, 255, 255, 0.9);
+  border-radius: 1px 0 0 1px;
+}
+
+.pr-note:hover .pr-note-resize-end,
+.pr-note.is-selected .pr-note-resize-end {
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.45));
+}
+
+.pr-note:hover .pr-note-resize-start,
+.pr-note.is-selected .pr-note-resize-start {
+  background: linear-gradient(to left, transparent, rgba(255, 255, 255, 0.45));
 }
 
 .pr-playhead {
@@ -576,6 +654,69 @@ select:focus-visible {
   background: var(--color-accent);
   pointer-events: none;
   box-shadow: 0 0 6px var(--color-accent);
+}
+
+/* Velocity lane — a sibling of .pr-scroll whose scrollLeft is mirrored from the
+   grid (one-way) so its bars stay time-aligned with the notes above. */
+.pr-velocity {
+  display: flex;
+  flex: none;
+  height: 5rem;
+  margin-top: var(--space-2);
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+}
+
+.pr-velocity-gutter {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  flex: none;
+  width: 3.5rem;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--color-text-subtle);
+  background: var(--color-surface-raised);
+  border-right: 1px solid var(--color-border-strong);
+}
+
+.pr-velocity-track {
+  position: relative;
+  flex: 1 0 auto;
+  align-self: stretch;
+}
+
+.pr-vel-bar {
+  position: absolute;
+  bottom: 0;
+  min-height: 4px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.45);
+  border-radius: 1px 1px 0 0;
+  opacity: 0.85;
+  cursor: ns-resize;
+}
+
+.pr-vel-bar:hover {
+  opacity: 1;
+}
+
+.pr-vel-bar.is-selected {
+  outline: 2px solid var(--color-neutral-0);
+  box-shadow: 0 0 0 2px var(--color-accent);
+  opacity: 1;
+  z-index: 1;
+}
+
+.pr-vel-bar:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 1px;
 }
 
 .pr-footer {

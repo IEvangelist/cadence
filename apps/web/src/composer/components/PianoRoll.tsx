@@ -1,12 +1,23 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent,
+} from 'react'
 import { MAX_PITCH, MIN_PITCH, isBlackKey, pitchToName } from '../model/project'
 import { getInstrument, drumLabel } from '../instruments/registry'
 import { type ComposerController } from '../hooks/useComposer'
 import type { SuggestedNote } from '../ai/types'
 import {
   DEFAULT_LAYOUT,
+  ZOOM_STEP,
   beatToX,
+  clampZoom,
   noteRect,
+  scaleLayout,
   snap as snapBeat,
   snapFloor,
   xToBeat,
@@ -18,8 +29,9 @@ interface PianoRollProps {
   previewNotes?: SuggestedNote[]
 }
 
-interface Gesture {
-  mode: 'move' | 'resize'
+/** A drag on a note's body (move) or one of its two resize edges. */
+interface NoteGesture {
+  kind: 'move' | 'resize-end' | 'resize-start'
   noteId: string
   startX: number
   startY: number
@@ -28,8 +40,19 @@ interface Gesture {
   origDuration: number
 }
 
-const layout = DEFAULT_LAYOUT
+/** A vertical drag on a velocity-lane bar. */
+interface VelocityGesture {
+  kind: 'velocity'
+  noteId: string
+  laneTop: number
+  laneHeight: number
+}
+
+type Gesture = NoteGesture | VelocityGesture
+
 const clampPitch = (p: number): number => Math.min(MAX_PITCH, Math.max(MIN_PITCH, p))
+const clamp01 = (v: number): number => Math.min(1, Math.max(0, v))
+const round2 = (v: number): number => Math.round(v * 100) / 100
 const TOTAL_ROWS = MAX_PITCH - MIN_PITCH + 1
 
 /**
@@ -67,6 +90,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
     addNoteAt,
     updateNote,
     removeNote,
+    quantizeNotes,
     selectNote,
     previewNote,
     positionBeats,
@@ -87,10 +111,22 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
 
   const gridRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const velScrollRef = useRef<HTMLDivElement>(null)
+  const velLaneRef = useRef<HTMLDivElement>(null)
   const didAutoScrollRef = useRef(false)
   const gestureRef = useRef<Gesture | null>(null)
   const [caret, setCaret] = useState({ pitch: 60, beat: 0 })
   const [viewportRows, setViewportRows] = useState(0)
+
+  // Independent horizontal (time) and vertical (pitch) zoom. Both scale the pure
+  // DEFAULT_LAYOUT — the audio engine schedules by TIME only, so zoom is purely
+  // visual and never affects playback (#97-safe).
+  const [zoomX, setZoomX] = useState(1)
+  const [zoomY, setZoomY] = useState(1)
+  const layout = useMemo(() => scaleLayout(DEFAULT_LAYOUT, zoomX, zoomY), [zoomX, zoomY])
+
+  const [showVelocity, setShowVelocity] = useState(true)
+  const [quantizeStrength, setQuantizeStrength] = useState(1)
 
   const snapStep = snap > 0 ? snap : 1
   const width = project.lengthBeats * layout.beatWidth
@@ -122,32 +158,48 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
   // Keep live values reachable from the (mount-installed) window pointer
   // handlers without re-installing them on every render. The ref is written in
   // an effect, never during render, to satisfy the React Compiler rules.
-  const latest = useRef({ track, snap: snapStep, updateNote })
+  const latest = useRef({ track, snap: snapStep, updateNote, layout })
   useEffect(() => {
-    latest.current = { track, snap: snapStep, updateNote }
+    latest.current = { track, snap: snapStep, updateNote, layout }
   })
 
   useEffect(() => {
     const handleMove = (event: globalThis.PointerEvent) => {
       const gesture = gestureRef.current
-      const { track: t, snap: step, updateNote: update } = latest.current
+      const { track: t, snap: step, updateNote: update, layout: lay } = latest.current
       if (!gesture || !t) return
-      const dBeat = (event.clientX - gesture.startX) / layout.beatWidth
-      if (gesture.mode === 'move') {
+
+      if (gesture.kind === 'velocity') {
+        const velocity = clamp01(1 - (event.clientY - gesture.laneTop) / gesture.laneHeight)
+        update(t.id, gesture.noteId, { velocity: round2(velocity) })
+        return
+      }
+
+      const dBeat = (event.clientX - gesture.startX) / lay.beatWidth
+      if (gesture.kind === 'move') {
         // Ignore sub-threshold pointer travel so a click-to-select doesn't nudge.
         if (
           Math.abs(event.clientX - gesture.startX) < 3 &&
           Math.abs(event.clientY - gesture.startY) < 3
         )
           return
-        const dRows = Math.round((event.clientY - gesture.startY) / layout.rowHeight)
+        const dRows = Math.round((event.clientY - gesture.startY) / lay.rowHeight)
         update(t.id, gesture.noteId, {
           start: snapBeat(gesture.origStart + dBeat, step),
           pitch: clampPitch(gesture.origPitch - dRows),
         })
-      } else {
+      } else if (gesture.kind === 'resize-end') {
         update(t.id, gesture.noteId, {
           duration: Math.max(step, snapBeat(gesture.origDuration + dBeat, step)),
+        })
+      } else {
+        // resize-start: drag the left edge, holding the note's END fixed.
+        const origEnd = gesture.origStart + gesture.origDuration
+        const rawStart = Math.max(0, gesture.origStart + dBeat)
+        const newStart = Math.max(0, Math.min(snapBeat(rawStart, step), origEnd - step))
+        update(t.id, gesture.noteId, {
+          start: newStart,
+          duration: Math.max(step, origEnd - newStart),
         })
       }
     }
@@ -175,7 +227,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
     const observer = new ResizeObserver(measure)
     observer.observe(scroller)
     return () => observer.disconnect()
-  }, [])
+  }, [layout.rowHeight])
 
   // #98: on first render that has seeded notes, scroll the roll so those notes are
   // in view. The grid spans all 128 pitches, so it otherwise opens at the top (C8)
@@ -214,7 +266,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
     const starts = inserted.map((note) => note.start)
     const minStart = Math.min(...starts)
     // Lead-in margin of one beat so the region isn't flush against the edge.
-    scroller.scrollLeft = Math.max(0, beatToX(minStart) - layout.beatWidth)
+    scroller.scrollLeft = Math.max(0, beatToX(minStart, layout) - layout.beatWidth)
 
     const pitches = inserted.map((note) => note.pitch)
     const centerPitch = Math.round((Math.max(...pitches) + Math.min(...pitches)) / 2)
@@ -234,7 +286,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
     if (!note) return
     selectNote(noteId)
     beginGesture({
-      mode: 'move',
+      kind: 'move',
       noteId,
       startX: event.clientX,
       startY: event.clientY,
@@ -244,13 +296,18 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
     })
   }
 
-  const startResize = (event: PointerEvent, noteId: string): void => {
+  const startResize = (
+    event: PointerEvent,
+    noteId: string,
+    edge: 'start' | 'end',
+  ): void => {
     if (!track) return
     event.stopPropagation()
     const note = track.notes.find((n) => n.id === noteId)
     if (!note) return
+    selectNote(noteId)
     beginGesture({
-      mode: 'resize',
+      kind: edge === 'start' ? 'resize-start' : 'resize-end',
       noteId,
       startX: event.clientX,
       startY: event.clientY,
@@ -258,6 +315,18 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
       origPitch: note.pitch,
       origDuration: note.duration,
     })
+  }
+
+  const startVelocity = (event: PointerEvent, noteId: string): void => {
+    if (!track) return
+    event.stopPropagation()
+    const lane = velLaneRef.current
+    if (!lane) return
+    const rect = lane.getBoundingClientRect()
+    selectNote(noteId)
+    const velocity = clamp01(1 - (event.clientY - rect.top) / rect.height)
+    updateNote(track.id, noteId, { velocity: round2(velocity) })
+    beginGesture({ kind: 'velocity', noteId, laneTop: rect.top, laneHeight: rect.height })
   }
 
   const addAtPoint = (event: PointerEvent): void => {
@@ -270,8 +339,99 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
     previewNote(pitch)
   }
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+  const zoomTime = (factor: number): void => setZoomX((z) => clampZoom(z * factor))
+  const zoomPitch = (factor: number): void => setZoomY((z) => clampZoom(z * factor))
+  const resetZoom = (): void => {
+    setZoomX(1)
+    setZoomY(1)
+  }
+
+  const runQuantize = (): void => {
     if (!track) return
+    const noteIds = selectedNoteIds.length > 0 ? selectedNoteIds : undefined
+    quantizeNotes(track.id, { grid: snapStep, strength: quantizeStrength, noteIds })
+  }
+
+  // Keep the velocity lane horizontally aligned with the grid: mirror the grid's
+  // scrollLeft onto the (overflow-hidden) velocity scroller. One-way, so there is
+  // no scroll feedback loop, and the lane has no scrollbar of its own.
+  const syncVelocityScroll = (): void => {
+    const grid = scrollRef.current
+    const vel = velScrollRef.current
+    if (grid && vel) vel.scrollLeft = grid.scrollLeft
+  }
+
+  // Nudge/resize the selected note by a grid step from the keyboard. Returns true
+  // when the key was consumed so the caret handler below is skipped.
+  const nudgeSelected = (event: ReactKeyboardEvent<HTMLDivElement>): boolean => {
+    if (!track || !selectedNote) return false
+    const step = snapStep
+    switch (event.key) {
+      case 'ArrowLeft':
+        event.preventDefault()
+        if (event.shiftKey) {
+          updateNote(track.id, selectedNote.id, {
+            duration: Math.max(step, selectedNote.duration - step),
+          })
+        } else {
+          updateNote(track.id, selectedNote.id, {
+            start: Math.max(0, selectedNote.start - step),
+          })
+        }
+        return true
+      case 'ArrowRight':
+        event.preventDefault()
+        if (event.shiftKey) {
+          updateNote(track.id, selectedNote.id, {
+            duration: selectedNote.duration + step,
+          })
+        } else {
+          updateNote(track.id, selectedNote.id, { start: selectedNote.start + step })
+        }
+        return true
+      case 'ArrowUp': {
+        event.preventDefault()
+        const pitch = clampPitch(selectedNote.pitch + 1)
+        updateNote(track.id, selectedNote.id, { pitch })
+        previewNote(pitch)
+        return true
+      }
+      case 'ArrowDown': {
+        event.preventDefault()
+        const pitch = clampPitch(selectedNote.pitch - 1)
+        updateNote(track.id, selectedNote.id, { pitch })
+        previewNote(pitch)
+        return true
+      }
+      case 'Escape':
+        event.preventDefault()
+        selectNote(null)
+        return true
+      default:
+        return false
+    }
+  }
+
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    if (!track) return
+
+    // Zoom shortcuts (work whether or not a note is selected).
+    if (event.key === '+' || event.key === '=') {
+      event.preventDefault()
+      if (event.shiftKey) zoomPitch(ZOOM_STEP)
+      else zoomTime(ZOOM_STEP)
+      return
+    }
+    if (event.key === '-' || event.key === '_') {
+      event.preventDefault()
+      if (event.shiftKey) zoomPitch(1 / ZOOM_STEP)
+      else zoomTime(1 / ZOOM_STEP)
+      return
+    }
+
+    // A selected note captures the arrows for precise move/resize.
+    if (selectedNote && nudgeSelected(event)) return
+
     switch (event.key) {
       case 'ArrowUp':
         event.preventDefault()
@@ -307,6 +467,21 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
     }
   }
 
+  const handleVelocityKey = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    noteId: string,
+    velocity: number,
+  ): void => {
+    if (!track) return
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      updateNote(track.id, noteId, { velocity: round2(clamp01(velocity + 0.05)) })
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      updateNote(track.id, noteId, { velocity: round2(clamp01(velocity - 0.05)) })
+    }
+  }
+
   const noteLabel = (pitch: number, start: number): string => {
     const name = (isDrum && drumLabel(pitch)) || pitchToName(pitch)
     return `${name} at beat ${start}`
@@ -321,10 +496,118 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
   } as CSSProperties
 
   const playing = transportState !== 'stopped'
+  const quantizeLabel =
+    selectedNoteIds.length > 0 ? 'Quantize selection' : 'Quantize all'
 
   return (
     <section className="piano-roll" aria-label="Piano roll editor">
-      <div className="pr-scroll" ref={scrollRef}>
+      <div className="pr-toolbar" role="toolbar" aria-label="Piano roll editing controls">
+        <div className="pr-tool-group" role="group" aria-label="Zoom">
+          <span className="pr-tool-label" aria-hidden="true">
+            Zoom
+          </span>
+          <div className="pr-btn-cluster">
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => zoomTime(1 / ZOOM_STEP)}
+              aria-label="Zoom out horizontally (time)"
+              title="Zoom out — time (−)"
+            >
+              −
+            </button>
+            <span className="pr-tool-sub" aria-hidden="true">
+              Time
+            </span>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => zoomTime(ZOOM_STEP)}
+              aria-label="Zoom in horizontally (time)"
+              title="Zoom in — time (+)"
+            >
+              +
+            </button>
+          </div>
+          <div className="pr-btn-cluster">
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => zoomPitch(1 / ZOOM_STEP)}
+              aria-label="Zoom out vertically (pitch)"
+              title="Zoom out — pitch (Shift −)"
+            >
+              −
+            </button>
+            <span className="pr-tool-sub" aria-hidden="true">
+              Pitch
+            </span>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => zoomPitch(ZOOM_STEP)}
+              aria-label="Zoom in vertically (pitch)"
+              title="Zoom in — pitch (Shift +)"
+            >
+              +
+            </button>
+          </div>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={resetZoom}
+            aria-label="Reset zoom"
+            title="Reset zoom"
+          >
+            Reset
+          </button>
+          <output className="pr-zoom-readout" aria-label="Current zoom">
+            {Math.round(zoomX * 100)}% × {Math.round(zoomY * 100)}%
+          </output>
+        </div>
+
+        <div className="pr-tool-group" role="group" aria-label="Quantize">
+          <span className="pr-tool-label" aria-hidden="true">
+            Quantize
+          </span>
+          <label className="field pr-quantize-strength">
+            <span className="pr-tool-sub">Strength</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={quantizeStrength}
+              onChange={(event) => setQuantizeStrength(Number(event.target.value))}
+              aria-label="Quantize strength"
+            />
+            <span className="field-suffix">{Math.round(quantizeStrength * 100)}%</span>
+          </label>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={runQuantize}
+            disabled={!track || track.notes.length === 0}
+            aria-label={`${quantizeLabel} to the current snap grid`}
+          >
+            {quantizeLabel}
+          </button>
+        </div>
+
+        <div className="pr-tool-group" role="group" aria-label="Velocity">
+          <button
+            type="button"
+            className={`btn btn-sm${showVelocity ? ' is-active' : ''}`}
+            onClick={() => setShowVelocity((v) => !v)}
+            aria-pressed={showVelocity}
+            aria-label="Toggle velocity lane"
+          >
+            Velocity lane
+          </button>
+        </div>
+      </div>
+
+      <div className="pr-scroll" ref={scrollRef} onScroll={syncVelocityScroll}>
         <div className="pr-keys" aria-hidden="true" style={{ height }}>
           {Array.from({ length: visibleRows }, (_, row) => {
             const pitch = topPitch - row
@@ -344,7 +627,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
           ref={gridRef}
           className="pr-grid"
           role="application"
-          aria-label="Note grid. Use arrow keys to move the caret, Enter to add a note, Delete to remove the selected note."
+          aria-label="Note grid. Use arrow keys to move the caret, Enter to add a note, Delete to remove the selected note. With a note selected, arrow keys nudge it and Shift+Left/Right resize it. Press + or - to zoom."
           tabIndex={0}
           style={gridStyle}
           onKeyDown={handleKeyDown}
@@ -383,9 +666,14 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
                 onClick={() => selectNote(note.id)}
               >
                 <span
-                  className="pr-note-resize"
+                  className="pr-note-resize pr-note-resize-start"
                   aria-hidden="true"
-                  onPointerDown={(event) => startResize(event, note.id)}
+                  onPointerDown={(event) => startResize(event, note.id, 'start')}
+                />
+                <span
+                  className="pr-note-resize pr-note-resize-end"
+                  aria-hidden="true"
+                  onPointerDown={(event) => startResize(event, note.id, 'end')}
                 />
               </button>
             )
@@ -418,6 +706,37 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
         </div>
       </div>
 
+      {showVelocity && (
+        <div className="pr-velocity" ref={velScrollRef} role="group" aria-label="Velocity lane">
+          <div className="pr-velocity-gutter" aria-hidden="true">
+            Vel
+          </div>
+          <div className="pr-velocity-track" ref={velLaneRef} style={{ minWidth: width }}>
+            {track?.notes.map((note) => {
+              const selected = selectedSet.has(note.id)
+              return (
+                <button
+                  key={note.id}
+                  type="button"
+                  className={`pr-vel-bar${selected ? ' is-selected' : ''}`}
+                  style={{
+                    left: beatToX(note.start, layout),
+                    width: Math.max(4, layout.beatWidth * 0.35),
+                    height: `${note.velocity * 100}%`,
+                    background: track.color,
+                  }}
+                  aria-label={`Velocity for ${noteLabel(note.pitch, note.start)}: ${Math.round(
+                    note.velocity * 127,
+                  )}`}
+                  onPointerDown={(event) => startVelocity(event, note.id)}
+                  onKeyDown={(event) => handleVelocityKey(event, note.id, note.velocity)}
+                />
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="pr-footer">
         {selectedNote ? (
           <label className="field">
@@ -439,8 +758,8 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
           </label>
         ) : (
           <p className="pr-hint">
-            Click the grid to add a note, or focus it and press Enter. Drag to move, drag the
-            right edge to resize.
+            Click the grid to add a note, or focus it and press Enter. Drag to move, drag either
+            edge to resize. Select a note and use arrow keys for precise nudges.
           </p>
         )}
       </div>

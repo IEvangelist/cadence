@@ -18,6 +18,39 @@ export interface GridLayout {
 
 export const DEFAULT_LAYOUT: GridLayout = { beatWidth: 48, rowHeight: 16 }
 
+/**
+ * Zoom bounds shared by the horizontal (time) and vertical (pitch) piano-roll
+ * zoom. Kept here — with {@link scaleLayout} — so the geometry stays pure and the
+ * UI, keyboard shortcuts, and tests all agree on the same limits/steps.
+ */
+export const ZOOM_MIN = 0.5
+export const ZOOM_MAX = 4
+/** Multiplicative step applied by the zoom-in/out affordances. */
+export const ZOOM_STEP = 1.25
+
+/** Clamp a zoom multiplier into [{@link ZOOM_MIN}, {@link ZOOM_MAX}]. */
+export function clampZoom(zoom: number): number {
+  if (!Number.isFinite(zoom)) return 1
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom))
+}
+
+/**
+ * Scale a base {@link GridLayout} by independent horizontal/vertical zoom
+ * factors. Both factors are clamped, so callers can pass raw user input. The base
+ * is never mutated — a fresh layout is returned — so {@link DEFAULT_LAYOUT} stays
+ * the shared, stable reference the audio-neutral geometry depends on.
+ */
+export function scaleLayout(
+  base: GridLayout,
+  zoomX: number,
+  zoomY: number,
+): GridLayout {
+  return {
+    beatWidth: base.beatWidth * clampZoom(zoomX),
+    rowHeight: base.rowHeight * clampZoom(zoomY),
+  }
+}
+
 /** Total number of pitch rows rendered (inclusive of both ends). */
 export const PITCH_ROWS = MAX_PITCH - MIN_PITCH + 1
 
@@ -46,6 +79,19 @@ export function snap(beat: number, grid: number): number {
 export function snapFloor(beat: number, grid: number): number {
   if (grid <= 0) return Math.max(0, beat)
   return Math.max(0, Math.floor(beat / grid) * grid)
+}
+
+/**
+ * Quantize a beat toward its nearest grid division by `strength` (0..1). A
+ * strength of 1 lands exactly on the grid (like {@link snap}); 0 leaves the beat
+ * untouched; values between ease the note partway, preserving human feel. Used by
+ * the reducer's `quantize-notes` transition.
+ */
+export function quantizeBeat(beat: number, grid: number, strength = 1): number {
+  if (grid <= 0) return Math.max(0, beat)
+  const amount = Math.min(1, Math.max(0, strength))
+  const target = snap(beat, grid)
+  return Math.max(0, beat + (target - beat) * amount)
 }
 
 /**

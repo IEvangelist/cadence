@@ -12,6 +12,7 @@ import {
   type Project,
   type Track,
 } from './project'
+import { quantizeBeat } from '../timing/timing'
 
 export interface ComposerState {
   project: Project
@@ -36,6 +37,13 @@ export type ComposerAction =
   | { type: 'insert-notes'; trackId: string; notes: Note[] }
   | { type: 'update-note'; trackId: string; noteId: string; changes: Partial<Note> }
   | { type: 'remove-note'; trackId: string; noteId: string }
+  | {
+      type: 'quantize-notes'
+      trackId: string
+      grid: number
+      strength: number
+      noteIds?: string[]
+    }
   | { type: 'select-notes'; noteIds: string[]; additive?: boolean }
   | { type: 'clear-selection' }
 
@@ -312,6 +320,39 @@ export function composerReducer(
           })),
         },
         selectedNoteIds: state.selectedNoteIds.filter((id) => id !== action.noteId),
+      }
+    }
+
+    case 'quantize-notes': {
+      // Snap note starts toward the chosen grid by `strength` (0..1). When
+      // `noteIds` is given only those notes move (quantize the selection);
+      // otherwise every note in the track is quantized. Durations are left
+      // untouched so this is a pure timing nudge — the audio path is unaffected
+      // beyond the usual reschedule that follows any note-data change.
+      const grid = action.grid
+      if (grid <= 0) return state
+      const only = action.noteIds ? new Set(action.noteIds) : null
+      let end = state.project.lengthBeats
+      const tracks = mapTrack(state.project, action.trackId, (t) => ({
+        ...t,
+        notes: t.notes.map((n) => {
+          if (only && !only.has(n.id)) return n
+          const next = sanitizeNote({
+            ...n,
+            start: quantizeBeat(n.start, grid, action.strength),
+          })
+          end = lengthForNoteEnd(end, next.start + next.duration)
+          return next
+        }),
+      }))
+      return {
+        ...state,
+        project: {
+          ...state.project,
+          lengthBeats: end,
+          loop: loopForLength(state.project.loop, end),
+          tracks,
+        },
       }
     }
 
