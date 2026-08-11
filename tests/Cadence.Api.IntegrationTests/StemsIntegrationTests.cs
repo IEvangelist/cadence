@@ -52,8 +52,16 @@ public class StemsIntegrationTests
             password = "Passw0rd!",
             displayName = "Stems User",
         });
-        Assert.Equal(HttpStatusCode.OK, register.StatusCode);
-        var me = await register.Content.ReadFromJsonAsync<MeResponse>();
+        // #76: registration is neutral (202, no cookie); sign in separately.
+        Assert.Equal(HttpStatusCode.Accepted, register.StatusCode);
+
+        var login = await client.PostAsJsonAsync("/api/auth/login", new
+        {
+            email = "stems.integration@example.com",
+            password = "Passw0rd!",
+        });
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var me = await login.Content.ReadFromJsonAsync<MeResponse>();
         Assert.Equal("Free", me!.Tier);
 
         var mix = CreateMixWav();
