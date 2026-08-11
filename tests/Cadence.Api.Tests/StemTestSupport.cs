@@ -64,25 +64,27 @@ internal sealed class ThrowingStemSeparator : IStemSeparator
 }
 
 /// <summary>
-/// Builds throwaway SQLite-backed <see cref="CadenceDbContext"/> instances that
-/// share one in-memory connection, so multiple contexts see the same schema and
-/// rows within a single test (mirroring <see cref="CadenceApiFactory"/>).
+/// Builds throwaway SQLite-backed <see cref="CadenceDbContext"/> instances over a
+/// uniquely-named, shared-cache, in-memory database, so multiple contexts see the
+/// same schema and rows within a single test (mirroring <see cref="CadenceApiFactory"/>)
+/// without contending on one connection object.
 /// </summary>
 internal sealed class StemDbHarness : IDisposable
 {
-    private readonly SqliteConnection _connection;
+    private readonly string _connectionString;
+    private readonly SqliteConnection _keepAlive;
 
     public StemDbHarness()
     {
-        _connection = new SqliteConnection("DataSource=:memory:");
-        _connection.Open();
+        _connectionString = SqliteTestDatabase.NewConnectionString();
+        _keepAlive = SqliteTestDatabase.OpenKeepAlive(_connectionString);
         using var ctx = CreateContext();
         ctx.Database.EnsureCreated();
     }
 
-    /// <summary>A fresh context over the shared connection.</summary>
+    /// <summary>A fresh context over the shared in-memory database.</summary>
     public CadenceDbContext CreateContext() =>
-        new(new DbContextOptionsBuilder<CadenceDbContext>().UseSqlite(_connection).Options);
+        new(new DbContextOptionsBuilder<CadenceDbContext>().UseSqlite(_connectionString).Options);
 
     /// <summary>Insert an owner user so job foreign keys resolve.</summary>
     public async Task SeedOwnerAsync(string ownerId)
@@ -92,7 +94,7 @@ internal sealed class StemDbHarness : IDisposable
         await db.SaveChangesAsync();
     }
 
-    public void Dispose() => _connection.Dispose();
+    public void Dispose() => _keepAlive.Dispose();
 }
 
 /// <summary>Synthesizes small PCM/WAV mixes for the DSP and pipeline tests.</summary>

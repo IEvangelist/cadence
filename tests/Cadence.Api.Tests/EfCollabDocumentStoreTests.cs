@@ -18,20 +18,20 @@ public sealed class EfCollabDocumentStoreTests : IDisposable
     private const string OwnerId = "owner-1";
     private const string ProjectId = "project-1";
 
-    private readonly SqliteConnection _connection;
+    private readonly SqliteConnection _keepAlive;
     private readonly ServiceProvider _provider;
     private readonly EfCollabDocumentStore _store;
 
     public EfCollabDocumentStoreTests()
     {
-        // One open connection keeps the in-memory schema alive across the scopes the
-        // store creates per operation, mirroring how the app resolves a scoped
-        // DbContext from the singleton relay.
-        _connection = new SqliteConnection("DataSource=:memory:");
-        _connection.Open();
+        // A uniquely-named shared-cache in-memory database (kept alive by the keeper
+        // connection) lets the store's per-operation scopes each open their own
+        // connection over one schema, instead of contending on a single connection.
+        var connectionString = SqliteTestDatabase.NewConnectionString();
+        _keepAlive = SqliteTestDatabase.OpenKeepAlive(connectionString);
 
         var services = new ServiceCollection();
-        services.AddDbContext<CadenceDbContext>(options => options.UseSqlite(_connection));
+        services.AddDbContext<CadenceDbContext>(options => options.UseSqlite(connectionString));
         _provider = services.BuildServiceProvider();
 
         using var scope = _provider.CreateScope();
@@ -124,6 +124,6 @@ public sealed class EfCollabDocumentStoreTests : IDisposable
     public void Dispose()
     {
         _provider.Dispose();
-        _connection.Dispose();
+        _keepAlive.Dispose();
     }
 }

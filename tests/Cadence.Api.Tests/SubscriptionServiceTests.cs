@@ -12,14 +12,14 @@ namespace Cadence.Api.Tests;
 /// </summary>
 public sealed class SubscriptionServiceTests : IDisposable
 {
-    private readonly SqliteConnection _connection;
+    private readonly SqliteConnection _keepAlive;
     private readonly DbContextOptions<CadenceDbContext> _options;
 
     public SubscriptionServiceTests()
     {
-        _connection = new SqliteConnection("DataSource=:memory:");
-        _connection.Open();
-        _options = new DbContextOptionsBuilder<CadenceDbContext>().UseSqlite(_connection).Options;
+        var connectionString = SqliteTestDatabase.NewConnectionString();
+        _keepAlive = SqliteTestDatabase.OpenKeepAlive(connectionString);
+        _options = new DbContextOptionsBuilder<CadenceDbContext>().UseSqlite(connectionString).Options;
         using var db = new CadenceDbContext(_options);
         db.Database.EnsureCreated();
     }
@@ -167,5 +167,5 @@ public sealed class SubscriptionServiceTests : IDisposable
         Assert.Equal(SubscriptionTier.Free, sub.Tier);
     }
 
-    public void Dispose() => _connection.Dispose();
+    public void Dispose() => _keepAlive.Dispose();
 }
