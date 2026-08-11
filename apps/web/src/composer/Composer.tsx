@@ -14,6 +14,7 @@ import { MixerPanel } from './components/MixerPanel'
 import { PluginsPanel } from './components/PluginsPanel'
 import { CollapsiblePanel } from './components/CollapsiblePanel'
 import { PianoRoll } from './components/PianoRoll'
+import { QuickStartGallery } from './components/QuickStartGallery'
 import { PresenceBar } from './components/PresenceBar'
 import { ShareProjectButton } from './components/ShareProjectButton'
 import {
@@ -122,6 +123,16 @@ export function Composer({
             onToggle={panels.toggle}
           >
             <TrackPanel controller={controller} />
+          </CollapsiblePanel>
+          <CollapsiblePanel
+            id="quickStarts"
+            title="Quick Starts"
+            open={panels.isOpen('quickStarts')}
+            onToggle={panels.toggle}
+          >
+            <QuickStartGallery
+              onLoad={(template) => controller.loadProjectSnapshot(template.build())}
+            />
           </CollapsiblePanel>
           <CollapsiblePanel
             id="assistant"

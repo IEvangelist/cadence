@@ -119,6 +119,20 @@ export interface ComposerController {
   newProject: () => void
   loadDemo: () => void
   /**
+   * Load a fully-formed in-memory {@link Project} (e.g. a built-in "house dub"
+   * quick-start template) as a NEW project. INTERNAL to the app — not part of the
+   * frozen public {@link ComposerController} contract surface.
+   *
+   * This reuses the existing `load-project` reducer path (same self-healing
+   * length/loop as file/MIDI import) rather than inventing a parallel loader, and
+   * is deliberately audio-neutral: it touches neither the engine nor the audio
+   * subscribe effect (#97). It stamps a fresh project id so autosave treats the
+   * template as a new document, and bumps the note-reveal request so the piano
+   * roll scrolls the loaded arrangement into view (#98/#101), leaving it
+   * immediately playable.
+   */
+  loadProjectSnapshot: (project: Project) => void
+  /**
    * Adopt a project converged from a remote collaborator (Yjs CRDT). Unlike
    * {@link loadProject} this preserves the local cursor selection when it is
    * still valid, so live edits from peers don't yank the caret around.
@@ -406,6 +420,22 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     dispatch({ type: 'load-project', project: createDemoProject(newId('project')) })
     setStatus('Loaded demo')
   }, [])
+  const loadProjectSnapshot = useCallback((incoming: Project) => {
+    // Stamp a fresh id so autosave stores the template as a NEW document instead
+    // of clobbering whatever was last saved under the template's own id.
+    const project = { ...incoming, id: newId('project') }
+    dispatch({ type: 'load-project', project })
+    // `load-project` selects the first track; reveal ITS notes so the roll scrolls
+    // the freshly loaded arrangement into view (reuses the #101 reveal machinery).
+    const revealNotes = project.tracks[0]?.notes ?? []
+    if (revealNotes.length > 0) {
+      setRevealRequest((prev) => ({
+        noteIds: revealNotes.map((note) => note.id),
+        token: prev.token + 1,
+      }))
+    }
+    setStatus(`Loaded “${project.name}”`)
+  }, [])
   const applyRemoteProject = useCallback((project: Project) => {
     dispatch({ type: 'sync-remote', project })
   }, [])
@@ -550,6 +580,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     setProjectName,
     newProject,
     loadDemo,
+    loadProjectSnapshot,
     applyRemoteProject,
     saveProject,
     loadProject,

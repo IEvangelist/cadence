@@ -200,6 +200,38 @@ describe('useComposer', () => {
     expect(hook.result.current.project.name).toBe('Untitled')
   })
 
+  it('loads an in-memory project snapshot (quick-start template) via the reveal path', () => {
+    const { hook } = setup()
+    const tokenBefore = hook.result.current.revealRequest.token
+    const snapshot: Project = {
+      ...createEmptyProject('template_src'),
+      name: 'Midnight Tape',
+      tracks: [
+        {
+          id: 'tpl_track',
+          name: 'Rhodes',
+          instrumentId: 'rhodes',
+          muted: false,
+          color: '#abc',
+          notes: [
+            { id: 'tpl_n1', pitch: 60, start: 0, duration: 1, velocity: 0.8 },
+            { id: 'tpl_n2', pitch: 64, start: 1, duration: 1, velocity: 0.8 },
+          ],
+        },
+      ],
+    }
+    act(() => hook.result.current.loadProjectSnapshot(snapshot))
+    // Loaded as a NEW document (fresh id, not the template's own id).
+    expect(hook.result.current.project.id).not.toBe('template_src')
+    expect(hook.result.current.project.name).toBe('Midnight Tape')
+    expect(hook.result.current.project.tracks).toHaveLength(1)
+    expect(hook.result.current.project.tracks[0].notes).toHaveLength(2)
+    // The first track's notes are revealed so the roll scrolls them into view.
+    expect(hook.result.current.revealRequest.noteIds).toEqual(['tpl_n1', 'tpl_n2'])
+    expect(hook.result.current.revealRequest.token).toBe(tokenBefore + 1)
+    expect(hook.result.current.status).toContain('Midnight Tape')
+  })
+
   it('autosaves changes and can reload them', async () => {
     const { store, hook } = setup()
     const trackId = hook.result.current.selectedTrackId
