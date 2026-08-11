@@ -60,12 +60,13 @@ function context(): InstrumentVoiceContext {
 describe('DRUM_KIT_INSTRUMENTS', () => {
   it('contributes uniquely-identified drum kits grouped under Drums', () => {
     const ids = DRUM_KIT_INSTRUMENTS.map((i) => i.id)
-    expect(ids.length).toBeGreaterThan(0)
+    expect(ids.length).toBeGreaterThanOrEqual(4)
     expect(new Set(ids).size).toBe(ids.length)
     for (const inst of DRUM_KIT_INSTRUMENTS) {
       expect(inst.kind).toBe('drum')
       expect(inst.group).toBe('Drums')
       expect(typeof inst.createVoice).toBe('function')
+      expect(inst.id).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
     }
   })
 

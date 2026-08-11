@@ -26,6 +26,33 @@ describe('INSTRUMENTS registry', () => {
     expect(kinds.has('synth')).toBe(true)
     expect(kinds.has('drum')).toBe(true)
   })
+
+  it('exposes a large, grouped built-in catalog', () => {
+    // The Studio Pro library grew the built-ins into a broad, professional
+    // palette; guard both the size and that every entry is picker-groupable.
+    const instruments = listInstruments()
+    expect(instruments.length).toBeGreaterThanOrEqual(40)
+    for (const inst of instruments) {
+      expect(inst.group).toBeTruthy()
+    }
+  })
+
+  it('resolves representative ids from each added family to themselves', () => {
+    // These ids persist inside saved projects, so each must resolve back to
+    // itself (not fall through to the poly-synth default).
+    for (const id of [
+      'grand-piano',
+      'nylon-guitar',
+      'upright-bass',
+      'violin',
+      'trumpet',
+      'vibraphone',
+      'timpani',
+      'drum-kit-trap',
+    ]) {
+      expect(getInstrument(id).id).toBe(id)
+    }
+  })
 })
 
 describe('getInstrument', () => {
