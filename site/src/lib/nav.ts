@@ -14,4 +14,5 @@ export const docsNav: readonly DocLink[] = [
   { title: 'Self-hosting & deploy', path: '/docs/self-hosting/' },
   { title: 'Authentication', path: '/docs/auth/' },
   { title: 'Versioning policy', path: '/docs/versioning/' },
+  { title: 'Acknowledgements', path: '/docs/acknowledgements/' },
 ];
