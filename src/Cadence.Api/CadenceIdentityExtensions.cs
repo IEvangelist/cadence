@@ -21,6 +21,15 @@ public static class CadenceIdentityExtensions
     private static readonly string[] KnownExternalProviders =
         ["GitHub", "Google", "Microsoft", MockExternalDefaults.Scheme];
 
+    /// <summary>
+    /// Configuration key controlling the auth cookies' <c>SameSite</c> attribute
+    /// (<c>Lax</c>/<c>None</c>/<c>Strict</c>). Absent =&gt; today's same-origin
+    /// default of <see cref="SameSiteMode.Lax"/>. Set to <c>None</c> to make the
+    /// cookie flow on cross-site requests (the API hosted on a different site than
+    /// the SPA) — a deploy-time toggle rather than a code change.
+    /// </summary>
+    public const string CookieSameSiteConfigKey = "Auth:Cookie:SameSite";
+
     /// <summary>The external provider names Cadence recognizes (for the SPA).</summary>
     public static IReadOnlyList<string> ExternalProviderNames => KnownExternalProviders;
 
@@ -57,10 +66,16 @@ public static class CadenceIdentityExtensions
         services.AddSingleton<IAccountEmailQueue>(sp => sp.GetRequiredService<AccountEmailDispatcher>());
         services.AddHostedService(sp => sp.GetRequiredService<AccountEmailDispatcher>());
 
-        // Outside Development/Testing (both served over plain HTTP by the test host
-        // and local dev), always mark the auth cookies Secure so they are never
-        // emitted over an unencrypted hop (e.g. a TLS-terminating proxy).
-        var securePolicy = ResolveCookieSecurePolicy(
+        // Cookie topology is configuration-driven so cross-site hosting (the SPA on
+        // a different site than the API) is a deploy-time toggle rather than a code
+        // change. When unset this resolves to today's same-origin default:
+        // SameSite=Lax with the environment-derived secure policy below. Outside
+        // Development/Testing (both served over plain HTTP by the test host and local
+        // dev) the auth cookies are always marked Secure so they are never emitted
+        // over an unencrypted hop (e.g. a TLS-terminating proxy); a SameSite=None
+        // cookie is additionally forced Secure in EVERY environment (browser rule).
+        var (cookieSameSite, cookieSecurePolicy) = ResolveCookiePolicy(
+            builder.Configuration[CookieSameSiteConfigKey],
             builder.Environment.IsDevelopment(),
             builder.Environment.IsEnvironment("Testing"));
 
@@ -74,8 +89,8 @@ public static class CadenceIdentityExtensions
             {
                 options.Cookie.Name = "cadence.auth";
                 options.Cookie.HttpOnly = true;
-                options.Cookie.SameSite = SameSiteMode.Lax;
-                options.Cookie.SecurePolicy = securePolicy;
+                options.Cookie.SameSite = cookieSameSite;
+                options.Cookie.SecurePolicy = cookieSecurePolicy;
                 options.SlidingExpiration = true;
                 options.ExpireTimeSpan = TimeSpan.FromDays(14);
                 // The API is called by a SPA: answer with status codes, never HTML redirects.
@@ -86,8 +101,8 @@ public static class CadenceIdentityExtensions
             {
                 options.Cookie.Name = "cadence.external";
                 options.Cookie.HttpOnly = true;
-                options.Cookie.SameSite = SameSiteMode.Lax;
-                options.Cookie.SecurePolicy = securePolicy;
+                options.Cookie.SameSite = cookieSameSite;
+                options.Cookie.SecurePolicy = cookieSecurePolicy;
                 options.ExpireTimeSpan = TimeSpan.FromMinutes(10);
             });
 
@@ -122,6 +137,54 @@ public static class CadenceIdentityExtensions
         isDevelopment || isTesting
             ? CookieSecurePolicy.SameAsRequest
             : CookieSecurePolicy.Always;
+
+    /// <summary>
+    /// Resolve the auth cookies' <see cref="SameSiteMode"/> and
+    /// <see cref="CookieSecurePolicy"/> from the (optional) configured SameSite value
+    /// (<see cref="CookieSameSiteConfigKey"/>) and the current environment. When the
+    /// value is absent the result is today's same-origin default:
+    /// <see cref="SameSiteMode.Lax"/> paired with the environment-derived secure
+    /// policy (see <see cref="ResolveCookieSecurePolicy"/>).
+    /// <para>
+    /// Hard browser rule: a <see cref="SameSiteMode.None"/> (cross-site) cookie is
+    /// silently <em>dropped</em> by Chrome/Firefox/Safari unless it is also marked
+    /// <c>Secure</c>. So <c>None</c> forces <see cref="CookieSecurePolicy.Always"/>
+    /// in <em>every</em> environment, overriding the
+    /// <see cref="CookieSecurePolicy.SameAsRequest"/> that Development/Testing would
+    /// otherwise use — otherwise cross-site auth would break the moment it is enabled.
+    /// </para>
+    /// </summary>
+    public static (SameSiteMode SameSite, CookieSecurePolicy SecurePolicy) ResolveCookiePolicy(
+        string? configuredSameSite, bool isDevelopment, bool isTesting)
+    {
+        var sameSite = ParseSameSite(configuredSameSite);
+        var securePolicy = ResolveCookieSecurePolicy(isDevelopment, isTesting);
+
+        if (sameSite is SameSiteMode.None)
+        {
+            securePolicy = CookieSecurePolicy.Always;
+        }
+
+        return (sameSite, securePolicy);
+    }
+
+    /// <summary>
+    /// Parse the configured SameSite value (<c>Lax</c>/<c>None</c>/<c>Strict</c>,
+    /// case-insensitive), defaulting to <see cref="SameSiteMode.Lax"/> when absent.
+    /// An unrecognized value is an operator misconfiguration and fails fast.
+    /// </summary>
+    private static SameSiteMode ParseSameSite(string? configuredSameSite) =>
+        string.IsNullOrWhiteSpace(configuredSameSite)
+            ? SameSiteMode.Lax
+            : configuredSameSite.Trim().ToLowerInvariant() switch
+            {
+                "lax" => SameSiteMode.Lax,
+                "none" => SameSiteMode.None,
+                "strict" => SameSiteMode.Strict,
+                _ => throw new InvalidOperationException(
+                    $"Configuration '{CookieSameSiteConfigKey}' has unsupported value " +
+                    $"'{configuredSameSite}'. Valid values are 'Lax', 'None', or 'Strict'."),
+            };
 
     private static void AddConfiguredExternalProviders(AuthenticationBuilder auth, IConfiguration configuration)
     {

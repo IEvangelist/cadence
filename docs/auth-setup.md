@@ -12,11 +12,16 @@ EF Core in `Cadence.Data`) for user accounts. Four sign-in methods are supported
 | **Microsoft** OAuth | `GET /api/auth/external/Microsoft` |
 
 Sessions are carried by a **hardened cookie** (`cadence.auth`): `HttpOnly`,
-`SameSite=Lax`, and `Secure` in every environment except Development/Testing
-(which are served over plain HTTP) — so the cookie is never emitted in the clear,
-even behind a TLS-terminating proxy. The API answers unauthorized requests with
-`401`/`403` status codes (never HTML redirects) so the SPA can react. **No secrets
-are committed** — every provider is off until you supply its credentials locally.
+`SameSite=Lax` by default, and `Secure` in every environment except
+Development/Testing (which are served over plain HTTP) — so the cookie is never
+emitted in the clear, even behind a TLS-terminating proxy. The API answers
+unauthorized requests with `401`/`403` status codes (never HTML redirects) so the
+SPA can react. **No secrets are committed** — every provider is off until you
+supply its credentials locally.
+
+The cookie's `SameSite`/`Secure` topology is **configuration-driven** so hosting
+the SPA cross-site (a different site than the API) is a deploy-time toggle, not a
+code change — see [Cookie topology & cross-site hosting](#cookie-topology--cross-site-hosting).
 
 ## Provider configuration keys
 
@@ -59,6 +64,52 @@ When running through `Cadence.AppHost`, the same keys can be supplied as
 as environment variables using the double-underscore convention, e.g.
 `Authentication__GitHub__ClientId`. Keep parameter *values* in the AppHost's own
 user-secrets — never in `apphost.json` or source.
+
+## Cookie topology & cross-site hosting
+
+Today Cadence runs **same-origin**: locally the SPA reaches the API through the
+Vite dev proxy, and the cloud plan serves the SPA from GitHub Pages while the API
+opts that origin into credentialed CORS. The default cookie topology matches that:
+`SameSite=Lax` with `Secure` derived from the environment (see above).
+
+If the SPA is ever hosted **cross-site** (a genuinely different site from the API,
+so the auth cookie rides on cross-site requests), flip a single setting — no code
+change:
+
+```
+Auth:Cookie:SameSite     # Lax (default) | None | Strict
+```
+
+| Value | When | Secure |
+|---|---|---|
+| `Lax` *(default / unset)* | Same-origin, or the SPA reached through a same-site proxy. Preserves today's behavior exactly. | Environment-derived (`Always` outside Dev/Testing). |
+| `None` | **Cross-site**: the cookie must flow on cross-site requests. | **Forced `Always` in every environment** — browsers silently drop a `SameSite=None` cookie that is not `Secure`, so this is non-negotiable and cannot be downgraded by config or environment. |
+| `Strict` | Hardened same-site only (the cookie never rides a cross-site navigation). | Environment-derived. |
+
+The value applies to **both** the application cookie (`cadence.auth`) and the
+short-lived external-login cookie (`cadence.external`). Set it as a scalar (e.g.
+the `Auth__Cookie__SameSite=None` environment variable, or an Aspire parameter)
+alongside the matching CORS origins below.
+
+> **`None` requires HTTPS end-to-end.** Because `Secure` is forced on, a
+> `SameSite=None` cookie will not be set over plain HTTP — terminate TLS at (or
+> ahead of) the API and keep the deployed origins `https://`.
+
+### CORS for cross-site (already flexible)
+
+CORS is independently configuration-driven via `Cors:AllowedOrigins` and is always
+**credentialed with explicit origins** (never a wildcard, which browsers forbid
+with credentials). Supply origins either as a JSON array or, for a single
+environment variable, a comma/semicolon-separated string:
+
+```
+Cors:AllowedOrigins            # JSON array: [ "https://app.example" ]
+Cors__AllowedOrigins           # scalar env var: https://app.example,https://preview.example
+```
+
+When unset it defaults to the public Pages origin (`https://ievangelist.github.io`).
+For a cross-site deployment, list every browser origin that must reach the API here
+and set `Auth:Cookie:SameSite=None` so the credentialed requests carry the cookie.
 
 ## Registering the OAuth apps
 
