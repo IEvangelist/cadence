@@ -152,6 +152,12 @@ public static class StemsEndpoints
         return Results.Accepted($"/api/stems/jobs/{id}", ToDetail(job));
     }
 
+    // The read paths (this list, the detail handler, and the stem download below)
+    // are deliberately ownership-only with no current-tier re-check. Once a user has
+    // separated stems while subscribed, downgrading to Free stops NEW separations
+    // (gated in CreateJobAsync above → 402) but they keep access to what they already
+    // made — "keep what you made while paying." This is an intentional product
+    // decision (issue #74), not a missing gate: don't add an entitlement check here.
     private static async Task<IResult> ListJobsAsync(ClaimsPrincipal principal, UserManager<ApplicationUser> users, CadenceDbContext db)
     {
         var ownerId = users.GetUserId(principal)!;
@@ -193,6 +199,9 @@ public static class StemsEndpoints
             return Results.NotFound();
         }
 
+        // Ownership-only by design (issue #74): a former-Pro, now-Free owner still
+        // downloads stems they created while subscribed. Pro is enforced at creation
+        // (CreateJobAsync → 402); this read path intentionally has no tier re-check.
         var stem = await db.SeparationStems
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.OwnerId == ownerId && s.JobId == id && s.Label == stemLabel);
