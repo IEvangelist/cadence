@@ -65,7 +65,9 @@ synth, and other** — through an authenticated, owner-scoped **asynchronous job
 pipeline** backed by an ONNX/Demucs separation worker (with a deterministic
 band-split fallback in CI/dev). Upload a mix, the job runs server-side, and each
 labeled stem returns as a WAV you can preview and download. Stem separation is a
-**paid** entitlement (free users see an upgrade prompt).
+**paid** entitlement (free users see an upgrade prompt). If you later downgrade to
+Free, Cadence stops **new** separations, but the stems you already created while
+subscribed stay yours — you keep listing and downloading them.
 
 > Phase 1 ships the standalone separation surface (upload → preview → download).
 > Bringing a separated stem back into the composer as an editable mixer track with
