@@ -23,6 +23,7 @@ import {
   initialState,
   selectedTrack as selectSelectedTrack,
 } from '../model/reducer'
+import { selectVisibleTrackIds } from '../model/trackVisibility'
 import type { AutomationPoint, AutomationTarget } from '../model/automation'
 import {
   type ProjectStore,
@@ -162,6 +163,23 @@ export interface ComposerController {
   toggleMute: (trackId: string) => void
 
   /**
+   * Ids of the tracks the piano roll draws (#131 multi-track view): the selected
+   * track (always, so it stays editable) plus any others toggled on as read-only
+   * context. Memoized so unrelated renders don't recompute the overlay. INTERNAL
+   * to the app — deliberately EPHEMERAL view state (not serialized into
+   * `project`), so it needs no schema bump, and excluded from the frozen public
+   * {@link ComposerPublicApi} contract surface.
+   */
+  visibleTrackIds: string[]
+  /**
+   * Toggle a track's read-only presence on the piano roll. The selected track is
+   * always visible regardless, so toggling it is a no-op for the current view.
+   */
+  toggleTrackVisibility: (trackId: string) => void
+  /** Show every track (`true`) or collapse back to just the selected one (`false`). */
+  setAllTracksVisible: (visible: boolean) => void
+
+  /**
    * Write (or replace) an automation point on a `(target, trackId)` lane. Master
    * targets omit `trackId`. Dispatches a reducer action so the edit persists via
    * autosave. INTERNAL to the app — not part of the frozen public
@@ -249,6 +267,14 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   const [positionBeats, setPositionBeats] = useState(0)
   const [savedProjects, setSavedProjects] = useState<StoredProjectMeta[]>([])
   const [status, setStatus] = useState('Ready')
+  // #131 multi-track view: ids of tracks shown on the piano roll as read-only
+  // context, in ADDITION to the always-visible selected track. Deliberately
+  // EPHEMERAL — it is view state, so it stays out of the persisted `project`
+  // (no schema bump / migration) and resets to "just the selected track" on
+  // reload. Never touches the audio seam; the engine still plays every track.
+  const [contextTrackIds, setContextTrackIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  )
   // Bumped whenever a batch of notes is inserted so the piano roll can reveal the
   // freshly placed region exactly once per insert (see `insertNotes`).
   const [revealRequest, setRevealRequest] = useState<NoteRevealRequest>(() => ({
@@ -564,6 +590,32 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     [],
   )
 
+  // #131 multi-track view controls (all EPHEMERAL view state — see contextTrackIds).
+  const toggleTrackVisibility = useCallback((trackId: string) => {
+    setContextTrackIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(trackId)) next.delete(trackId)
+      else next.add(trackId)
+      return next
+    })
+  }, [])
+  const setAllTracksVisible = useCallback((visible: boolean) => {
+    setContextTrackIds(
+      visible ? new Set(projectRef.current.tracks.map((t) => t.id)) : new Set(),
+    )
+  }, [])
+  // Memoized so a note edit (which changes `state.project`) doesn't churn the
+  // overlay unless the track set, the selection, or visibility actually changed.
+  const visibleTrackIds = useMemo(
+    () =>
+      selectVisibleTrackIds(
+        state.project.tracks,
+        contextTrackIds,
+        state.selectedTrackId,
+      ),
+    [state.project.tracks, contextTrackIds, state.selectedTrackId],
+  )
+
   const writeAutomationPoint = useCallback(
     (target: AutomationTarget, trackId: string | undefined, point: AutomationPoint) =>
       dispatch({ type: 'write-automation-point', target, trackId, point }),
@@ -768,6 +820,9 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     renameTrack,
     setInstrument,
     toggleMute,
+    visibleTrackIds,
+    toggleTrackVisibility,
+    setAllTracksVisible,
     writeAutomationPoint,
     removeAutomationPoint,
     clearAutomationLane,

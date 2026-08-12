@@ -96,6 +96,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
     positionBeats,
     transportState,
     revealRequest,
+    visibleTrackIds,
   } = controller
 
   const track =
@@ -108,6 +109,25 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
   const selectedSet = new Set(selectedNoteIds)
   const selectedNoteId = selectedNoteIds[0] ?? null
   const selectedNote = track?.notes.find((n) => n.id === selectedNoteId)
+
+  // #131 multi-track view. `visibleTrackIds` (memoized in the controller) always
+  // includes the active track; the OTHER visible tracks render as read-only,
+  // color-coded "ghost" context underneath the editable notes. Deriving these
+  // via useMemo keeps note edits (which don't change the visible set) from
+  // recomputing the overlay. Ghost tracks are DISPLAY-ONLY — they carry no
+  // gesture handlers and are pointer-events:none, so only the active track is
+  // ever hit-testable (drag/resize/velocity can't touch a ghost).
+  const activeTrackId = track?.id
+  const visibleTrackIdSet = useMemo(() => new Set(visibleTrackIds), [visibleTrackIds])
+  const visibleTracks = useMemo(
+    () => project.tracks.filter((t) => visibleTrackIdSet.has(t.id)),
+    [project.tracks, visibleTrackIdSet],
+  )
+  const ghostTracks = useMemo(
+    () => visibleTracks.filter((t) => t.id !== activeTrackId),
+    [visibleTracks, activeTrackId],
+  )
+  const isMultiTrack = visibleTracks.length > 1
 
   const gridRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -140,7 +160,14 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
   // schedules by TIME only, so this vertical windowing never affects playback.
   const PITCH_MARGIN = 4
   const MIN_PITCH_SPAN = 24
-  const notePitches = track?.notes.map((n) => n.pitch) ?? []
+  // Fit the vertical window to EVERY visible track's notes (active + ghosts) so
+  // overlaid context notes land on real, rendered rows instead of clipping above
+  // or below the grid. With only the active track visible this is identical to
+  // the previous single-track behaviour.
+  const notePitches = [
+    ...(track?.notes ?? []),
+    ...ghostTracks.flatMap((t) => t.notes),
+  ].map((n) => n.pitch)
   const usedLow = notePitches.length > 0 ? Math.min(...notePitches) - PITCH_MARGIN : 54
   const usedHigh = notePitches.length > 0 ? Math.max(...notePitches) + PITCH_MARGIN : 78
   const contentCenter = Math.round((usedLow + usedHigh) / 2)
@@ -607,6 +634,30 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
         </div>
       </div>
 
+      {isMultiTrack && (
+        <ul className="pr-legend" aria-label="Tracks shown on the piano roll">
+          {visibleTracks.map((t) => {
+            const isActive = t.id === activeTrackId
+            return (
+              <li
+                key={t.id}
+                className={`pr-legend-item${isActive ? ' is-active' : ''}`}
+              >
+                <span
+                  className="pr-legend-swatch"
+                  style={{ background: t.color }}
+                  aria-hidden="true"
+                />
+                <span className="pr-legend-name">{t.name}</span>
+                <span className="pr-legend-role">
+                  {isActive ? '(editing)' : '(read-only)'}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
       <div className="pr-scroll" ref={scrollRef} onScroll={syncVelocityScroll}>
         <div className="pr-keys" aria-hidden="true" style={{ height }}>
           {Array.from({ length: visibleRows }, (_, row) => {
@@ -643,6 +694,31 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
               height: layout.rowHeight,
             }}
           />
+
+          {/* Read-only context from other visible tracks (#131). Rendered before
+              the active notes so the editable track always paints on top, and as
+              non-interactive, aria-hidden divs (no gesture handlers, pointer-events
+              disabled in CSS) so drags only ever hit the active track. */}
+          {ghostTracks.map((ghost) =>
+            ghost.notes.map((note) => {
+              const rect = noteRect(note, layout)
+              return (
+                <div
+                  key={`ghost-${ghost.id}-${note.id}`}
+                  className="pr-note is-ghost"
+                  aria-hidden="true"
+                  style={{
+                    left: rect.left,
+                    top: rowOfPitch(note.pitch) * layout.rowHeight,
+                    width: rect.width,
+                    height: rect.height,
+                    background: ghost.color,
+                    opacity: 0.25 + 0.25 * note.velocity,
+                  }}
+                />
+              )
+            }),
+          )}
 
           {track?.notes.map((note) => {
             const rect = noteRect(note, layout)

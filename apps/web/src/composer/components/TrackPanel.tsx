@@ -16,19 +16,39 @@ export function TrackPanel({ controller }: TrackPanelProps) {
     setInstrument,
     addTrack,
     removeTrack,
+    visibleTrackIds,
+    toggleTrackVisibility,
+    setAllTracksVisible,
   } = controller
+
+  const visibleSet = new Set(visibleTrackIds)
+  const allVisible =
+    project.tracks.length > 0 && project.tracks.every((t) => visibleSet.has(t.id))
 
   return (
     <section className="track-panel" aria-label="Tracks">
       <header className="panel-header">
         <h3>Tracks</h3>
-        <button type="button" className="btn btn-sm" onClick={addTrack}>
-          + Add track
-        </button>
+        <div className="track-panel-actions">
+          {project.tracks.length > 1 && (
+            <button
+              type="button"
+              className={`btn btn-sm${allVisible ? ' is-active' : ''}`}
+              aria-pressed={allVisible}
+              onClick={() => setAllTracksVisible(!allVisible)}
+            >
+              {allVisible ? 'Show only selected' : 'Show all tracks'}
+            </button>
+          )}
+          <button type="button" className="btn btn-sm" onClick={addTrack}>
+            + Add track
+          </button>
+        </div>
       </header>
       <ul className="track-list">
         {project.tracks.map((track) => {
           const selected = track.id === selectedTrackId
+          const visible = visibleSet.has(track.id)
           return (
             <li
               key={track.id}
@@ -59,6 +79,23 @@ export function TrackPanel({ controller }: TrackPanelProps) {
                 onChange={(id) => setInstrument(track.id, id)}
                 label={`Instrument for ${track.name}`}
               />
+              <button
+                type="button"
+                className={`btn btn-sm${visible ? ' is-active' : ''}`}
+                aria-pressed={visible}
+                disabled={selected}
+                onClick={() => toggleTrackVisibility(track.id)}
+                aria-label={
+                  selected
+                    ? `${track.name} is shown on the piano roll — the track being edited`
+                    : visible
+                      ? `Hide ${track.name} from the piano roll`
+                      : `Show ${track.name} on the piano roll`
+                }
+                title="Show on piano roll"
+              >
+                {visible ? 'On roll' : 'Show'}
+              </button>
               <button
                 type="button"
                 className={`btn btn-sm${track.muted ? ' is-active' : ''}`}
