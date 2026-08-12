@@ -30,6 +30,16 @@
       `aspire run` smoke (the web resource starts Vite and serves the SPA).
     -->
     <PackageVersion Include="Aspire.Hosting.NodeJs" Version="9.5.2" />
+    <!--
+      Community Toolkit local-LLM hosting integration (AddOllama/AddModel). Wires a
+      LOCAL Ollama container + model into `aspire run` — run mode only and
+      explicit-start (see AppHost.cs), so nothing Ollama-related enters the
+      published manifest or is ever deployed. 13.4.0 is the latest stable the
+      restore feed publishes and aligns with the 13.4.x Aspire host; its AppHost
+      surface binds cleanly against the 13.4.6 core packages. The consuming
+      server-side AI endpoint (and its #71 daily cap) is tracked separately in #140.
+    -->
+    <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Ollama" Version="13.4.0" />
   </ItemGroup>
 
   <ItemGroup Label="Stem separation (Blob storage, ONNX Runtime)">

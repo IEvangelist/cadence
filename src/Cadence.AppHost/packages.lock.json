@@ -308,6 +308,16 @@
           "System.IO.Hashing": "10.0.8"
         }
       },
+      "CommunityToolkit.Aspire.Hosting.Ollama": {
+        "type": "Direct",
+        "requested": "[13.4.0, )",
+        "resolved": "13.4.0",
+        "contentHash": "1z9ADu8SJ54Lyyn8MwX+Ih3tdO7tAeIx9fSpmyldeU0W2j7DSsgov7gNbXWp5ih9uQrSEaTBG0HT0Anpfd+xLg==",
+        "dependencies": {
+          "Aspire.Hosting": "13.4.0",
+          "OllamaSharp": "5.4.12"
+        }
+      },
       "Aspire.Hosting": {
         "type": "Transitive",
         "resolved": "13.4.6",
@@ -1148,6 +1158,14 @@
         "contentHash": "6WEmzsQJCZAlUG1pThKg/RmeF6V+I0DmBBBE/8YzpRtEzhyZzKcK7ulMANDm5CkxrALBEC8H+5plxHWtIL7xnA==",
         "dependencies": {
           "Microsoft.Extensions.Logging.Abstractions": "8.0.0"
+        }
+      },
+      "OllamaSharp": {
+        "type": "Transitive",
+        "resolved": "5.4.12",
+        "contentHash": "uUKOgoTV9Fxo9J5syrY4OMZ/2/xlPO83tGG+FjGmY8HqJVJ1iUT5f8EsC9yNEqBBIoth9D8zzN4I5p1oQEMBhQ==",
+        "dependencies": {
+          "Microsoft.Extensions.AI.Abstractions": "10.0.0"
         }
       },
       "OpenTelemetry": {

@@ -236,6 +236,57 @@ To smoke it locally: `npm ci` at the repo root, install the Rust toolchain via
 [`rustup`](https://rustup.rs), then `aspire run` → open the dashboard → **Start**
 the `desktop` resource. The Tauri window opens on the Aspire-served SPA.
 
+### A local Ollama LLM under `aspire run`
+
+Per the owner's local-first ruling — run everything locally under Aspire, "even
+pulling in Ollama" — `aspire run` can also bring up a **local [Ollama](https://ollama.com/)
+LLM** so a model is available on the developer's machine with no cloud calls. It
+uses the Aspire Community Toolkit
+[`CommunityToolkit.Aspire.Hosting.Ollama`](https://www.nuget.org/packages/CommunityToolkit.Aspire.Hosting.Ollama)
+hosting integration:
+
+```csharp
+var ollama = builder.AddOllama("ollama")
+    .WithDataVolume()
+    .WithLifetime(ContainerLifetime.Persistent)
+    .WithExplicitStart();
+
+var ollamaModel = ollama.AddModel("ollama-model", ollamaModelName);
+
+api.WithReference(ollamaModel, optional: true);
+```
+
+The Ollama server runs from the `docker.io/ollama/ollama` container image and the
+declared model (`llama3.2` by default) is pulled the first time the server starts.
+Three guards keep it scoped and non-disruptive, mirroring `web`/`desktop`/`docs-site`:
+
+- **Run mode only** (`builder.ExecutionContext.IsRunMode`) — Ollama is a local-dev
+  convenience, so the published `azd` / `aspire publish` manifest has **no `ollama`
+  resource**; nothing Ollama-related is ever deployed.
+- **Explicit start** (`WithExplicitStart`) — the resource stays *Not started* in the
+  dashboard until a developer clicks **Start**. Because the model download is
+  triggered by the server's readiness, neither the container image nor the
+  (multi-GB) model is pulled on a normal build/F5 — or in the Docker-only
+  integration harness, which boots the AppHost in run mode but never starts
+  explicit-start resources.
+- **Persistent + data volume** — `WithLifetime(ContainerLifetime.Persistent)` plus
+  `WithDataVolume()` (mounted at `/root/.ollama`) keep the pulled model across runs,
+  so it is fetched once rather than on every start.
+
+**Enable it:** `aspire run` → open the dashboard → **Start** the `ollama` resource
+(the first start downloads the model; later starts reuse the volume). **Disable it:**
+simply leave it *Not started* — the rest of the stack, including the API, runs
+normally without it. **Swap the model** without a code change via the `Ollama:Model`
+configuration value (for example AppHost user-secrets, or the `Ollama__Model`
+environment variable); it defaults to the small, CPU-friendly `llama3.2`.
+
+`api.WithReference(ollamaModel, optional: true)` wires the model's connection
+information into the API for **future** service discovery; it is `optional` and has
+no `WaitFor`, so the API starts cleanly whether or not a developer has started
+Ollama. The server-side AI endpoint that will actually consume the model — and its
+daily-cap enforcement (#71) — is intentionally out of scope here and tracked in
+[issue #140](https://github.com/IEvangelist/cadence/issues/140).
+
 ## Collaboration document persistence (effort #91)
 
 The live-collaboration relay (effort #9) was a pure in-memory broadcaster: it

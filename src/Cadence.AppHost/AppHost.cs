@@ -157,6 +157,42 @@ if (builder.ExecutionContext.IsRunMode)
         .WithExplicitStart();
 }
 
+// Local Ollama LLM (CommunityToolkit.Aspire.Hosting.Ollama) so a developer gets a
+// model locally as part of `aspire run` — the owner's local-first ruling: run
+// everything locally, "even pulling in Ollama." Like web/desktop/docs-site it is
+// wired ONLY in run mode, so the published azd / `aspire publish` manifest has no
+// `ollama` resource: the model is a local-dev convenience, never deployed.
+// WithExplicitStart() leaves it *Not started* in the dashboard until a developer
+// clicks Start, so neither the heavy `ollama` container image nor the multi-GB
+// model pull runs on a normal build/F5 — nor in the Docker-only integration
+// harness, which boots the AppHost in run mode but never starts explicit-start
+// resources. The model download is triggered by the server's ResourceReadyEvent,
+// which only fires once the server is started, so the model is fetched on first
+// start and — thanks to the data volume + persistent container lifetime — reused
+// across runs rather than re-pulled each time.
+//
+// The consuming server-side AI endpoint (and its #71 daily cap) is deferred to
+// issue #140; declaring api.WithReference(model) now lets the API discover the
+// model later via service discovery without an AppHost change. The reference is
+// optional so the API still starts cleanly while Ollama is left un-started — its
+// connection string is simply absent until a developer starts the resource (no
+// WaitFor, so the API never blocks on it).
+if (builder.ExecutionContext.IsRunMode)
+{
+    // Small, CPU-friendly default; override with `Ollama:Model` (user-secrets,
+    // configuration, or the `Ollama__Model` env var) to swap models — no code change.
+    var ollamaModelName = builder.Configuration["Ollama:Model"] ?? "llama3.2";
+
+    var ollama = builder.AddOllama("ollama")
+        .WithDataVolume()
+        .WithLifetime(ContainerLifetime.Persistent)
+        .WithExplicitStart();
+
+    var ollamaModel = ollama.AddModel("ollama-model", ollamaModelName);
+
+    api.WithReference(ollamaModel, optional: true);
+}
+
 builder.Build().Run();
 
 file static class DesktopPrerequisites
