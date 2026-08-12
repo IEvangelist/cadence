@@ -113,4 +113,27 @@ public class CadenceCorsTests
             ["https://studio.contoso.test", "https://preview.contoso.test"],
             origins);
     }
+
+    // Operator convenience: a single scalar env var (Cors__AllowedOrigins=a,b) is
+    // accepted as a comma/semicolon-separated list in addition to the array form,
+    // with surrounding whitespace trimmed and empty entries dropped.
+    [Theory]
+    [InlineData("https://studio.contoso.test, https://preview.contoso.test")]
+    [InlineData("https://studio.contoso.test;https://preview.contoso.test")]
+    [InlineData(" https://studio.contoso.test , , https://preview.contoso.test ")]
+    public void ResolveAllowedOrigins_reads_delimited_scalar_string(string configured)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Cors:AllowedOrigins"] = configured,
+            })
+            .Build();
+
+        var origins = CadenceCors.ResolveAllowedOrigins(configuration);
+
+        Assert.Equal(
+            ["https://studio.contoso.test", "https://preview.contoso.test"],
+            origins);
+    }
 }
