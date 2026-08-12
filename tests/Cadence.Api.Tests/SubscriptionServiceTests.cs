@@ -1,7 +1,6 @@
 using Cadence.Api.Billing;
 using Cadence.Data;
 using Cadence.Data.Entities;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace Cadence.Api.Tests;
@@ -12,14 +11,13 @@ namespace Cadence.Api.Tests;
 /// </summary>
 public sealed class SubscriptionServiceTests : IDisposable
 {
-    private readonly SqliteConnection _keepAlive;
+    private readonly SqliteTestDatabase _database;
     private readonly DbContextOptions<CadenceDbContext> _options;
 
     public SubscriptionServiceTests()
     {
-        var connectionString = SqliteTestDatabase.NewConnectionString();
-        _keepAlive = SqliteTestDatabase.OpenKeepAlive(connectionString);
-        _options = new DbContextOptionsBuilder<CadenceDbContext>().UseSqlite(connectionString).Options;
+        _database = new SqliteTestDatabase();
+        _options = new DbContextOptionsBuilder<CadenceDbContext>().UseSqlite(_database.ConnectionString).Options;
         using var db = new CadenceDbContext(_options);
         db.Database.EnsureCreated();
     }
@@ -167,5 +165,5 @@ public sealed class SubscriptionServiceTests : IDisposable
         Assert.Equal(SubscriptionTier.Free, sub.Tier);
     }
 
-    public void Dispose() => _keepAlive.Dispose();
+    public void Dispose() => _database.Dispose();
 }
