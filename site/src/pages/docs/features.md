@@ -84,8 +84,9 @@ session is explicitly activated.
 ## Import, export & share
 
 - **MIDI** and **MusicXML** import/export for interop with other tools.
-- **WAV** audio export (lossless PCM). *MP3 export is marketed but not yet
-  shipped — WAV is currently the only rendered-audio export.*
+- **WAV** (lossless PCM) and **MP3** audio export. MP3 encoding runs
+  on-device via the LAME encoder (credited under
+  [Acknowledgements](../acknowledgements/)).
 - Portable `.cadence.json` projects.
 - Shareable **listen links** — a client-side snapshot, no account required.
 - Offline-first local storage that syncs to your account's cloud projects on
@@ -124,7 +125,7 @@ what the backend **enforces today**, mapped onto the editions shown on the
 | On-device (offline) AI assistant | ✅ | ✅ | ✅ |
 | AI generations per day | 50 | Unlimited | Unlimited |
 | MIDI & MusicXML import / export | ✅ | ✅ | ✅ |
-| WAV export | ✅ (watermarked) | ✅ | ✅ |
+| WAV & MP3 export | ✅ (watermarked) | ✅ | ✅ |
 | Watermark-free export | — | ✅ | ✅ |
 | Cloud projects | Up to 10 | Unlimited | Unlimited |
 | Live collaboration (seats) | 1 | 5 | 5 |
@@ -135,9 +136,9 @@ what the backend **enforces today**, mapped onto the editions shown on the
 > pricing page currently resolve to the *same* unlocked entitlement set
 > (watermark-free export, unlimited projects and AI, stem separation, and 5
 > collaboration seats); the finer Studio-vs-Pro packaging (e.g. team perks) isn't
-> separately gated yet. **Server-side AI generation** and **MP3 export** are shown
-> on the pricing page but are **not yet shipped** — today AI runs on-device and
-> WAV is the only rendered-audio export. Pricing is indicative for the preview and
+> separately gated yet. **Server-side AI generation** is shown on the pricing page
+> but is **not yet shipped** — today AI runs on-device. Rendered-audio export
+> ships as both **WAV** (lossless PCM) and **MP3**. Pricing is indicative for the preview and
 > not final; the free tier is always free. The subscription **tier** is a claim
 > (default `Free`) resolved through the entitlement seam described in
 > [Authentication](../auth/).
