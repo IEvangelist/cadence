@@ -9,6 +9,7 @@
 import type { CadencePlugin, PluginContributions } from '../types'
 import { BUILTIN_INSTRUMENTS } from './instruments'
 import { SYNTH_VOICE_INSTRUMENTS } from './synthVoices'
+import { SAMPLER_VOICE_INSTRUMENTS } from './samplerVoices'
 import { DRUM_KIT_INSTRUMENTS } from './drumKits'
 import { BUILTIN_FORMATS } from './formats'
 import { BUILTIN_AI_PROVIDERS } from './aiProviders'
@@ -21,6 +22,7 @@ export function coreContributions(): PluginContributions {
     instruments: [
       ...BUILTIN_INSTRUMENTS,
       ...SYNTH_VOICE_INSTRUMENTS,
+      ...SAMPLER_VOICE_INSTRUMENTS,
       ...DRUM_KIT_INSTRUMENTS,
     ],
     formats: BUILTIN_FORMATS,

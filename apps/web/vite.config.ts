@@ -86,6 +86,11 @@ export default defineConfig({
         // under jsdom. WAV export is covered via encodeWav + an injected mock
         // renderer; this thin Tone binding is exercised in the browser/e2e only.
         'src/composer/audio/offlineRender.ts',
+        // Sampled-instrument packs (#113) build ToneAudioBuffers + a Tone.Sampler,
+        // which need Web Audio and can't run under jsdom. The pure sample renderer
+        // and the voice's buffer/flush logic ARE unit-tested; this thin, lazy-loaded
+        // Tone binding is exercised in the browser (mirrors offlineRender.ts).
+        'src/composer/plugins/builtins/samplePacks/pianoPacks.ts',
         // Thin y-websocket network glue (opens a real socket). The binding it
         // feeds is fully covered via in-memory docs; this factory is exercised
         // by the e2e collaboration spec against the Node relay harness.
