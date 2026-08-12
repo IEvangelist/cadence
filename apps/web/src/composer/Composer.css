@@ -492,6 +492,51 @@ select:focus-visible {
   width: 4.5rem;
 }
 
+/* Track-visibility legend (#131 multi-track view). Maps each visible track's
+   colour to its name so colour is never the sole differentiator, and calls out
+   which track is editable vs read-only. */
+.pr-legend {
+  list-style: none;
+  margin: 0 0 var(--space-2);
+  padding: 0 var(--space-1) var(--space-2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.pr-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
+}
+
+.pr-legend-item.is-active {
+  color: var(--color-text);
+  font-weight: var(--font-weight-medium);
+}
+
+.pr-legend-swatch {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  flex: none;
+}
+
+.pr-legend-role {
+  color: var(--color-text-subtle);
+  font-weight: var(--font-weight-regular, 400);
+}
+
+.track-panel-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 .pr-scroll {
   display: flex;
   max-height: 60vh;
@@ -613,6 +658,21 @@ select:focus-visible {
     animation: none;
     opacity: 0.85;
   }
+}
+
+/* Read-only context notes from other visible tracks (#131 multi-track view).
+   Recessed so the editable track reads clearly on top, and pointer-events:none so
+   only the active track is ever hit-testable — a drag/resize can never grab a
+   ghost note. Colour alone isn't the differentiator: the roll legend pairs each
+   colour with its track name (and the editable-vs-read-only role). */
+.pr-note.is-ghost {
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  border-left: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 1px;
+  cursor: default;
+  pointer-events: none;
+  filter: saturate(0.75);
+  z-index: 0;
 }
 
 .pr-note-resize {

@@ -37,4 +37,38 @@ describe('<TrackPanel />', () => {
     fireEvent.click(screen.getByRole('button', { name: /Delete Bass/ }))
     expect(screen.getAllByLabelText('Track name')).toHaveLength(1)
   })
+
+  it('keeps the selected track always shown on the roll (toggle disabled + on)', () => {
+    render(<Harness />)
+    const toggle = screen.getByRole('button', {
+      name: /Synth is shown on the piano roll/,
+    })
+    expect(toggle).toBeDisabled()
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('toggles a non-selected track onto and off the piano roll', () => {
+    render(<Harness />)
+    // Add a second track — it becomes selected, leaving Synth as context.
+    fireEvent.click(screen.getByRole('button', { name: '+ Add track' }))
+
+    const show = screen.getByRole('button', { name: /Show Synth on the piano roll/ })
+    expect(show).toHaveAttribute('aria-pressed', 'false')
+
+    fireEvent.click(show)
+    const hide = screen.getByRole('button', { name: /Hide Synth from the piano roll/ })
+    expect(hide).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('shows all tracks and collapses back to just the selected one', () => {
+    render(<Harness />)
+    fireEvent.click(screen.getByRole('button', { name: '+ Add track' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show all tracks' }))
+    const collapse = screen.getByRole('button', { name: 'Show only selected' })
+    expect(collapse).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(collapse)
+    expect(screen.getByRole('button', { name: 'Show all tracks' })).toBeInTheDocument()
+  })
 })
