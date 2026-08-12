@@ -1,7 +1,6 @@
 using Cadence.Data;
 using Cadence.Data.Entities;
 using Cadence.Data.Stems;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace Cadence.Api.Tests;
@@ -65,26 +64,25 @@ internal sealed class ThrowingStemSeparator : IStemSeparator
 
 /// <summary>
 /// Builds throwaway SQLite-backed <see cref="CadenceDbContext"/> instances over a
-/// uniquely-named, shared-cache, in-memory database, so multiple contexts see the
-/// same schema and rows within a single test (mirroring <see cref="CadenceApiFactory"/>)
-/// without contending on one connection object.
+/// dedicated, per-harness temp-file database, so multiple contexts see the same
+/// schema and rows within a single test (mirroring <see cref="CadenceApiFactory"/>)
+/// without contending on one connection object or racing on EF Core user-function
+/// registration.
 /// </summary>
 internal sealed class StemDbHarness : IDisposable
 {
-    private readonly string _connectionString;
-    private readonly SqliteConnection _keepAlive;
+    private readonly SqliteTestDatabase _database;
 
     public StemDbHarness()
     {
-        _connectionString = SqliteTestDatabase.NewConnectionString();
-        _keepAlive = SqliteTestDatabase.OpenKeepAlive(_connectionString);
+        _database = new SqliteTestDatabase();
         using var ctx = CreateContext();
         ctx.Database.EnsureCreated();
     }
 
-    /// <summary>A fresh context over the shared in-memory database.</summary>
+    /// <summary>A fresh context over the harness's database.</summary>
     public CadenceDbContext CreateContext() =>
-        new(new DbContextOptionsBuilder<CadenceDbContext>().UseSqlite(_connectionString).Options);
+        new(new DbContextOptionsBuilder<CadenceDbContext>().UseSqlite(_database.ConnectionString).Options);
 
     /// <summary>Insert an owner user so job foreign keys resolve.</summary>
     public async Task SeedOwnerAsync(string ownerId)
@@ -94,7 +92,7 @@ internal sealed class StemDbHarness : IDisposable
         await db.SaveChangesAsync();
     }
 
-    public void Dispose() => _keepAlive.Dispose();
+    public void Dispose() => _database.Dispose();
 }
 
 /// <summary>Synthesizes small PCM/WAV mixes for the DSP and pipeline tests.</summary>

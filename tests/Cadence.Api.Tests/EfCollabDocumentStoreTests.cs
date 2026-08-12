@@ -1,7 +1,6 @@
 using Cadence.Api.Collaboration;
 using Cadence.Data;
 using Cadence.Data.Entities;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -18,20 +17,19 @@ public sealed class EfCollabDocumentStoreTests : IDisposable
     private const string OwnerId = "owner-1";
     private const string ProjectId = "project-1";
 
-    private readonly SqliteConnection _keepAlive;
+    private readonly SqliteTestDatabase _database;
     private readonly ServiceProvider _provider;
     private readonly EfCollabDocumentStore _store;
 
     public EfCollabDocumentStoreTests()
     {
-        // A uniquely-named shared-cache in-memory database (kept alive by the keeper
-        // connection) lets the store's per-operation scopes each open their own
-        // connection over one schema, instead of contending on a single connection.
-        var connectionString = SqliteTestDatabase.NewConnectionString();
-        _keepAlive = SqliteTestDatabase.OpenKeepAlive(connectionString);
+        // A dedicated per-fixture temp-file database lets the store's per-operation
+        // scopes each open their own connection over one on-disk schema, instead of
+        // contending on a single connection or racing on user-function registration.
+        _database = new SqliteTestDatabase();
 
         var services = new ServiceCollection();
-        services.AddDbContext<CadenceDbContext>(options => options.UseSqlite(connectionString));
+        services.AddDbContext<CadenceDbContext>(options => options.UseSqlite(_database.ConnectionString));
         _provider = services.BuildServiceProvider();
 
         using var scope = _provider.CreateScope();
@@ -124,6 +122,6 @@ public sealed class EfCollabDocumentStoreTests : IDisposable
     public void Dispose()
     {
         _provider.Dispose();
-        _keepAlive.Dispose();
+        _database.Dispose();
     }
 }
