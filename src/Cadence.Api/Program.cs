@@ -1,4 +1,5 @@
 using Cadence.Api;
+using Cadence.Api.Ai;
 using Microsoft.AspNetCore.HttpOverrides;
 using Scalar.AspNetCore;
 
@@ -50,6 +51,11 @@ builder.Services.AddSingleton<Cadence.Api.Collaboration.ICollabDocumentStore, Ca
 
 // Stem separation: options + (outside Testing) Blob-backed stem storage.
 builder.AddCadenceStems();
+
+// Optional, default-OFF local server-side AI generation (#140). When the
+// Ai:ServerSide:Enabled flag is off (the default) this registers nothing and the
+// endpoint is not mapped, so the default on-device experience is unchanged.
+builder.AddCadenceAi();
 
 var app = builder.Build();
 
@@ -128,6 +134,7 @@ app.MapCadenceProjects();
 app.MapCadenceCollaboration();
 app.MapCadenceBilling();
 app.MapCadenceStems();
+app.MapCadenceAi();
 
 app.Run();
 

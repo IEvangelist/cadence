@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -75,6 +76,15 @@ public sealed class CadenceApiFactory : WebApplicationFactory<Program>
     /// </summary>
     public IRateLimitCounterStore? RateLimitCounterStore { get; init; }
 
+    /// <summary>
+    /// Optional fake local-AI chat client for the server-side AI generation endpoint
+    /// (#140). Supplying one makes the generator report available and return this
+    /// client's canned output; leaving it null (with the feature enabled) models the
+    /// Ollama-absent case, so the endpoint answers 503. It is only consulted when
+    /// <c>Ai:ServerSide:Enabled</c> is set true via <see cref="ConfigOverrides"/>.
+    /// </summary>
+    public IChatClient? ChatClient { get; init; }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -125,6 +135,15 @@ public sealed class CadenceApiFactory : WebApplicationFactory<Program>
             {
                 services.RemoveAll<IRateLimitCounterStore>();
                 services.AddSingleton(counterStore);
+            }
+
+            if (ChatClient is { } chatClient)
+            {
+                // AddCadenceAi does not register an IChatClient in the Testing environment
+                // (no Ollama connection string), so this is the sole registration — the
+                // generator resolves it optionally and reports the model as available.
+                services.RemoveAll<IChatClient>();
+                services.AddSingleton(chatClient);
             }
 
             using var provider = services.BuildServiceProvider();

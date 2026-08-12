@@ -40,6 +40,16 @@
       server-side AI endpoint (and its #71 daily cap) is tracked separately in #140.
     -->
     <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Ollama" Version="13.4.0" />
+    <!--
+      Community Toolkit Ollama CLIENT integration (AddOllamaSharpChatClient) consumed
+      by Cadence.Api's optional, default-off server-side AI endpoint (#140). Registers
+      an OllamaSharp IOllamaApiClient and a Microsoft.Extensions.AI IChatClient bound
+      to the Aspire-referenced "ollama-model" resource, so the endpoint depends on the
+      mockable IChatClient abstraction. 13.4.0 matches the hosting package above and
+      the 13.4.x Aspire line; it is only resolved when the feature flag is enabled and
+      the model's connection string is present (a developer started the local Ollama).
+    -->
+    <PackageVersion Include="CommunityToolkit.Aspire.OllamaSharp" Version="13.4.0" />
   </ItemGroup>
 
   <ItemGroup Label="Stem separation (Blob storage, ONNX Runtime)">
