@@ -9,12 +9,13 @@ import { PricingPage } from './billing/PricingPage'
 import { useEntitlements } from './billing/useEntitlements'
 import { watermarkExportsFor } from './composer/formats/exportEntitlements'
 import { StemsPage } from './stems/StemsPage'
+import { AcknowledgementsPage } from './acknowledgements/AcknowledgementsPage'
 import { handleAuthChange, projectStore } from './appStores'
 import { buildCollabConfig } from './composer/model/collab/collabConfig'
 import './auth/auth.css'
 import './App.css'
 
-type View = 'composer' | 'profile' | 'pricing' | 'stems'
+type View = 'composer' | 'profile' | 'pricing' | 'stems' | 'acknowledgements'
 
 function AppShell() {
   const auth = useAuth()
@@ -43,65 +44,84 @@ function AppShell() {
   const showProfile = view === 'profile' && authenticated
   const showPricing = view === 'pricing'
   const showStems = view === 'stems'
-  const showComposer = !showPricing && !showStems && !showProfile
+  const showAcknowledgements = view === 'acknowledgements'
+  const showComposer = !showPricing && !showStems && !showProfile && !showAcknowledgements
 
   return (
-    <main className={`app${showComposer ? ' app--composer' : ''}`}>
-      {showComposer && (
-        <a className="skip-link" href="#composer-main">
-          Skip to editor
-        </a>
-      )}
-      <header className="app-header">
-        <div className="app-header__brand">
-          <div className="brand">
-            <img className="brand-mark" src="/favicon.svg" alt="" aria-hidden="true" />
-            <h1>{appName}</h1>
+    <>
+      <main className={`app${showComposer ? ' app--composer' : ''}`}>
+        {showComposer && (
+          <a className="skip-link" href="#composer-main">
+            Skip to editor
+          </a>
+        )}
+        <header className="app-header">
+          <div className="app-header__brand">
+            <div className="brand">
+              <img className="brand-mark" src="/favicon.svg" alt="" aria-hidden="true" />
+              <h1>{appName}</h1>
+            </div>
+            <p className="tagline">{tagline}</p>
           </div>
-          <p className="tagline">{tagline}</p>
-        </div>
-        <div className="app-header__actions">
-          <AuthBar onShowProfile={() => setView('profile')} profileActive={showProfile} />
-          <nav className="app-nav" aria-label="Primary">
-            <button
-              type="button"
-              className="app-nav-link"
-              onClick={() => setView(showStems ? 'composer' : 'stems')}
-              aria-pressed={showStems}
-            >
-              {showStems ? 'Back to composer' : 'Stems'}
-            </button>
-            <button
-              type="button"
-              className="app-nav-link"
-              onClick={() => setView(showPricing ? 'composer' : 'pricing')}
-              aria-pressed={showPricing}
-            >
-              {showPricing ? 'Back to composer' : 'Pricing'}
-            </button>
-          </nav>
-        </div>
-      </header>
+          <div className="app-header__actions">
+            <AuthBar onShowProfile={() => setView('profile')} profileActive={showProfile} />
+            <nav className="app-nav" aria-label="Primary">
+              <button
+                type="button"
+                className="app-nav-link"
+                onClick={() => setView(showStems ? 'composer' : 'stems')}
+                aria-pressed={showStems}
+              >
+                {showStems ? 'Back to composer' : 'Stems'}
+              </button>
+              <button
+                type="button"
+                className="app-nav-link"
+                onClick={() => setView(showPricing ? 'composer' : 'pricing')}
+                aria-pressed={showPricing}
+              >
+                {showPricing ? 'Back to composer' : 'Pricing'}
+              </button>
+            </nav>
+          </div>
+        </header>
 
-      {showPricing ? (
-        <PricingPage onClose={() => setView('composer')} />
-      ) : showStems ? (
-        <StemsPage
-          authenticated={authenticated}
-          entitled={entitlements?.stemSeparation ?? false}
-          onUpgrade={() => setView('pricing')}
-          onClose={() => setView('composer')}
-        />
-      ) : showProfile ? (
-        <ProfilePage onClose={() => setView('composer')} />
-      ) : (
-        <Composer
-          options={{ store: projectStore, watermarkExports }}
-          collab={collab}
-          canShare={authenticated}
-        />
-      )}
-    </main>
+        {showPricing ? (
+          <PricingPage onClose={() => setView('composer')} />
+        ) : showStems ? (
+          <StemsPage
+            authenticated={authenticated}
+            entitled={entitlements?.stemSeparation ?? false}
+            onUpgrade={() => setView('pricing')}
+            onClose={() => setView('composer')}
+          />
+        ) : showProfile ? (
+          <ProfilePage onClose={() => setView('composer')} />
+        ) : showAcknowledgements ? (
+          <AcknowledgementsPage onClose={() => setView('composer')} />
+        ) : (
+          <Composer
+            options={{ store: projectStore, watermarkExports }}
+            collab={collab}
+            canShare={authenticated}
+          />
+        )}
+      </main>
+
+      <footer className="app-footer">
+        <p className="app-footer__note">Cadence is open-source software.</p>
+        <nav className="app-footer__nav" aria-label="About Cadence">
+          <button
+            type="button"
+            className="app-footer__link"
+            onClick={() => setView(showAcknowledgements ? 'composer' : 'acknowledgements')}
+            aria-pressed={showAcknowledgements}
+          >
+            Third-party licenses
+          </button>
+        </nav>
+      </footer>
+    </>
   )
 }
 

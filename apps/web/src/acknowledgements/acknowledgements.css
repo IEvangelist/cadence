@@ -1,0 +1,164 @@
+/* Acknowledgements / third-party licenses UI — consumes the Cadence brand
+   tokens (theme/tokens.css). Mirrors the stems/pricing surface conventions. */
+
+.acknowledgements {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  text-align: left;
+  max-width: 52rem;
+}
+
+.acknowledgements-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.acknowledgements-head h2 {
+  font-family: var(--font-display);
+  font-size: var(--font-size-2xl);
+  margin: 0;
+  color: var(--color-text);
+}
+
+.acknowledgements-sub {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-relaxed);
+  max-width: 46rem;
+}
+
+.acknowledgements-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.acknowledgements-section h3 {
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  margin: 0;
+  color: var(--color-text);
+}
+
+.acknowledgements-section p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-relaxed);
+}
+
+.acknowledgements-thanks {
+  font-style: italic;
+}
+
+.acknowledgements-facts {
+  display: grid;
+  grid-template-columns: minmax(6rem, max-content) 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+
+.acknowledgements-fact {
+  display: contents;
+}
+
+.acknowledgements-fact dt {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+}
+
+.acknowledgements-fact dd {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+.acknowledgements-fact code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  padding: 0.05em 0.35em;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+  word-break: break-word;
+}
+
+.acknowledgements-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.acknowledgements-caption {
+  text-align: left;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-xs);
+  margin-bottom: var(--space-2);
+}
+
+.acknowledgements-table th,
+.acknowledgements-table td {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: top;
+}
+
+.acknowledgements-table th {
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+}
+
+.acknowledgements-table td {
+  color: var(--color-text-muted);
+}
+
+.acknowledgements a {
+  color: var(--color-primary-text);
+  text-decoration: underline;
+  border-radius: var(--radius-sm);
+}
+
+.acknowledgements a:hover {
+  color: var(--color-primary);
+}
+
+.acknowledgements a:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.acknowledgements-btn {
+  font-family: var(--font-body);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-4);
+  min-height: 2.25rem;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.acknowledgements-btn:hover {
+  border-color: var(--color-primary);
+}
+
+.acknowledgements-btn:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}

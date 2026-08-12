@@ -39,4 +39,19 @@ describe('<App />', () => {
       screen.getAllByRole('button', { name: 'Back to composer' }).length,
     ).toBeGreaterThanOrEqual(1)
   })
+
+  it('opens the third-party licenses surface from the footer', () => {
+    render(<App />)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Third-party licenses' }),
+    )
+    expect(
+      screen.getByRole('heading', {
+        name: /acknowledgements & third-party licenses/i,
+      }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: /lame project/i }),
+    ).toHaveAttribute('href', 'https://lame.sourceforge.io/')
+  })
 })
