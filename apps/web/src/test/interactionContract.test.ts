@@ -241,6 +241,44 @@ describe('interaction coverage contract', () => {
     expect(deadLinks).toEqual([])
   })
 
+  it('links related E2E metadata only to existing specs', () => {
+    const deadLinks = interactionManifest.flatMap(({ id, relatedE2e }) => {
+      if (!relatedE2e) return []
+      return existsSync(path.resolve(webRoot, relatedE2e))
+        ? []
+        : [`${id}: missing ${relatedE2e}`]
+    })
+    expect(deadLinks).toEqual([])
+  })
+
+  it('keeps accessibility exemptions narrow, explicit, and actionable', () => {
+    const invalid = interactionManifest.flatMap(
+      ({ id, expectedName, expectedRole, accessibilityExemption }) => {
+        if (!accessibilityExemption) {
+          return expectedName.trim() ? [] : [`${id}: empty name without exemption`]
+        }
+        const problems: string[] = []
+        if (expectedName.trim()) problems.push(`${id}: exempt interaction invents a name`)
+        if (!['none', 'presentation'].includes(expectedRole)) {
+          problems.push(`${id}: exempt role ${expectedRole} is not narrow`)
+        }
+        if (accessibilityExemption.reason.trim().length < 20) {
+          problems.push(`${id}: exemption reason is not concrete`)
+        }
+        if (accessibilityExemption.alternativeInteractionIds.length === 0) {
+          problems.push(`${id}: exemption has no alternative interaction`)
+        }
+        for (const alternativeId of accessibilityExemption.alternativeInteractionIds) {
+          if (alternativeId === id || !manifestIds.includes(alternativeId)) {
+            problems.push(`${id}: invalid alternative ${alternativeId}`)
+          }
+        }
+        return problems
+      },
+    )
+    expect(invalid).toEqual([])
+  })
+
   it('requires concrete user-visible outcome descriptions', () => {
     const vagueOutcomes = interactionManifest
       .filter(({ outcome }) => {

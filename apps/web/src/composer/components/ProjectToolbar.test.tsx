@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 /* Interaction coverage:
  * studio.project.name, studio.project.new, studio.project.demo, studio.project.save,
  * studio.project.open, studio.project.import.trigger, studio.project.import.file,
@@ -75,13 +76,35 @@ describe('<ProjectToolbar />', () => {
     expect(filename).toMatch(/\.mid$/)
   })
 
-  it('saves a project and lists it under Open', async () => {
+  it('saves a project and loads it from Open', async () => {
+    const user = userEvent.setup()
     render(<Harness download={vi.fn()} />)
-    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Track One' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    await waitFor(() =>
-      expect(screen.getByRole('option', { name: 'Track One' })).toBeInTheDocument(),
-    )
+    const name = screen.getByLabelText('Project name')
+    await user.clear(name)
+    await user.type(name, 'Track One')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    const saved = await screen.findByRole('option', { name: 'Track One' })
+
+    await user.click(screen.getByRole('button', { name: 'New' }))
+    await waitFor(() => expect(name).toHaveValue('Untitled'))
+    await user.selectOptions(screen.getByLabelText('Open project'), saved)
+
+    await waitFor(() => expect(name).toHaveValue('Track One'))
+  })
+
+  it('opens each hidden file chooser from its visible trigger', async () => {
+    const user = userEvent.setup()
+    render(<Harness download={vi.fn()} />)
+    const projectInput = screen.getByLabelText('Import project or MusicXML file')
+    const midiInput = screen.getByLabelText('Import MIDI file')
+    const projectClick = vi.spyOn(projectInput, 'click').mockImplementation(() => {})
+    const midiClick = vi.spyOn(midiInput, 'click').mockImplementation(() => {})
+
+    await user.click(screen.getByRole('button', { name: 'Import file' }))
+    expect(projectClick).toHaveBeenCalledOnce()
+
+    await user.click(screen.getByRole('button', { name: 'Import MIDI' }))
+    expect(midiClick).toHaveBeenCalledOnce()
   })
 
   it('imports a MIDI file into the project', async () => {

@@ -71,6 +71,7 @@ async function mockApi(route: Route, authenticated: boolean): Promise<void> {
     )
   }
   if (path === '/api/projects' && method === 'GET') return json([])
+  if (/^\/api\/projects\/[^/]+\/shares$/.test(path) && method === 'GET') return json([])
   if (path === '/api/stems/jobs' && method === 'GET') {
     return json(authenticated ? [completedJob] : [])
   }
@@ -80,8 +81,6 @@ async function mockApi(route: Route, authenticated: boolean): Promise<void> {
 
 interface RenderedSemantics {
   role: string
-  name: string
-  ariaHidden: boolean
 }
 
 async function renderedSemantics(locator: Locator): Promise<RenderedSemantics> {
@@ -109,48 +108,25 @@ async function renderedSemantics(locator: Locator): Promise<RenderedSemantics> {
       }
     }
 
-    const labelledBy = element
-      .getAttribute('aria-labelledby')
-      ?.split(/\s+/)
-      .map((id) => document.getElementById(id)?.textContent ?? '')
-      .join(' ')
-    const labels =
-      element instanceof HTMLInputElement ||
-      element instanceof HTMLSelectElement ||
-      element instanceof HTMLTextAreaElement
-        ? Array.from(element.labels ?? [])
-            .map((label) => label.textContent ?? '')
-            .join(' ')
-        : ''
-    const name =
-      element.getAttribute('aria-label') ||
-      labelledBy ||
-      labels ||
-      element.textContent ||
-      element.getAttribute('title') ||
-      ''
-
     return {
-      role,
-      name: name.replace(/\s+/g, ' ').trim(),
-      ariaHidden: element.getAttribute('aria-hidden') === 'true',
+      role: element.getAttribute('aria-hidden') === 'true' ? 'none' : role,
     }
   })
 }
 
-function matchesExpectedName(
-  actual: string,
-  { expectedName }: InteractionManifestEntry,
-): boolean {
+function expectedAccessibleName({
+  expectedName,
+}: InteractionManifestEntry): string | RegExp {
   if (expectedName.startsWith('/') && expectedName.endsWith('/')) {
-    return new RegExp(expectedName.slice(1, -1), 'i').test(actual)
+    return new RegExp(expectedName.slice(1, -1), 'i')
   }
-  return actual === expectedName
+  return expectedName
 }
 
 async function assertInteractionContract(page: Page, state: string): Promise<void> {
   const rendered = page.locator(interactiveSelector)
   const failures: string[] = []
+  const visibleCounts = new Map<string, number>()
 
   for (let index = 0; index < (await rendered.count()); index += 1) {
     const locator = rendered.nth(index)
@@ -166,26 +142,57 @@ async function assertInteractionContract(page: Page, state: string): Promise<voi
       continue
     }
     if (!(await locator.isVisible())) continue
+    visibleCounts.set(id, (visibleCounts.get(id) ?? 0) + 1)
     const semantics = await renderedSemantics(locator)
-    if (semantics.ariaHidden) continue
     if (semantics.role !== entry.expectedRole) {
       failures.push(
         `${state}: ${id} role ${semantics.role} does not match ${entry.expectedRole}`,
       )
     }
-    if (!semantics.name) {
-      failures.push(`${state}: ${id} has no accessible name`)
-    } else if (!matchesExpectedName(semantics.name, entry)) {
+    try {
+      if (entry.accessibilityExemption) {
+        await expect(locator).toHaveAccessibleName('', { timeout: 0 })
+      } else {
+        await expect(locator).toHaveAccessibleName(expectedAccessibleName(entry), {
+          timeout: 0,
+        })
+      }
+    } catch {
       failures.push(
-        `${state}: ${id} name "${semantics.name}" does not match ${entry.expectedName}`,
+        entry.accessibilityExemption
+          ? `${state}: ${id} exemption is stale because it now has an accessible name`
+          : `${state}: ${id} accessible name does not match ${entry.expectedName}`,
       )
+    }
+  }
+
+  for (const [id, count] of visibleCounts) {
+    const entry = manifestById.get(id)
+    if (!entry) continue
+    if (entry.multiplicity === 'one' && count !== 1) {
+      failures.push(`${state}: ${id} expected one visible instance, found ${count}`)
+    }
+    for (const alternativeId of entry.accessibilityExemption?.alternativeInteractionIds ?? []) {
+      if ((visibleCounts.get(alternativeId) ?? 0) === 0) {
+        failures.push(`${state}: ${id} alternative ${alternativeId} is not visible`)
+      }
     }
   }
 
   expect(failures).toEqual([])
 }
 
+async function openPanel(page: Page, name: string): Promise<Locator> {
+  const toggle = page.getByRole('button', { name, exact: true })
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
+  const panel = page.getByRole('region', { name, exact: true })
+  await expect(panel).toBeVisible()
+  return panel
+}
+
 test.describe('production interaction contract', () => {
+  test.describe.configure({ timeout: 90_000 })
+
   test('covers studio, auth, pricing, stems, and licenses states', async ({ page }) => {
     await page.route('**/api/**', (route) => mockApi(route, false))
     await page.goto('/')
@@ -208,9 +215,62 @@ test.describe('production interaction contract', () => {
     await assertInteractionContract(page, 'licenses')
   })
 
-  test('covers authenticated profile and native stem controls', async ({ page }) => {
+  test('covers authenticated studio conditional states, profile, pricing, and stems', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      ;(window as unknown as { __CADENCE_AI_MOCK__: boolean }).__CADENCE_AI_MOCK__ = true
+    })
     await page.route('**/api/**', (route) => mockApi(route, true))
     await page.goto('/')
+    await expect(page.getByRole('button', { name: 'Profile' })).toBeVisible()
+
+    const skipLink = page.getByRole('link', { name: 'Skip to editor' })
+    await skipLink.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.locator('#composer-main')).toBeFocused()
+    await assertInteractionContract(page, 'authenticated studio')
+
+    const shareToggle = page.locator('[data-interaction="studio.share.toggle"]')
+    await shareToggle.click()
+    await expect(page.getByRole('group', { name: 'Share links' })).toBeVisible()
+    await assertInteractionContract(page, 'authenticated share panel')
+    await shareToggle.click()
+
+    await openPanel(page, 'Quick Starts')
+    await assertInteractionContract(page, 'quick starts open')
+
+    const aiStudio = await openPanel(page, 'AI Studio')
+    await expect(aiStudio.getByText('Pro · on-device')).toBeVisible()
+    await assertInteractionContract(page, 'AI Studio text to motif')
+    await aiStudio.getByRole('radio', { name: /Style transfer/ }).check()
+    await assertInteractionContract(page, 'AI Studio style transfer')
+    await aiStudio.getByRole('radio', { name: /Groove & humanize/ }).check()
+    await assertInteractionContract(page, 'AI Studio groove')
+    await aiStudio.getByRole('radio', { name: /Auto-master/ }).check()
+    await assertInteractionContract(page, 'AI Studio auto-master')
+
+    await openPanel(page, 'Mixer')
+    await assertInteractionContract(page, 'mixer open')
+
+    const extensions = await openPanel(page, 'Extensions')
+    await extensions.getByRole('checkbox', { name: /Hello Cadence \(example\)/ }).check()
+    await expect(page.getByRole('region', { name: 'Example plugin' })).toBeVisible()
+    await assertInteractionContract(page, 'extensions enabled')
+
+    await page.getByRole('button', { name: 'New' }).click()
+    await expect(page.getByText('Your canvas is empty.')).toBeVisible()
+    await assertInteractionContract(page, 'empty project')
+
+    const assistant = await openPanel(page, 'AI Assistant')
+    await assistant.getByRole('radio', { name: /Generate melody/ }).check()
+    await assistant.getByRole('button', { name: 'Generate' }).click()
+    await expect(assistant.getByRole('button', { name: 'Accept' })).toBeVisible()
+    await assertInteractionContract(page, 'assistant suggestion')
+
+    await page.getByRole('button', { name: 'Pricing' }).click()
+    await expect(page.getByRole('button', { name: 'Manage billing' })).toBeVisible()
+    await assertInteractionContract(page, 'pricing pro tier')
 
     await page.getByRole('button', { name: 'Profile' }).click()
     await assertInteractionContract(page, 'profile')
@@ -218,5 +278,16 @@ test.describe('production interaction contract', () => {
     await page.getByRole('button', { name: 'Stems' }).click()
     await expect(page.getByLabel('bass stem preview')).toBeVisible()
     await assertInteractionContract(page, 'stems pro results')
+  })
+})
+
+test.describe('first-run interaction contract', () => {
+  test.use({ storageState: { cookies: [], origins: [] } })
+
+  test('covers the visible onboarding dialog', async ({ page }) => {
+    await page.route('**/api/**', (route) => mockApi(route, false))
+    await page.goto('/')
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await assertInteractionContract(page, 'first-run onboarding')
   })
 })

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 /* Interaction coverage:
  * studio.track.visibility-all, studio.track.add, studio.track.select,
  * studio.track.name, studio.track.visibility, studio.track.mute, studio.track.delete
@@ -49,6 +50,28 @@ describe('<TrackPanel />', () => {
     })
     expect(toggle).toBeDisabled()
     expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('selects a different track for editing', async () => {
+    const user = userEvent.setup()
+    render(<Harness />)
+    await user.click(screen.getByRole('button', { name: '+ Add track' }))
+
+    const synth = screen.getByRole('button', { name: 'Select Synth' })
+    const added = screen.getByRole('button', { name: /Selected: Track 2/ })
+    expect(synth).toHaveAttribute('aria-pressed', 'false')
+    expect(added).toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(synth)
+
+    expect(screen.getByRole('button', { name: 'Selected: Synth' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: 'Select Track 2' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
   })
 
   it('toggles a non-selected track onto and off the piano roll', () => {

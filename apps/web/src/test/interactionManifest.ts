@@ -9,6 +9,11 @@ export type InteractionSurface =
 
 export type InteractionMultiplicity = 'one' | 'repeated'
 
+export interface InteractionAccessibilityExemption {
+  reason: string
+  alternativeInteractionIds: readonly string[]
+}
+
 export interface InteractionManifestEntry {
   id: string
   surface: InteractionSurface
@@ -17,8 +22,9 @@ export interface InteractionManifestEntry {
   outcome: string
   multiplicity: InteractionMultiplicity
   behaviorSpec: string
-  criticalE2e?: string
+  relatedE2e?: string
   notes?: string
+  accessibilityExemption?: InteractionAccessibilityExemption
 }
 
 type EntryFields = [
@@ -29,11 +35,21 @@ type EntryFields = [
   outcome: string,
   multiplicity?: InteractionMultiplicity,
   notes?: string,
+  accessibilityExemption?: InteractionAccessibilityExemption,
 ]
 
-function traced(behaviorSpec: string, criticalE2e?: string) {
+function traced(behaviorSpec: string, relatedE2e?: string) {
   return (...fields: EntryFields): InteractionManifestEntry => {
-    const [id, surface, expectedRole, expectedName, outcome, multiplicity = 'one', notes] = fields
+    const [
+      id,
+      surface,
+      expectedRole,
+      expectedName,
+      outcome,
+      multiplicity = 'one',
+      notes,
+      accessibilityExemption,
+    ] = fields
     return {
       id,
       surface,
@@ -42,8 +58,9 @@ function traced(behaviorSpec: string, criticalE2e?: string) {
       outcome,
       multiplicity,
       behaviorSpec,
-      ...(criticalE2e ? { criticalE2e } : {}),
+      ...(relatedE2e ? { relatedE2e } : {}),
       ...(notes ? { notes } : {}),
+      ...(accessibilityExemption ? { accessibilityExemption } : {}),
     }
   }
 }
@@ -268,7 +285,7 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'pricing.manage',
     'pricing',
     'button',
-    'Manage subscription',
+    'Manage billing',
     'Opens the billing portal URL or exposes an error.',
   ),
 
@@ -284,14 +301,14 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'studio.ai.motif.prompt',
     'studio',
     'textbox',
-    'Describe a motif',
+    'Prompt',
     'Updates the text-to-motif prompt.',
   ),
   aiStudio(
     'studio.ai.motif.length',
     'studio',
     'slider',
-    'Length',
+    '/Motif length/',
     'Updates motif length and its beat readout.',
   ),
   aiStudio(
@@ -305,7 +322,7 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'studio.ai.style.select',
     'studio',
     'combobox',
-    'Style',
+    '/Style/',
     'Updates the selected style-transfer preset.',
   ),
   aiStudio(
@@ -319,14 +336,14 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'studio.ai.groove.select',
     'studio',
     'combobox',
-    'Groove',
+    '/Groove/',
     'Updates the selected groove preset.',
   ),
   aiStudio(
     'studio.ai.groove.intensity',
     'studio',
     'slider',
-    'Intensity',
+    '/Intensity/',
     'Updates groove intensity and its percentage readout.',
   ),
   aiStudio(
@@ -399,7 +416,7 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'studio.automation.add-point',
     'studio',
     'button',
-    '/Write .+ at playhead/',
+    'Add point',
     'Writes the current automation value at the playhead.',
     'repeated',
   ),
@@ -415,10 +432,15 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'studio.automation.lane',
     'studio',
     'presentation',
-    '/.+ automation lane/',
+    '',
     'Writes an automation point at the pointer-derived beat and value.',
     'repeated',
-    'Pointer-only SVG graph remains presentation role; its labeled section owns context.',
+    'Known pointer-only baseline gap.',
+    {
+      reason:
+        'The SVG intentionally remains role=presentation with no accessible name in the current UX.',
+      alternativeInteractionIds: ['studio.automation.add-point'],
+    },
   ),
   automation(
     'studio.automation.remove-point',
@@ -535,7 +557,7 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'studio.mixer.master.gain',
     'studio',
     'slider',
-    'Gain',
+    '/Gain/',
     'Updates master gain and its decibel readout.',
   ),
   mixer(
@@ -549,7 +571,7 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'studio.mixer.master.ceiling',
     'studio',
     'slider',
-    'Ceiling',
+    '/Ceiling/',
     'Updates the limiter ceiling and its decibel readout.',
   ),
 
@@ -630,20 +652,28 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
   piano(
     'studio.piano-roll.note.resize-start',
     'studio',
-    'pointer handle',
-    'Start edge of selected note',
+    'none',
+    '',
     'Resizes the note from its start edge.',
     'repeated',
-    'Aria-hidden pointer handle; the containing note button owns the accessible name.',
+    'Aria-hidden pointer handle.',
+    {
+      reason: 'The resize handle is aria-hidden and the containing note button owns keyboard access.',
+      alternativeInteractionIds: ['studio.piano-roll.note'],
+    },
   ),
   piano(
     'studio.piano-roll.note.resize-end',
     'studio',
-    'pointer handle',
-    'End edge of selected note',
+    'none',
+    '',
     'Resizes the note from its end edge.',
     'repeated',
-    'Aria-hidden pointer handle; the containing note button owns the accessible name.',
+    'Aria-hidden pointer handle.',
+    {
+      reason: 'The resize handle is aria-hidden and the containing note button owns keyboard access.',
+      alternativeInteractionIds: ['studio.piano-roll.note'],
+    },
   ),
   piano(
     'studio.piano-roll.velocity.note',
@@ -911,7 +941,7 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'studio.empty.load-demo',
     'studio',
     'button',
-    'Load demo pattern',
+    'Load a demo pattern',
     'Loads the demo pattern from the empty composer state.',
   ),
   examplePlugin(
