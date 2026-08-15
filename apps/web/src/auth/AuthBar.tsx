@@ -116,8 +116,14 @@ export function AuthBar({ onShowProfile, profileActive }: AuthBarProps) {
         </Popover.Trigger>
 
         <Popover.Portal>
-          <Popover.Content className="auth-panel" id={`${formId}-panel`} align="end" sideOffset={8}>
-          <h2 className="auth-panel-title">
+          <Popover.Content
+            className="auth-panel"
+            id={`${formId}-panel`}
+            aria-labelledby={`${formId}-title`}
+            align="end"
+            sideOffset={8}
+          >
+          <h2 className="auth-panel-title" id={`${formId}-title`}>
             {mode === 'signin' ? 'Sign in to Cadence' : 'Create your account'}
           </h2>
 

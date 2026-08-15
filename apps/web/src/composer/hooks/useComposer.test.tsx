@@ -460,6 +460,86 @@ describe('useComposer — StrictMode lifecycle (regression #97)', () => {
       await flushing
       expect(consoleError).not.toHaveBeenCalled()
     })
+
+    it('queues a later autosave when a newer revision joins a rejected flush', async () => {
+      const first = deferred<StoredProjectMeta>()
+      const save = vi
+        .fn<ProjectStore['save']>()
+        .mockImplementationOnce(() => first.promise)
+        .mockImplementation(async (project) => ({
+          id: project.id,
+          name: project.name,
+          updatedAt: 2,
+        }))
+      const hook = renderHook(() =>
+        useComposer({
+          createEngine: () => new FakeEngine(),
+          store: fakeStore(save),
+          initialProject: createEmptyProject('retry'),
+          autosaveDelay: 20,
+        }),
+      )
+
+      act(() => hook.result.current.setProjectName('Revision one'))
+      await waitFor(() => expect(hook.result.current.project.name).toBe('Revision one'))
+      const failedFlush = hook.result.current.flushAutosave()
+      await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+      act(() => hook.result.current.setProjectName('Revision two'))
+      first.reject(new Error('offline'))
+      await expect(failedFlush).rejects.toThrow('offline')
+
+      await waitFor(() => expect(save).toHaveBeenCalledTimes(2), { timeout: 1_500 })
+      expect(save.mock.calls[1][0].name).toBe('Revision two')
+      await waitFor(() => expect(hook.result.current.isDirty).toBe(false))
+    })
+
+    it('explicit retry after failure persists the latest revision', async () => {
+      const save = vi
+        .fn<ProjectStore['save']>()
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockImplementation(async (project) => ({
+          id: project.id,
+          name: project.name,
+          updatedAt: 2,
+        }))
+      const hook = renderHook(() =>
+        useComposer({
+          createEngine: () => new FakeEngine(),
+          store: fakeStore(save),
+          initialProject: createEmptyProject('explicit-retry'),
+          autosaveDelay: 60_000,
+        }),
+      )
+
+      act(() => hook.result.current.setProjectName('Newest revision'))
+      await waitFor(() => expect(hook.result.current.project.name).toBe('Newest revision'))
+      await expect(hook.result.current.flushAutosave()).rejects.toThrow('offline')
+      await act(() => hook.result.current.flushAutosave())
+
+      expect(save).toHaveBeenCalledTimes(2)
+      expect(save.mock.calls[1][0].name).toBe('Newest revision')
+      expect(hook.result.current.isDirty).toBe(false)
+    })
+
+    it('does not retry the same persistently failing revision in a loop', async () => {
+      const save = vi.fn(async () => Promise.reject(new Error('offline')))
+      const hook = renderHook(() =>
+        useComposer({
+          createEngine: () => new FakeEngine(),
+          store: fakeStore(save),
+          initialProject: createEmptyProject('no-hot-loop'),
+          autosaveDelay: 20,
+        }),
+      )
+
+      act(() => hook.result.current.setProjectName('One failing revision'))
+      await waitFor(() => expect(hook.result.current.project.name).toBe('One failing revision'))
+      await expect(hook.result.current.flushAutosave()).rejects.toThrow('offline')
+      await new Promise((resolve) => setTimeout(resolve, 600))
+
+      expect(save).toHaveBeenCalledTimes(1)
+      expect(hook.result.current.isDirty).toBe(true)
+    })
   })
 })
 

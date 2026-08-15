@@ -7,6 +7,12 @@ import {
 import { AppFrame } from './AppFrame'
 import { AppProviders } from './AppProviders'
 import type { ProjectStore } from '../composer/model/storage'
+import {
+  loadLicensesRoute,
+  loadPricingRoute,
+  loadProfileRoute,
+  loadStemsRoute,
+} from './routeLoaders'
 
 function appRoutes(): RouteObject[] {
   return [
@@ -30,34 +36,22 @@ function appRoutes(): RouteObject[] {
       {
         path: 'stems',
         handle: { title: 'Stems | Cadence', announcement: 'Stems' },
-        lazy: async () => {
-          const { StemsRoute } = await import('./routes/StemsRoute')
-          return { Component: StemsRoute }
-        },
+        lazy: loadStemsRoute,
       },
       {
         path: 'pricing',
         handle: { title: 'Pricing | Cadence', announcement: 'Pricing' },
-        lazy: async () => {
-          const { PricingRoute } = await import('./routes/PricingRoute')
-          return { Component: PricingRoute }
-        },
+        lazy: loadPricingRoute,
       },
       {
         path: 'profile',
         handle: { title: 'Profile | Cadence', announcement: 'Profile' },
-        lazy: async () => {
-          const { ProfileRoute } = await import('./routes/ProfileRoute')
-          return { Component: ProfileRoute }
-        },
+        lazy: loadProfileRoute,
       },
       {
         path: 'licenses',
         handle: { title: 'Licenses | Cadence', announcement: 'Licenses' },
-        lazy: async () => {
-          const { LicensesRoute } = await import('./routes/LicensesRoute')
-          return { Component: LicensesRoute }
-        },
+        lazy: loadLicensesRoute,
       },
       {
         path: '*',

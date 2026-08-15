@@ -184,6 +184,50 @@ describe('useCollaboration', () => {
     expect(providers[1].destroy).toHaveBeenCalledTimes(1)
   })
 
+  it.each([
+    ['id', { id: 'u2' }],
+    ['name', { name: 'Ada Updated' }],
+    ['color', { color: '#0ff' }],
+  ] as const)('reconnects once when collaboration user %s changes', (_field, change) => {
+    const binding = makeBinding(seedProject())
+    const { rerender } = renderHook(
+      ({ next }: { next: CollabConfig }) => useCollaboration(binding, next, factory),
+      { initialProps: { next: config } },
+    )
+    const first = providers[0]
+    const updatedUser = { ...config.user, ...change }
+
+    rerender({
+      next: {
+        ...config,
+        user: updatedUser,
+      },
+    })
+
+    expect(first.destroy).toHaveBeenCalledTimes(1)
+    expect(providers).toHaveLength(2)
+    expect(providers[1].awareness.getLocalState()?.user).toMatchObject(updatedUser)
+  })
+
+  it('does not reconnect for an equivalent collaboration identity object', () => {
+    const binding = makeBinding(seedProject())
+    const { rerender } = renderHook(
+      ({ next }: { next: CollabConfig }) => useCollaboration(binding, next, factory),
+      { initialProps: { next: config } },
+    )
+    const first = providers[0]
+
+    rerender({
+      next: {
+        ...config,
+        user: { ...config.user },
+      },
+    })
+
+    expect(first.destroy).not.toHaveBeenCalled()
+    expect(providers).toHaveLength(1)
+  })
+
   it('defers seeding until the provider reports its initial sync', () => {
     const built: Array<ReturnType<typeof fakeSyncingProvider>> = []
     const syncingFactory = () => {

@@ -90,7 +90,9 @@ test.describe('pwa', () => {
     }
   })
 
-  test('reloads every visited secondary route while offline', async ({ page }) => {
+  test('opens unvisited secondary routes after background warming while offline', async ({
+    page,
+  }) => {
     test.setTimeout(90_000)
     const routes = [
       ['/stems', 'Stem separation'],
@@ -102,17 +104,24 @@ test.describe('pwa', () => {
     await page.goto('/')
     await waitForServiceWorkerReady(page)
     await expectServiceWorkerController(page)
+    await page.waitForFunction(
+      () =>
+        (window as unknown as { __CADENCE_ROUTE_PREFETCH_READY__?: boolean })
+          .__CADENCE_ROUTE_PREFETCH_READY__ === true,
+      undefined,
+      { timeout: 30_000 },
+    )
 
-    for (const [path, heading] of routes) {
-      await page.goto(path)
-      await expect(page.getByRole('heading', { name: heading })).toBeVisible()
-      try {
-        await page.context().setOffline(true)
+    try {
+      await page.context().setOffline(true)
+      for (const [path, heading] of routes) {
+        await page.goto(path)
+        await expect(page.getByRole('heading', { name: heading })).toBeVisible()
         await page.reload()
         await expect(page.getByRole('heading', { name: heading })).toBeVisible()
-      } finally {
-        await page.context().setOffline(false)
       }
+    } finally {
+      await page.context().setOffline(false)
     }
   })
 

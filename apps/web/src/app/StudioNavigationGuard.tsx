@@ -3,29 +3,47 @@ import { useBlocker } from 'react-router-dom'
 import type { ComposerController } from '../composer/hooks/useComposer'
 
 interface StudioNavigationGuardProps {
-  controller: Pick<ComposerController, 'isDirty' | 'flushAutosave'>
+  controller: Pick<ComposerController, 'isDirty' | 'isFlushing' | 'flushAutosave'>
 }
 
 export function StudioNavigationGuard({ controller }: StudioNavigationGuardProps) {
+  const { isDirty, isFlushing, flushAutosave } = controller
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
-      controller.isDirty &&
+      isDirty &&
       currentLocation.pathname === '/' &&
       nextLocation.pathname !== currentLocation.pathname,
   )
   const [error, setError] = useState<string | null>(null)
   const retryRef = useRef<HTMLButtonElement>(null)
   const attemptedKeyRef = useRef<string | null>(null)
+  const generationRef = useRef(0)
+  const saveAttemptRef = useRef<Promise<void> | null>(null)
 
-  const flushAndProceed = useCallback(async () => {
+  const saveOnce = useCallback(() => {
+    if (saveAttemptRef.current) return saveAttemptRef.current
+    const attempt = flushAutosave().finally(() => {
+      if (saveAttemptRef.current === attempt) saveAttemptRef.current = null
+    })
+    saveAttemptRef.current = attempt
+    return attempt
+  }, [flushAutosave])
+
+  const flushAndProceed = useCallback(async (generation: number) => {
     setError(null)
     try {
-      await controller.flushAutosave()
-      if (blocker.state === 'blocked') blocker.proceed()
+      await saveOnce()
+      if (generation === generationRef.current && blocker.state === 'blocked') {
+        blocker.proceed()
+      }
     } catch {
-      setError('Cadence couldn’t save your latest changes. Retry or discard them to leave Studio.')
+      if (generation === generationRef.current) {
+        setError(
+          'Cadence couldn’t save your latest changes. Retry or discard them to leave Studio.',
+        )
+      }
     }
-  }, [blocker, controller])
+  }, [blocker, saveOnce])
 
   useEffect(() => {
     if (blocker.state !== 'blocked') {
@@ -35,7 +53,8 @@ export function StudioNavigationGuard({ controller }: StudioNavigationGuardProps
     const key = blocker.location.key
     if (attemptedKeyRef.current === key) return
     attemptedKeyRef.current = key
-    void flushAndProceed()
+    generationRef.current += 1
+    void flushAndProceed(generationRef.current)
   }, [blocker, flushAndProceed])
 
   useEffect(() => {
@@ -43,12 +62,34 @@ export function StudioNavigationGuard({ controller }: StudioNavigationGuardProps
   }, [error])
 
   useEffect(() => {
-    const flush = () => {
-      if (controller.isDirty) void controller.flushAutosave().catch(() => undefined)
+    if (!isDirty && !isFlushing) return
+    // Browsers cannot await pagehide cleanup. beforeunload is the only full-page
+    // boundary here: confirming it is an explicit discard. Durable crash/unload
+    // recovery belongs to the start-center hydration work in #154.
+    const confirmUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
     }
-    window.addEventListener('pagehide', flush)
-    return () => window.removeEventListener('pagehide', flush)
-  }, [controller])
+    window.addEventListener('beforeunload', confirmUnload)
+    return () => window.removeEventListener('beforeunload', confirmUnload)
+  }, [isDirty, isFlushing])
+
+  useEffect(() => {
+    const bestEffortFlush = () => {
+      if (isDirty && !isFlushing) {
+        void flushAutosave().catch(() => undefined)
+      }
+    }
+    const flushWhenHidden = () => {
+      if (document.visibilityState === 'hidden') bestEffortFlush()
+    }
+    window.addEventListener('pagehide', bestEffortFlush)
+    document.addEventListener('visibilitychange', flushWhenHidden)
+    return () => {
+      window.removeEventListener('pagehide', bestEffortFlush)
+      document.removeEventListener('visibilitychange', flushWhenHidden)
+    }
+  }, [flushAutosave, isDirty, isFlushing])
 
   if (blocker.state !== 'blocked') return null
 
@@ -70,7 +111,10 @@ export function StudioNavigationGuard({ controller }: StudioNavigationGuardProps
           type="button"
           className="btn btn-primary"
           data-interaction="studio.autosave.retry"
-          onClick={() => void flushAndProceed()}
+          onClick={() => {
+            generationRef.current += 1
+            void flushAndProceed(generationRef.current)
+          }}
         >
           Retry save
         </button>
@@ -78,7 +122,10 @@ export function StudioNavigationGuard({ controller }: StudioNavigationGuardProps
           type="button"
           className="btn"
           data-interaction="studio.autosave.discard"
-          onClick={() => blocker.proceed()}
+          onClick={() => {
+            generationRef.current += 1
+            blocker.proceed()
+          }}
         >
           Discard changes
         </button>

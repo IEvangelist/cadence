@@ -1,6 +1,5 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useState } from 'react'
 import {
   createMemoryRouter,
   RouterProvider,
@@ -10,14 +9,24 @@ import { describe, expect, it, vi } from 'vitest'
 import { coversInteractions } from '../test/coversInteractions'
 import { StudioNavigationGuard } from './StudioNavigationGuard'
 
-function Studio({ flushAutosave }: { flushAutosave: () => Promise<void> }) {
+function Studio({
+  flushAutosave,
+  dirty = true,
+  isFlushing = false,
+}: {
+  flushAutosave: () => Promise<void>
+  dirty?: boolean
+  isFlushing?: boolean
+}) {
   const navigate = useNavigate()
-  const [dirty] = useState(true)
   return (
     <>
-      <StudioNavigationGuard controller={{ isDirty: dirty, flushAutosave }} />
+      <StudioNavigationGuard controller={{ isDirty: dirty, isFlushing, flushAutosave }} />
       <button type="button" onClick={() => void navigate('/pricing')}>
-        Leave
+        Pricing
+      </button>
+      <button type="button" onClick={() => void navigate('/stems')}>
+        Stems
       </button>
     </>
   )
@@ -28,6 +37,7 @@ function renderGuard(flushAutosave: () => Promise<void>) {
     [
       { path: '/', element: <Studio flushAutosave={flushAutosave} /> },
       { path: '/pricing', element: <h1>Pricing</h1> },
+      { path: '/stems', element: <h1>Stems</h1> },
     ],
     { initialEntries: ['/'] },
   )
@@ -45,7 +55,7 @@ describe('<StudioNavigationGuard />', () => {
       .mockResolvedValue(undefined)
     renderGuard(flush)
 
-    await user.click(screen.getByRole('button', { name: 'Leave' }))
+    await user.click(screen.getByRole('button', { name: 'Pricing' }))
     await user.click(await screen.findByRole('button', { name: 'Retry save' }))
 
     expect(await screen.findByRole('heading', { name: 'Pricing' })).toBeInTheDocument()
@@ -57,9 +67,70 @@ describe('<StudioNavigationGuard />', () => {
     const user = userEvent.setup()
     renderGuard(vi.fn(async () => Promise.reject(new Error('offline'))))
 
-    await user.click(screen.getByRole('button', { name: 'Leave' }))
+    await user.click(screen.getByRole('button', { name: 'Pricing' }))
     await user.click(await screen.findByRole('button', { name: 'Discard changes' }))
 
     expect(await screen.findByRole('heading', { name: 'Pricing' })).toBeInTheDocument()
+  })
+
+  it('registers beforeunload only while dirty or flushing', () => {
+    const add = vi.spyOn(window, 'addEventListener')
+    const remove = vi.spyOn(window, 'removeEventListener')
+    const flush = vi.fn(async () => undefined)
+    const router = createMemoryRouter(
+      [
+        {
+          path: '/',
+          element: <Studio flushAutosave={flush} dirty={false} />,
+        },
+      ],
+      { initialEntries: ['/'] },
+    )
+    const rendered = render(<RouterProvider router={router} />)
+    expect(add.mock.calls.some(([type]) => String(type) === 'beforeunload')).toBe(false)
+
+    const dirtyRouter = createMemoryRouter(
+      [
+        {
+          path: '/',
+          element: <Studio flushAutosave={flush} dirty />,
+        },
+      ],
+      { initialEntries: ['/'] },
+    )
+    rendered.rerender(<RouterProvider router={dirtyRouter} />)
+    expect(add.mock.calls.some(([type]) => String(type) === 'beforeunload')).toBe(true)
+
+    rendered.unmount()
+    expect(remove.mock.calls.some(([type]) => String(type) === 'beforeunload')).toBe(true)
+
+    const flushingRouter = createMemoryRouter(
+      [
+        {
+          path: '/',
+          element: <Studio flushAutosave={flush} dirty={false} isFlushing />,
+        },
+      ],
+      { initialEntries: ['/'] },
+    )
+    render(<RouterProvider router={flushingRouter} />)
+    expect(add.mock.calls.filter(([type]) => String(type) === 'beforeunload')).toHaveLength(2)
+  })
+
+  it('allows only the latest blocked destination to proceed', async () => {
+    const user = userEvent.setup()
+    let resolve!: () => void
+    const pending = new Promise<void>((accept) => {
+      resolve = accept
+    })
+    const flush = vi.fn(() => pending)
+    renderGuard(flush)
+
+    await user.click(screen.getByRole('button', { name: 'Pricing' }))
+    await user.click(screen.getByRole('button', { name: 'Stems' }))
+    resolve()
+
+    expect(await screen.findByRole('heading', { name: 'Stems' })).toBeInTheDocument()
+    expect(flush).toHaveBeenCalledTimes(1)
   })
 })

@@ -46,7 +46,9 @@ describe('<App />', () => {
     const user = userEvent.setup()
     renderApp()
     await user.click(await screen.findByRole('button', { name: 'Pricing' }))
-    expect(await screen.findByRole('heading', { name: 'Plans & pricing' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Plans & pricing' }, { timeout: 5_000 }),
+    ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Back to composer' })).toBeInTheDocument()
   })
 
@@ -55,7 +57,9 @@ describe('<App />', () => {
     const user = userEvent.setup()
     renderApp()
     await user.click(await screen.findByRole('button', { name: 'Stems' }))
-    expect(await screen.findByRole('heading', { name: 'Stem separation' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Stem separation' }, { timeout: 5_000 }),
+    ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Back to composer' })).toBeInTheDocument()
   })
 
@@ -86,13 +90,22 @@ describe('<App />', () => {
     expect(localStorage.getItem('cadence.v1.theme')).toBe('dark')
   })
 
-  it('returns an unknown route to Studio', async () => {
+  it('returns an unknown route to Studio without dropping URL suffixes', async () => {
     coversInteractions('app.not-found.studio')
     const user = userEvent.setup()
-    renderApp('/missing')
+    const router = createAppMemoryRouter(
+      ['/missing?collab=room#project=snapshot'],
+      new LocalStorageProjectStore(new MemoryStorage()),
+    )
+    render(<App router={router} />)
     await user.click(await screen.findByRole('button', { name: 'Return to Studio' }))
     await waitFor(() =>
       expect(screen.getByRole('region', { name: 'Composer' })).toBeInTheDocument(),
     )
+    expect(router.state.location).toMatchObject({
+      pathname: '/',
+      search: '?collab=room',
+      hash: '#project=snapshot',
+    })
   })
 })

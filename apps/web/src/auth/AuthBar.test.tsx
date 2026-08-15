@@ -77,6 +77,15 @@ describe('AuthBar', () => {
     expect(signIn).toHaveBeenCalledWith('a@b.com', 'secret12')
   })
 
+  it('names the authentication popover dialog from its title', async () => {
+    const user = userEvent.setup()
+    renderBar(makeValue())
+
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+
+    expect(screen.getByRole('dialog', { name: 'Sign in to Cadence' })).toBeInTheDocument()
+  })
+
   it('toggles to register mode, submits, and confirms a verification email was sent', async () => {
     coversInteractions('auth.mode.toggle', 'auth.registration.display-name')
     const user = userEvent.setup()

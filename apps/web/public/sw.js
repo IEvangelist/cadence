@@ -53,10 +53,11 @@ self.addEventListener('fetch', (event) => {
         return cached
       }
 
-      return fetch(request).then((response) => {
+      return fetch(request).then(async (response) => {
         if (response.status === 200 && response.type === 'basic') {
           const copy = response.clone()
-          caches.open(CACHE).then((cache) => cache.put(request, copy))
+          const cache = await caches.open(CACHE)
+          await cache.put(request, copy)
         }
 
         return response

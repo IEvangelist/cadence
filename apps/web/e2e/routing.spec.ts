@@ -104,6 +104,12 @@ test.describe('browser-history routes', () => {
     await expect(page).toHaveTitle('Pricing | Cadence')
   })
 
+  test('not-found recovery preserves collaboration and share suffixes', async ({ page }) => {
+    await page.goto('/missing?collab=room#project=snapshot')
+    await page.getByRole('button', { name: 'Return to Studio' }).click()
+    await expect(page).toHaveURL(/\/\?collab=room#project=snapshot$/)
+  })
+
   test('consumes a shared project hash with router replace and preserves search', async ({
     page,
   }) => {
@@ -186,5 +192,39 @@ test.describe('browser-history routes', () => {
     await expect(page.getByText('Saving changes…')).toBeVisible()
     await back
     await expect(page).toHaveURL(/\/pricing$/)
+  })
+
+  test('only the latest destination proceeds during one slow save', async ({ page }) => {
+    const state: MockProjectState = {}
+    const pageErrors: Error[] = []
+    page.on('pageerror', (error) => pageErrors.push(error))
+    await page.route('**/api/**', (route) => mockAuthenticatedApi(route, state, 600))
+    await page.goto('/')
+    await page.getByLabel('Project name').fill('Latest destination')
+
+    await page.getByRole('button', { name: 'Pricing' }).click()
+    await page.getByRole('button', { name: 'Stems' }).click()
+
+    await expect(page).toHaveURL(/\/stems$/, { timeout: 5_000 })
+    expect(pageErrors).toEqual([])
+  })
+
+  test('registers unload confirmation only while Studio has unsaved work', async ({
+    page,
+  }) => {
+    const dispatchBeforeUnload = () =>
+      page.evaluate(() => {
+        const event = new Event('beforeunload', { cancelable: true })
+        window.dispatchEvent(event)
+        return event.defaultPrevented
+      })
+
+    await page.goto('/')
+    await expect.poll(dispatchBeforeUnload).toBe(false)
+
+    await page.getByLabel('Project name').fill('Dirty before unload')
+    await expect.poll(dispatchBeforeUnload).toBe(true)
+
+    await expect.poll(dispatchBeforeUnload, { timeout: 5_000 }).toBe(false)
   })
 })

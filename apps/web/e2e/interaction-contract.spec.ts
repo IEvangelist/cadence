@@ -250,6 +250,7 @@ test.describe('production interaction contract', () => {
     await page.getByRole('menuitemradio', { name: 'System theme' }).click()
 
     await page.getByRole('button', { name: 'Sign in' }).click()
+    await expect(page.getByRole('dialog', { name: 'Sign in to Cadence' })).toBeVisible()
     await assertInteractionContract(page, 'auth sign-in', observed)
     await page.getByRole('button', { name: /Create an account/ }).click()
     await assertInteractionContract(page, 'auth registration', observed)

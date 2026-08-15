@@ -12,6 +12,7 @@ import {
   browserThemeStorage,
   readThemePreference,
 } from './theme/themeStorage'
+import { prefetchSecondaryRoutes } from './app/routePrefetch'
 
 applyThemePreference(readThemePreference(browserThemeStorage()))
 
@@ -22,3 +23,6 @@ createRoot(document.getElementById('root')!).render(
 )
 
 registerServiceWorker()
+void prefetchSecondaryRoutes().catch(() => {
+  // Route navigation remains network-first when background warming is unavailable.
+})
