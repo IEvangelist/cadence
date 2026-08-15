@@ -79,9 +79,13 @@ describe('<OnboardingTour />', () => {
   })
 
   it('skips, closes, and dismisses from the backdrop with persistence', async () => {
+    coversInteractions(
+      'onboarding.skip',
+      'onboarding.close',
+      'onboarding.dismiss-backdrop',
+    )
     const skipStorage = renderTour()
     await findDialog()
-    coversInteractions('onboarding.skip')
     fireEvent.click(screen.getByRole('button', { name: 'Skip tour' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(skipStorage.getItem(ONBOARDING_SEEN_KEY)).toBe('1')
@@ -89,7 +93,6 @@ describe('<OnboardingTour />', () => {
     const closeStorage = new MemoryOnboardingStorage()
     render(<OnboardingTour storage={closeStorage} autoOpenDelay={0} />)
     await findDialog()
-    coversInteractions('onboarding.close')
     fireEvent.click(screen.getByRole('button', { name: 'Close onboarding tour' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(closeStorage.getItem(ONBOARDING_SEEN_KEY)).toBe('1')
@@ -97,7 +100,6 @@ describe('<OnboardingTour />', () => {
     const backdropStorage = new MemoryOnboardingStorage()
     render(<OnboardingTour storage={backdropStorage} autoOpenDelay={0} />)
     await findDialog()
-    coversInteractions('onboarding.dismiss-backdrop')
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss onboarding tour' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(backdropStorage.getItem(ONBOARDING_SEEN_KEY)).toBe('1')

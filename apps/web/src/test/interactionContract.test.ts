@@ -249,33 +249,267 @@ function callArguments(node: AstNode): unknown[] {
 function callMembers(value: unknown): string[] {
   if (!isAstNode(value)) return []
   if (value.type === 'MemberExpression') {
-    const property =
-      isAstNode(value.property) &&
-      value.property.type === 'Identifier' &&
-      typeof value.property.name === 'string'
+    const property = value.computed
+      ? isAstNode(value.property) &&
+        value.property.type === 'Literal' &&
+        typeof value.property.value === 'string'
+        ? [value.property.value]
+        : ['[computed]']
+      : isAstNode(value.property) &&
+          value.property.type === 'Identifier' &&
+          typeof value.property.name === 'string'
         ? [value.property.name]
-        : []
+        : ['[computed]']
     return [...callMembers(value.object), ...property]
   }
   if (value.type === 'CallExpression') return callMembers(value.callee)
   return []
 }
 
-function isFunctionNode(value: unknown): value is AstNode {
+function hasConditionalCallChain(value: unknown): boolean {
+  if (!isAstNode(value)) return false
+  if (value.type === 'ChainExpression' || value.optional === true) return true
+  if (value.type === 'MemberExpression' || value.type === 'CallExpression') {
+    return hasConditionalCallChain(value.object) || hasConditionalCallChain(value.callee)
+  }
+  return false
+}
+
+interface FunctionAstNode extends AstNode {
+  type: 'ArrowFunctionExpression' | 'FunctionExpression' | 'FunctionDeclaration'
+}
+
+function isFunctionNode(value: unknown): value is FunctionAstNode {
   return (
     isAstNode(value) &&
-    ['ArrowFunctionExpression', 'FunctionExpression'].includes(value.type)
+    ['ArrowFunctionExpression', 'FunctionExpression', 'FunctionDeclaration'].includes(
+      value.type,
+    )
   )
 }
 
-function visitDirectCallback(value: unknown, visit: (node: AstNode) => void): void {
-  if (Array.isArray(value)) {
-    value.forEach((child) => visitDirectCallback(child, visit))
-    return
+function isExecutableCallback(value: unknown): value is FunctionAstNode {
+  return (
+    isFunctionNode(value) &&
+    value.type !== 'FunctionDeclaration' &&
+    value.generator !== true
+  )
+}
+
+interface TestInvocation {
+  callback: FunctionAstNode
+  options: unknown[]
+}
+
+function isStaticTestName(value: unknown): boolean {
+  return (
+    (isAstNode(value) &&
+      value.type === 'Literal' &&
+      typeof value.value === 'string') ||
+    (isAstNode(value) &&
+      value.type === 'TemplateLiteral' &&
+      Array.isArray(value.expressions) &&
+      value.expressions.length === 0)
+  )
+}
+
+function testInvocation(node: AstNode): TestInvocation | undefined {
+  const args = callArguments(node)
+  if (!isStaticTestName(args[0])) return undefined
+  const callbackIndex = args.findIndex(
+    (argument, index) => index > 0 && isExecutableCallback(argument),
+  )
+  if (callbackIndex < 0) return undefined
+  return {
+    callback: args[callbackIndex] as FunctionAstNode,
+    options: args.slice(1, callbackIndex),
   }
-  if (!isAstNode(value) || isFunctionNode(value)) return
-  visit(value)
-  nodeChildren(value).forEach((child) => visitDirectCallback(child, visit))
+}
+
+function propertyName(value: unknown): string | undefined {
+  if (!isAstNode(value)) return undefined
+  if (value.type === 'Identifier' && typeof value.name === 'string') return value.name
+  if (value.type === 'Literal' && typeof value.value === 'string') return value.value
+  return undefined
+}
+
+function hasConditionalOptions(options: unknown[]): boolean {
+  return options.some((option) => {
+    if (!isAstNode(option) || option.type !== 'ObjectExpression') return true
+    if (!Array.isArray(option.properties)) return true
+    return option.properties.some((property) => {
+      if (!isAstNode(property) || property.type !== 'Property') return true
+      const key = propertyName(property.key)
+      return (
+        !key ||
+        ['skip', 'todo', 'skipIf', 'runIf'].includes(key) ||
+        property.computed === true
+      )
+    })
+  })
+}
+
+function unwrapStaticExpression(value: unknown): AstNode | undefined {
+  if (!isAstNode(value)) return undefined
+  if (
+    ['TSAsExpression', 'TSTypeAssertion', 'TSNonNullExpression'].includes(value.type) &&
+    isAstNode(value.expression)
+  ) {
+    return unwrapStaticExpression(value.expression)
+  }
+  return value
+}
+
+function hasProvablyNonEmptyEachData(value: unknown): boolean {
+  if (!isAstNode(value)) return false
+  if (
+    value.type === 'CallExpression' &&
+    callMembers(value.callee).includes('each')
+  ) {
+    const data = unwrapStaticExpression(callArguments(value)[0])
+    return (
+      data?.type === 'ArrayExpression' &&
+      Array.isArray(data.elements) &&
+      data.elements.length > 0 &&
+      data.elements.every(
+        (element) => isAstNode(element) && element.type !== 'SpreadElement',
+      )
+    )
+  }
+  if (value.type === 'CallExpression' || value.type === 'MemberExpression') {
+    return (
+      hasProvablyNonEmptyEachData(value.callee) ||
+      hasProvablyNonEmptyEachData(value.object)
+    )
+  }
+  return false
+}
+
+function isIdentifierCall(node: AstNode, name: string): boolean {
+  return (
+    node.type === 'CallExpression' &&
+    isAstNode(node.callee) &&
+    node.callee.type === 'Identifier' &&
+    node.callee.name === name
+  )
+}
+
+function directStatements(callback: AstNode): AstNode[] {
+  return (
+    isAstNode(callback.body) &&
+    callback.body.type === 'BlockStatement' &&
+    Array.isArray(callback.body.body)
+  )
+    ? callback.body.body.filter(isAstNode)
+    : []
+}
+
+function directCoverageCalls(callback: AstNode): AstNode[] {
+  const calls: AstNode[] = []
+  for (const statement of directStatements(callback)) {
+    const expression =
+      statement.type === 'ExpressionStatement' && isAstNode(statement.expression)
+        ? statement.expression
+        : undefined
+    if (!expression || !isIdentifierCall(expression, 'coversInteractions')) break
+    calls.push(expression)
+  }
+  return calls
+}
+
+function containsCallOutsideNestedFunctions(value: unknown, name: string): boolean {
+  if (Array.isArray(value)) {
+    return value.some((child) => containsCallOutsideNestedFunctions(child, name))
+  }
+  if (
+    !isAstNode(value) ||
+    isFunctionNode(value) ||
+    [
+      'LogicalExpression',
+      'ConditionalExpression',
+      'ChainExpression',
+      'ClassExpression',
+      'ClassDeclaration',
+    ].includes(value.type) ||
+    value.optional === true
+  ) {
+    return false
+  }
+  if (isIdentifierCall(value, name)) return true
+  return nodeChildren(value).some((child) =>
+    containsCallOutsideNestedFunctions(child, name),
+  )
+}
+
+const assertionHelpers = new Set(['waitFor', 'waitForElementToBeRemoved'])
+
+function unwrapAwait(value: unknown): AstNode | undefined {
+  if (!isAstNode(value)) return undefined
+  if (value.type === 'AwaitExpression' && isAstNode(value.argument)) {
+    return value.argument
+  }
+  return value
+}
+
+const executionBarriers = new Set([
+  'ReturnStatement',
+  'ThrowStatement',
+  'IfStatement',
+  'SwitchStatement',
+  'ForStatement',
+  'ForInStatement',
+  'ForOfStatement',
+  'WhileStatement',
+  'DoWhileStatement',
+  'TryStatement',
+])
+
+function statementExpression(statement: AstNode): AstNode | undefined {
+  if (statement.type === 'ExpressionStatement' && isAstNode(statement.expression)) {
+    return statement.expression
+  }
+  if (statement.type === 'ReturnStatement' && isAstNode(statement.argument)) {
+    return statement.argument
+  }
+  return undefined
+}
+
+function directHelperHasAssertion(value: unknown): boolean {
+  const call = unwrapAwait(value)
+  if (
+    !call ||
+    call.type !== 'CallExpression' ||
+    !isAstNode(call.callee) ||
+    call.callee.type !== 'Identifier' ||
+    !assertionHelpers.has(call.callee.name as string)
+  ) {
+    return false
+  }
+  return callArguments(call)
+    .filter(isExecutableCallback)
+    .some((callback) => hasReachableAssertion(callback, false))
+}
+
+function hasReachableAssertion(
+  callback: AstNode,
+  allowAssertionHelpers = true,
+): boolean {
+  if (!isAstNode(callback.body)) return false
+  if (callback.body.type !== 'BlockStatement') {
+    return containsCallOutsideNestedFunctions(callback.body, 'expect')
+  }
+  for (const statement of directStatements(callback)) {
+    const expression = statementExpression(statement)
+    if (
+      expression &&
+      (containsCallOutsideNestedFunctions(expression, 'expect') ||
+        (allowAssertionHelpers && directHelperHasAssertion(expression)))
+    ) {
+      return true
+    }
+    if (executionBarriers.has(statement.type)) return false
+  }
+  return false
 }
 
 function scanBehaviorSpecText(text: string, absoluteFile: string): SpecCoverage {
@@ -296,56 +530,106 @@ function scanBehaviorSpecText(text: string, absoluteFile: string): SpecCoverage 
     ) {
       allCoverageLines.add(node.loc?.start.line ?? 0)
     }
+  })
 
-    if (
-      node.type !== 'CallExpression' ||
-      !['it', 'test'].includes(callRootName(node.callee) ?? '') ||
-      callMembers(node.callee).some((member) => ['skip', 'todo'].includes(member))
-    ) {
+  const conditionalNodes = new Set([
+    'IfStatement',
+    'SwitchStatement',
+    'ForStatement',
+    'ForInStatement',
+    'ForOfStatement',
+    'WhileStatement',
+    'DoWhileStatement',
+    'TryStatement',
+    'ConditionalExpression',
+    'LogicalExpression',
+  ])
+  const executableModifiers = new Set([
+    'only',
+    'concurrent',
+    'sequential',
+    'shuffle',
+    'fails',
+    'each',
+  ])
+
+  const scanExecutionTree = (value: unknown, blocked = false): void => {
+    if (Array.isArray(value)) {
+      value.forEach((child) => scanExecutionTree(child, blocked))
       return
     }
+    if (!isAstNode(value) || isFunctionNode(value)) return
 
-    const callback = callArguments(node).find(isFunctionNode)
-    if (!callback) return
-    let hasAssertion = false
-    const coverageCalls: AstNode[] = []
+    if (value.type === 'CallExpression') {
+      const root = callRootName(value.callee)
+      const members = callMembers(value.callee)
+      const invocation = testInvocation(value)
+      const callback = invocation?.callback
+      const invalidOptions = invocation
+        ? hasConditionalOptions(invocation.options)
+        : true
+      const invalidEach =
+        members.includes('each') && !hasProvablyNonEmptyEachData(value.callee)
 
-    visitAst(callback, (candidate) => {
-      if (candidate.type !== 'CallExpression') return
-      const name = callRootName(candidate.callee)
-      if (name === 'expect') hasAssertion = true
-    })
-    visitDirectCallback(callback.body, (candidate) => {
-      if (
-        candidate.type === 'CallExpression' &&
-        callRootName(candidate.callee) === 'coversInteractions'
-      ) {
-        coverageCalls.push(candidate)
-      }
-    })
-
-    for (const coverageCall of coverageCalls) {
-      const line = coverageCall.loc?.start.line ?? 0
-      testCoverageLines.add(line)
-      if (!hasAssertion) {
-        violations.push(`${path.relative(webRoot, absoluteFile)}:${line}: no expect in test callback`)
-        continue
-      }
-      for (const argument of callArguments(coverageCall)) {
-        if (
-          isAstNode(argument) &&
-          argument.type === 'Literal' &&
-          typeof argument.value === 'string'
-        ) {
-          ids.add(argument.value)
-        } else {
-          violations.push(
-            `${path.relative(webRoot, absoluteFile)}:${line}: interaction id must be a string literal`,
+      if (root && ['describe', 'suite'].includes(root)) {
+        if (callback) {
+          scanExecutionTree(
+            callback.body,
+            blocked ||
+              invalidOptions ||
+              invalidEach ||
+              hasConditionalCallChain(value.callee) ||
+              members.some((member) => !executableModifiers.has(member)),
           )
         }
+        return
+      }
+
+      if (root && ['it', 'test'].includes(root)) {
+        if (
+          !blocked &&
+          callback &&
+          !invalidOptions &&
+          !invalidEach &&
+          !hasConditionalCallChain(value.callee) &&
+          !members.some((member) => !executableModifiers.has(member))
+        ) {
+          const coverageCalls = directCoverageCalls(callback)
+          const hasAssertion = hasReachableAssertion(callback)
+
+          for (const coverageCall of coverageCalls) {
+            const line = coverageCall.loc?.start.line ?? 0
+            testCoverageLines.add(line)
+            if (!hasAssertion) {
+              violations.push(
+                `${path.relative(webRoot, absoluteFile)}:${line}: no reachable expect in test callback`,
+              )
+              continue
+            }
+            for (const argument of callArguments(coverageCall)) {
+              if (
+                isAstNode(argument) &&
+                argument.type === 'Literal' &&
+                typeof argument.value === 'string'
+              ) {
+                ids.add(argument.value)
+              } else {
+                violations.push(
+                  `${path.relative(webRoot, absoluteFile)}:${line}: interaction id must be a string literal`,
+                )
+              }
+            }
+          }
+        }
+        return
       }
     }
-  })
+
+    const childBlocked = blocked || conditionalNodes.has(value.type)
+    nodeChildren(value).forEach((child) => scanExecutionTree(child, childBlocked))
+  }
+
+  scanExecutionTree(sourceFile)
 
   for (const line of allCoverageLines) {
     if (!testCoverageLines.has(line)) {
@@ -360,6 +644,15 @@ function scanBehaviorSpecText(text: string, absoluteFile: string): SpecCoverage 
 
 function scanBehaviorSpec(absoluteFile: string): SpecCoverage {
   return scanBehaviorSpecText(readFileSync(absoluteFile, 'utf8'), absoluteFile)
+}
+
+function wrongBehaviorSpecIds(behaviorSpec: string, ids: ReadonlySet<string>): string[] {
+  return [...ids].filter(
+    (id) =>
+      !interactionManifest.some(
+        (entry) => entry.id === id && entry.behaviorSpec === behaviorSpec,
+      ),
+  )
 }
 
 describe('interaction coverage contract', () => {
@@ -397,13 +690,7 @@ describe('interaction coverage contract', () => {
     })
     const violations = [...scans.values()].flatMap(({ violations: invalid }) => invalid)
     const wrongSpec = [...scans.entries()].flatMap(([behaviorSpec, scan]) =>
-      [...scan.ids]
-        .filter(
-          (id) =>
-            !interactionManifest.some(
-              (entry) => entry.id === id && entry.behaviorSpec === behaviorSpec,
-            ),
-        )
+      wrongBehaviorSpecIds(behaviorSpec, scan.ids)
         .map((id) => `${id}: registered in the wrong behavior spec ${behaviorSpec}`),
     )
     expect([...deadLinks, ...violations, ...wrongSpec]).toEqual([])
@@ -416,16 +703,164 @@ describe('interaction coverage contract', () => {
         coversInteractions('app.skip-to-composer')
         expect(true).toBe(true)
       })`,
+      `test.todo('todo', () => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+      })`,
+      `describe.skip('skipped suite', () => {
+        it('nested test', () => {
+          coversInteractions('app.skip-to-composer')
+          expect(true).toBe(true)
+        })
+      })`,
+      `suite.skip('skipped suite', () => {
+        test('nested test', () => {
+          coversInteractions('app.skip-to-composer')
+          expect(true).toBe(true)
+        })
+      })`,
+      `it.skipIf(true)('conditional skip', () => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+      })`,
+      `it.skipIf(false)('conditional skip', () => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+      })`,
+      `it.runIf(false)('conditional run', () => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+      })`,
+      `it.runIf(true)('conditional run', () => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+      })`,
+      `it('conditional declaration', () => {
+        if (false) {
+          coversInteractions('app.skip-to-composer')
+        }
+        expect(true).toBe(true)
+      })`,
       `it('nested', () => {
         const neverCalled = () => coversInteractions('app.skip-to-composer')
         expect(neverCalled).toBeTypeOf('function')
+      })`,
+      `it('nested assertion', () => {
+        coversInteractions('app.skip-to-composer')
+        const neverCalled = () => expect(true).toBe(true)
+        void neverCalled
+      })`,
+      `it('conditional assertion', () => {
+        coversInteractions('app.skip-to-composer')
+        false && expect(true).toBe(true)
+      })`,
+      `it['skip']('computed skip', () => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+      })`,
+      `describe['skip']('computed skipped suite', () => {
+        it('nested test', () => {
+          coversInteractions('app.skip-to-composer')
+          expect(true).toBe(true)
+        })
+      })`,
+      `it('early return', () => {
+        return
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+      })`,
+      `it('optional assertion', () => {
+        coversInteractions('app.skip-to-composer')
+        gate.run?.(expect(true).toBe(true))
+      })`,
+      `it('bound helper', () => {
+        coversInteractions('app.skip-to-composer')
+        waitFor.bind(null, () => expect(true).toBe(true))
+      })`,
+      `it('generator helper callback', async () => {
+        coversInteractions('app.skip-to-composer')
+        await waitFor(function* () {
+          expect(true).toBe(true)
+        })
+      })`,
+      `it('skipped options', { skip: true }, () => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+      })`,
+      `describe('skipped options suite', { skip: true }, () => {
+        it('nested test', () => {
+          coversInteractions('app.skip-to-composer')
+          expect(true).toBe(true)
+        })
+      })`,
+      `it(
+        function neverExecutedName() {
+          coversInteractions('app.skip-to-composer')
+          expect(true).toBe(true)
+        },
+        () => expect(true).toBe(true),
+      )`,
+      `it('generator callback', function* () {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+      })`,
+      `it.each([])('empty parameterization', () => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+      })`,
+      `it('deferred class assertion', () => {
+        coversInteractions('app.skip-to-composer')
+        void class {
+          result = expect(true).toBe(true)
+        }
+      })`,
+      `it('non-literal', () => {
+        const id = 'app.skip-to-composer'
+        coversInteractions(id)
+        expect(true).toBe(true)
       })`,
     ]
     const scans = cases.map((code, index) =>
       scanBehaviorSpecText(code, path.resolve(webRoot, `invalid-coverage-${index}.tsx`)),
     )
-    expect(scans.map(({ ids }) => [...ids])).toEqual([[], [], []])
-    expect(scans.map(({ violations }) => violations.length)).toEqual([1, 1, 1])
+    expect(scans.every(({ ids }) => ids.size === 0)).toBe(true)
+    expect(scans.every(({ violations }) => violations.length >= 1)).toBe(true)
+  })
+
+  it('accepts direct coverage in unconditional test variants with reachable assertions', () => {
+    const cases = [
+      `it('ordinary', () => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+      })`,
+      `test('ordinary', () => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+      })`,
+      `it.each([1])('parameterized %s', () => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+      })`,
+      `it('async helper', async () => {
+        coversInteractions('app.skip-to-composer')
+        await waitFor(() => expect(true).toBe(true))
+      })`,
+    ]
+    const scans = cases.map((code, index) =>
+      scanBehaviorSpecText(code, path.resolve(webRoot, `valid-coverage-${index}.tsx`)),
+    )
+    expect(scans.map(({ ids }) => [...ids])).toEqual(
+      cases.map(() => ['app.skip-to-composer']),
+    )
+    expect(scans.every(({ violations }) => violations.length === 0)).toBe(true)
+
+    const wrongSpec = scanBehaviorSpecText(
+      cases[0],
+      path.resolve(webRoot, 'src/auth/AuthBar.test.tsx'),
+    )
+    expect(wrongBehaviorSpecIds('src/auth/AuthBar.test.tsx', wrongSpec.ids)).toEqual([
+      'app.skip-to-composer',
+    ])
   })
 
   it('links related E2E metadata only to existing specs', () => {
