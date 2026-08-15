@@ -40,6 +40,13 @@ test.describe('acknowledgements', () => {
     const table = page.getByRole('table', { name: /third-party components/i })
     await expect(table.getByText('@breezystack/lamejs')).toBeVisible()
     await expect(table.getByText('LGPL-3.0-or-later')).toBeVisible()
+    await expect(table.getByText('react-router-dom')).toBeVisible()
+    await expect(table.getByText('lucide-react')).toBeVisible()
+    await expect(table.getByText('@fontsource-variable/inter')).toBeVisible()
+    await expect(page.getByRole('link', { name: /SIL Open Font License/i })).toHaveAttribute(
+      'href',
+      '/licenses/OFL-1.1.txt',
+    )
 
     await expect(page.getByRole('link', { name: /lame project/i })).toHaveAttribute(
       'href',

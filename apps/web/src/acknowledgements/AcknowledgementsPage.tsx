@@ -43,6 +43,8 @@ const DOCS_ACKNOWLEDGEMENTS_URL =
   'https://ievangelist.github.io/cadence/docs/acknowledgements/'
 const LGPL_TEXT_URL = 'https://www.gnu.org/licenses/lgpl-3.0.txt'
 const GPL_TEXT_URL = 'https://www.gnu.org/licenses/gpl-3.0.txt'
+const OFL_TEXT_URL = '/licenses/OFL-1.1.txt'
+const LUCIDE_LICENSE_URL = '/licenses/lucide-ISC.txt'
 
 // The only third-party component Cadence redistributes into the shipped bundle
 // (mirrors the docs "Licenses" table). Kept as data so more rows can be added
@@ -53,6 +55,54 @@ const COMPONENTS: ThirdPartyComponent[] = [
     version: '1.2.7',
     license: 'LGPL-3.0-or-later',
     packageUrl: LAMEJS_NPM_URL,
+  },
+  {
+    name: 'react-router-dom',
+    version: '7.18.2',
+    license: 'MIT',
+    packageUrl: 'https://www.npmjs.com/package/react-router-dom',
+  },
+  {
+    name: '@radix-ui/react-dropdown-menu',
+    version: '2.1.24',
+    license: 'MIT',
+    packageUrl: 'https://www.npmjs.com/package/@radix-ui/react-dropdown-menu',
+  },
+  {
+    name: '@radix-ui/react-popover',
+    version: '1.1.23',
+    license: 'MIT',
+    packageUrl: 'https://www.npmjs.com/package/@radix-ui/react-popover',
+  },
+  {
+    name: '@radix-ui/react-tooltip',
+    version: '1.2.16',
+    license: 'MIT',
+    packageUrl: 'https://www.npmjs.com/package/@radix-ui/react-tooltip',
+  },
+  {
+    name: 'lucide-react',
+    version: '1.30.0',
+    license: 'ISC / MIT',
+    packageUrl: 'https://www.npmjs.com/package/lucide-react',
+  },
+  {
+    name: '@fontsource-variable/inter',
+    version: '5.3.0',
+    license: 'OFL-1.1',
+    packageUrl: 'https://www.npmjs.com/package/@fontsource-variable/inter',
+  },
+  {
+    name: '@fontsource-variable/space-grotesk',
+    version: '5.3.0',
+    license: 'OFL-1.1',
+    packageUrl: 'https://www.npmjs.com/package/@fontsource-variable/space-grotesk',
+  },
+  {
+    name: '@fontsource-variable/jetbrains-mono',
+    version: '5.3.0',
+    license: 'OFL-1.1',
+    packageUrl: 'https://www.npmjs.com/package/@fontsource-variable/jetbrains-mono',
   },
 ]
 
@@ -245,6 +295,17 @@ export function AcknowledgementsPage({ onClose }: AcknowledgementsPageProps) {
             Cadence acknowledgements page
           </a>
           .
+        </p>
+        <p>
+          The bundled typefaces are available under the{' '}
+          <a href={OFL_TEXT_URL} data-interaction="licenses.external-link">
+            SIL Open Font License 1.1
+          </a>
+          . Lucide&rsquo;s complete{' '}
+          <a href={LUCIDE_LICENSE_URL} data-interaction="licenses.external-link">
+            ISC and Feather MIT notices
+          </a>{' '}
+          are distributed with the app.
         </p>
       </div>
     </section>

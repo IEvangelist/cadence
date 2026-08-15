@@ -79,6 +79,19 @@ async function mockApi(
     )
   }
   if (path === '/api/projects' && method === 'GET') return json([])
+  if (path === '/api/projects' && method === 'POST') {
+    const project = request.postDataJSON() as {
+      id: string
+      name: string
+      schemaVersion: number
+      data: string
+    }
+    return json({
+      ...project,
+      createdAt: '2025-01-01T00:00:00Z',
+      updatedAt: '2025-01-01T00:00:00Z',
+    }, 201)
+  }
   if (/^\/api\/projects\/[^/]+\/shares$/.test(path) && method === 'GET') {
     return json(authenticated ? existingShares : [])
   }
@@ -141,42 +154,55 @@ async function assertInteractionContract(
   const rendered = page.locator(interactiveSelector)
   const failures: string[] = []
   const visibleCounts = new Map<string, number>()
+  const snapshot = await rendered.evaluateAll((elements) =>
+    elements.map((element) => ({
+      tag: element.tagName.toLowerCase(),
+      id: element.getAttribute('data-interaction'),
+    })),
+  )
 
-  for (let index = 0; index < (await rendered.count()); index += 1) {
-    const locator = rendered.nth(index)
-    const tag = await locator.evaluate((element) => element.tagName.toLowerCase())
-    const id = await locator.getAttribute('data-interaction')
+  for (const { tag, id } of snapshot) {
     if (!id) {
       failures.push(`${state}: <${tag}> is missing data-interaction`)
       continue
     }
-    const entry = manifestById.get(id)
-    if (!entry) {
+    if (!manifestById.has(id)) {
       failures.push(`${state}: ${id} is not registered`)
-      continue
     }
-    if (!(await locator.isVisible())) continue
-    visibleCounts.set(id, (visibleCounts.get(id) ?? 0) + 1)
-    const semantics = await renderedSemantics(locator)
-    if (semantics.role !== entry.expectedRole) {
-      failures.push(
-        `${state}: ${id} role ${semantics.role} does not match ${entry.expectedRole}`,
-      )
-    }
-    try {
-      if (entry.accessibilityExemption) {
-        await expect(locator).toHaveAccessibleName('', { timeout: 0 })
-      } else {
-        await expect(locator).toHaveAccessibleName(expectedAccessibleName(entry), {
-          timeout: 0,
-        })
+  }
+
+  const ids = [...new Set(snapshot.flatMap(({ id }) => (id ? [id] : [])))]
+  for (const id of ids) {
+    const entry = manifestById.get(id)
+    if (!entry) continue
+    const visible = page.locator(`[data-interaction="${id}"]:visible`)
+    const count = await visible.count()
+    if (count === 0) continue
+    visibleCounts.set(id, count)
+
+    for (let index = 0; index < count; index += 1) {
+      const locator = visible.nth(index)
+      const semantics = await renderedSemantics(locator)
+      if (semantics.role !== entry.expectedRole) {
+        failures.push(
+          `${state}: ${id} role ${semantics.role} does not match ${entry.expectedRole}`,
+        )
       }
-    } catch {
-      failures.push(
-        entry.accessibilityExemption
-          ? `${state}: ${id} exemption is stale because it now has an accessible name`
-          : `${state}: ${id} accessible name does not match ${entry.expectedName}`,
-      )
+      try {
+        if (entry.accessibilityExemption) {
+          await expect(locator).toHaveAccessibleName('', { timeout: 500 })
+        } else {
+          await expect(locator).toHaveAccessibleName(expectedAccessibleName(entry), {
+            timeout: 500,
+          })
+        }
+      } catch {
+        failures.push(
+          entry.accessibilityExemption
+            ? `${state}: ${id} exemption is stale because it now has an accessible name`
+            : `${state}: ${id} accessible name does not match ${entry.expectedName}`,
+        )
+      }
     }
   }
 
@@ -206,7 +232,7 @@ async function openPanel(page: Page, name: string): Promise<Locator> {
 }
 
 test.describe('production interaction contract', () => {
-  test.describe.configure({ timeout: 180_000 })
+  test.describe.configure({ timeout: 300_000 })
 
   test('observes every registered interaction across current production states', async ({
     page,
@@ -219,6 +245,10 @@ test.describe('production interaction contract', () => {
 
     await assertInteractionContract(page, 'studio', observed)
 
+    await page.getByRole('button', { name: 'Choose theme' }).click()
+    await assertInteractionContract(page, 'theme menu', observed)
+    await page.getByRole('menuitemradio', { name: 'System theme' }).click()
+
     await page.getByRole('button', { name: 'Sign in' }).click()
     await assertInteractionContract(page, 'auth sign-in', observed)
     await page.getByRole('button', { name: /Create an account/ }).click()
@@ -226,13 +256,23 @@ test.describe('production interaction contract', () => {
     await page.getByRole('button', { name: 'Close', exact: true }).click()
 
     await page.getByRole('button', { name: 'Pricing' }).click()
+    await expect(page.getByRole('heading', { name: 'Plans & pricing' })).toBeVisible()
     await assertInteractionContract(page, 'pricing', observed)
 
     await page.getByRole('button', { name: 'Stems' }).click()
+    await expect(page.getByRole('heading', { name: 'Stem separation' })).toBeVisible()
     await assertInteractionContract(page, 'stems free tier', observed)
 
     await page.getByRole('button', { name: 'Third-party licenses' }).click()
+    await expect(
+      page.getByRole('heading', { name: /Acknowledgements & third-party licenses/i }),
+    ).toBeVisible()
     await assertInteractionContract(page, 'licenses', observed)
+
+    await page.goto('/missing')
+    await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
+    await assertInteractionContract(page, 'not found', observed)
+    await page.getByRole('button', { name: 'Return to Studio' }).click()
 
     const origin = baseURL ?? 'http://127.0.0.1:4173'
     const returningStorage = {
@@ -334,12 +374,37 @@ test.describe('production interaction contract', () => {
     await assertInteractionContract(authenticatedPage, 'pricing pro tier', observed)
 
     await authenticatedPage.getByRole('button', { name: 'Profile' }).click()
+    await expect(authenticatedPage.getByRole('heading', { name: 'Your profile' })).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'profile', observed)
 
     await authenticatedPage.getByRole('button', { name: 'Stems' }).click()
     await expect(authenticatedPage.getByLabel('bass stem preview')).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'stems pro results', observed)
     await authenticatedContext.close()
+
+    const failingSaveContext = await browser.newContext({
+      baseURL: origin,
+      storageState: returningStorage,
+    })
+    const failingSavePage = await failingSaveContext.newPage()
+    await failingSavePage.route('**/api/**', (route) => {
+      const request = route.request()
+      if (
+        new URL(request.url()).pathname === '/api/projects' &&
+        request.method() === 'POST'
+      ) {
+        return route.fulfill({ status: 503, body: 'offline' })
+      }
+      return mockApi(route, true)
+    })
+    await failingSavePage.goto('/')
+    await failingSavePage.getByLabel('Project name').fill('Unsaved route exit')
+    await failingSavePage.getByRole('button', { name: 'Pricing' }).click()
+    await expect(failingSavePage.getByRole('button', { name: 'Retry save' })).toBeVisible()
+    await assertInteractionContract(failingSavePage, 'failed route autosave', observed)
+    await failingSavePage.getByRole('button', { name: 'Discard changes' }).click()
+    await expect(failingSavePage).toHaveURL(/\/pricing/)
+    await failingSaveContext.close()
 
     const firstRunContext = await browser.newContext({
       baseURL: origin,

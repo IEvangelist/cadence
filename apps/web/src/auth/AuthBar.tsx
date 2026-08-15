@@ -7,6 +7,7 @@
  * link to their profile, and sign-out. Every control is labelled for a11y.
  */
 import { useId, useState } from 'react'
+import * as Popover from '@radix-ui/react-popover'
 import { useAuth } from './authContext'
 
 interface AuthBarProps {
@@ -101,19 +102,21 @@ export function AuthBar({ onShowProfile, profileActive }: AuthBarProps) {
 
   return (
     <div className="authbar">
-      <button
-        type="button"
-        className="btn btn-primary btn-sm"
-        data-interaction="auth.panel.toggle"
-        aria-expanded={open}
-        aria-controls={`${formId}-panel`}
-        onClick={() => setOpen((value) => !value)}
-      >
-        {open ? 'Close' : 'Sign in'}
-      </button>
+      <Popover.Root open={open} onOpenChange={setOpen}>
+        <Popover.Trigger asChild>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            data-interaction="auth.panel.toggle"
+            aria-expanded={open}
+            aria-controls={`${formId}-panel`}
+          >
+            {open ? 'Close' : 'Sign in'}
+          </button>
+        </Popover.Trigger>
 
-      {open && (
-        <div className="auth-panel" id={`${formId}-panel`}>
+        <Popover.Portal>
+          <Popover.Content className="auth-panel" id={`${formId}-panel`} align="end" sideOffset={8}>
           <h2 className="auth-panel-title">
             {mode === 'signin' ? 'Sign in to Cadence' : 'Create your account'}
           </h2>
@@ -248,8 +251,9 @@ export function AuthBar({ onShowProfile, profileActive }: AuthBarProps) {
               {auth.error}
             </p>
           )}
-        </div>
-      )}
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
     </div>
   )
 }

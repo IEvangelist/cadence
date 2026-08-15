@@ -16,8 +16,6 @@
 }
 
 .auth-panel {
-  position: absolute;
-  top: calc(100% + var(--space-2));
   z-index: 20;
   width: min(22rem, 92vw);
   display: flex;

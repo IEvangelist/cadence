@@ -12,6 +12,8 @@
  * via aria-live, and errors surfaced with role="alert".
  */
 import { useCallback, useEffect, useId, useMemo, useState } from 'react'
+import { Download } from 'lucide-react'
+import { Icon } from '../ui/Icon'
 import { StemsClient, StemsError, type StemJob } from './stemsClient'
 import './stems.css'
 
@@ -256,7 +258,7 @@ export function StemsPage({
                                 href={href}
                                 download={`${job.originalFileName}-${stem.label}.wav`}
                               >
-                                <span aria-hidden="true">↓</span> Download {stem.label} (
+                                <Icon icon={Download} size={16} /> Download {stem.label} (
                                 {formatBytes(stem.sizeBytes)})
                               </a>
                             </li>

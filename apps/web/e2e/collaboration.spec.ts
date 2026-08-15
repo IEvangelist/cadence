@@ -47,6 +47,22 @@ async function openCollaborator(
 ) {
   const context = await browser.newContext()
   const page = await context.newPage()
+  await page.addInitScript(() => {
+    const NativeWebSocket = window.WebSocket
+    const counts = { created: 0, closed: 0 }
+    ;(window as unknown as { __CADENCE_WS_COUNTS__: typeof counts }).__CADENCE_WS_COUNTS__ =
+      counts
+    class CountingWebSocket extends NativeWebSocket {
+      constructor(url: string | URL, protocols?: string | string[]) {
+        super(url, protocols)
+        counts.created += 1
+        this.addEventListener('close', () => {
+          counts.closed += 1
+        })
+      }
+    }
+    window.WebSocket = CountingWebSocket
+  })
   await page.route('**/api/**', mockApi(user))
 
   await page.goto(`/?collab=${room}&role=${role}&share=${TOKENS[role]}`)
@@ -180,5 +196,54 @@ test.describe('live collaboration', () => {
 
     await ada.context.close()
     await bob.context.close()
+  })
+
+  test('secondary routes close the socket and browser back reconnects once', async ({
+    browser,
+  }) => {
+    const collaborator = await openCollaborator(
+      browser,
+      { id: 'u-route', email: 'route@example.com', displayName: 'Route Editor', tier: 'Free' },
+      'editor',
+      `route-${Date.now()}`,
+    )
+    await expect
+      .poll(() =>
+        collaborator.page.evaluate(
+          () =>
+            (window as unknown as {
+              __CADENCE_WS_COUNTS__: { created: number; closed: number }
+            }).__CADENCE_WS_COUNTS__,
+        ),
+      )
+      .toMatchObject({ created: 1, closed: 0 })
+
+    await collaborator.page.getByRole('button', { name: 'Pricing' }).click()
+    await expect(collaborator.page.getByRole('heading', { name: 'Plans & pricing' })).toBeVisible()
+    await expect
+      .poll(() =>
+        collaborator.page.evaluate(
+          () =>
+            (window as unknown as {
+              __CADENCE_WS_COUNTS__: { created: number; closed: number }
+            }).__CADENCE_WS_COUNTS__,
+        ),
+      )
+      .toMatchObject({ created: 1, closed: 1 })
+
+    await collaborator.page.goBack()
+    await expect(collaborator.roster).toBeVisible()
+    await expect
+      .poll(() =>
+        collaborator.page.evaluate(
+          () =>
+            (window as unknown as {
+              __CADENCE_WS_COUNTS__: { created: number; closed: number }
+            }).__CADENCE_WS_COUNTS__,
+        ),
+      )
+      .toMatchObject({ created: 2, closed: 1 })
+
+    await collaborator.context.close()
   })
 })

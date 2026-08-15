@@ -90,6 +90,32 @@ test.describe('pwa', () => {
     }
   })
 
+  test('reloads every visited secondary route while offline', async ({ page }) => {
+    test.setTimeout(90_000)
+    const routes = [
+      ['/stems', 'Stem separation'],
+      ['/pricing', 'Plans & pricing'],
+      ['/profile', 'Sign in to view your profile'],
+      ['/licenses', 'Acknowledgements & third-party licenses'],
+    ] as const
+
+    await page.goto('/')
+    await waitForServiceWorkerReady(page)
+    await expectServiceWorkerController(page)
+
+    for (const [path, heading] of routes) {
+      await page.goto(path)
+      await expect(page.getByRole('heading', { name: heading })).toBeVisible()
+      try {
+        await page.context().setOffline(true)
+        await page.reload()
+        await expect(page.getByRole('heading', { name: heading })).toBeVisible()
+      } finally {
+        await page.context().setOffline(false)
+      }
+    }
+  })
+
   test('service worker does not cache /api paths', async ({ page }) => {
     test.setTimeout(60_000)
 

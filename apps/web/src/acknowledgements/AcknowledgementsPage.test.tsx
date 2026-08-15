@@ -33,6 +33,23 @@ describe('<AcknowledgementsPage />', () => {
     )
   })
 
+  it('lists routed UI and self-hosted font dependencies with their licenses', () => {
+    render(<AcknowledgementsPage />)
+    const table = screen.getByRole('table', { name: /third-party components/i })
+
+    expect(within(table).getByText('react-router-dom')).toBeInTheDocument()
+    expect(within(table).getByText('lucide-react')).toBeInTheDocument()
+    expect(within(table).getAllByText('OFL-1.1')).toHaveLength(3)
+    expect(screen.getByRole('link', { name: /SIL Open Font License/i })).toHaveAttribute(
+      'href',
+      '/licenses/OFL-1.1.txt',
+    )
+    expect(screen.getByRole('link', { name: /ISC and Feather MIT/i })).toHaveAttribute(
+      'href',
+      '/licenses/lucide-ISC.txt',
+    )
+  })
+
   it('links to the LAME credit page at lame.sourceforge.io', () => {
     coversInteractions('licenses.external-link')
     render(<AcknowledgementsPage />)

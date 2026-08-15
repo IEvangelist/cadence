@@ -163,6 +163,27 @@ describe('useCollaboration', () => {
     expect(provider.destroy).toHaveBeenCalled()
   })
 
+  it('tears down the old provider before reconnecting to changed URL params', () => {
+    const binding = makeBinding(seedProject())
+    const { rerender } = renderHook(
+      ({ next }: { next: CollabConfig | null }) =>
+        useCollaboration(binding, next, factory),
+      { initialProps: { next: config as CollabConfig | null } },
+    )
+    const first = providers[0]
+
+    rerender({
+      next: { ...config, projectId: 'p2', token: 'next-token' },
+    })
+
+    expect(first.destroy).toHaveBeenCalledTimes(1)
+    expect(providers).toHaveLength(2)
+    expect(providers[1].destroy).not.toHaveBeenCalled()
+
+    rerender({ next: null })
+    expect(providers[1].destroy).toHaveBeenCalledTimes(1)
+  })
+
   it('defers seeding until the provider reports its initial sync', () => {
     const built: Array<ReturnType<typeof fakeSyncingProvider>> = []
     const syncingFactory = () => {
