@@ -11,6 +11,7 @@ import {
   loadLicensesRoute,
   loadPricingRoute,
   loadProfileRoute,
+  loadStudioRoute,
   loadStemsRoute,
 } from './routeLoaders'
 
@@ -28,10 +29,7 @@ function appRoutes(): RouteObject[] {
       {
         index: true,
         handle: { title: 'Cadence', announcement: 'Studio' },
-        lazy: async () => {
-          const { StudioRoute } = await import('./routes/StudioRoute')
-          return { Component: StudioRoute }
-        },
+        lazy: loadStudioRoute,
       },
       {
         path: 'stems',

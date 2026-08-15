@@ -228,6 +228,22 @@ describe('useCollaboration', () => {
     expect(providers).toHaveLength(1)
   })
 
+  it('connects with a valid empty collaboration display name', () => {
+    const binding = makeBinding(seedProject())
+    const emptyNameConfig: CollabConfig = {
+      ...config,
+      user: { ...config.user, name: '' },
+    }
+
+    const { result } = renderHook(() =>
+      useCollaboration(binding, emptyNameConfig, factory),
+    )
+
+    expect(result.current.active).toBe(true)
+    expect(providers).toHaveLength(1)
+    expect(providers[0].awareness.getLocalState()?.user).toMatchObject({ name: '' })
+  })
+
   it('defers seeding until the provider reports its initial sync', () => {
     const built: Array<ReturnType<typeof fakeSyncingProvider>> = []
     const syncingFactory = () => {

@@ -1,3 +1,8 @@
+export const loadStudioRoute = async () => {
+  const { StudioRoute } = await import('./routes/StudioRoute')
+  return { Component: StudioRoute }
+}
+
 export const loadStemsRoute = async () => {
   const { StemsRoute } = await import('./routes/StemsRoute')
   return { Component: StemsRoute }
@@ -24,3 +29,5 @@ export const secondaryRouteLoaders = [
   loadProfileRoute,
   loadLicensesRoute,
 ] as const
+
+export const warmRouteLoaders = [loadStudioRoute, ...secondaryRouteLoaders] as const

@@ -48,16 +48,20 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    caches.match(request).then((cached) => {
+    caches.match(request, { ignoreVary: true }).then((cached) => {
       if (cached) {
         return cached
       }
 
       return fetch(request).then(async (response) => {
         if (response.status === 200 && response.type === 'basic') {
-          const copy = response.clone()
-          const cache = await caches.open(CACHE)
-          await cache.put(request, copy)
+          try {
+            const copy = response.clone()
+            const cache = await caches.open(CACHE)
+            await cache.put(request, copy)
+          } catch {
+            // Caching is an optimization; never discard a successful network asset.
+          }
         }
 
         return response

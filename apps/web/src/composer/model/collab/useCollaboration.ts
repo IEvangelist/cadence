@@ -105,7 +105,16 @@ export function useCollaboration(
   // config is null, so no state writes are needed here (and none should run
   // synchronously inside the effect).
   useEffect(() => {
-    if (!projectId || !role || !url || !userId || !userName || !userColor) return
+    if (
+      !projectId ||
+      !role ||
+      !url ||
+      userId == null ||
+      userName == null ||
+      userColor == null
+    ) {
+      return
+    }
     const activeConfig: CollabConfig = {
       projectId,
       role,
