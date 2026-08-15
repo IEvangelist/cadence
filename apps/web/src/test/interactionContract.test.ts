@@ -422,15 +422,49 @@ function directCoverageCalls(callback: AstNode): AstNode[] {
   return calls
 }
 
+function bindingPattern(value: unknown): AstNode | undefined {
+  const pattern = unwrapStaticExpression(value)
+  if (pattern?.type === 'AssignmentPattern') {
+    return bindingPattern(pattern.left)
+  }
+  return pattern
+}
+
 function bindingIdentifier(value: unknown): string | undefined {
-  const binding = unwrapStaticExpression(value)
+  const binding = bindingPattern(value)
   if (binding?.type === 'Identifier' && typeof binding.name === 'string') {
     return binding.name
   }
-  if (binding?.type === 'AssignmentPattern') {
-    return bindingIdentifier(binding.left)
-  }
   return undefined
+}
+
+function collectRuntimeSkipPatternBindings(
+  value: unknown,
+  bindings: RuntimeSkipBindings,
+): void {
+  const pattern = bindingPattern(value)
+  if (pattern?.type !== 'ObjectPattern' || !Array.isArray(pattern.properties)) {
+    return
+  }
+  for (const property of pattern.properties) {
+    if (!isAstNode(property)) continue
+    if (property.type === 'RestElement') {
+      const restName = bindingIdentifier(property.argument)
+      if (restName) bindings.contextObjects.add(restName)
+      continue
+    }
+    if (
+      property.type !== 'Property' ||
+      property.computed === true
+    ) {
+      continue
+    }
+    if (propertyName(property.key) === 'skip') {
+      const localName = bindingIdentifier(property.value)
+      if (localName) bindings.directCalls.add(localName)
+    }
+    collectRuntimeSkipPatternBindings(property.value, bindings)
+  }
 }
 
 function runtimeSkipBindings(callback: FunctionAstNode): RuntimeSkipBindings {
@@ -440,60 +474,70 @@ function runtimeSkipBindings(callback: FunctionAstNode): RuntimeSkipBindings {
   }
   const parameters = Array.isArray(callback.params) ? callback.params : []
   for (const parameter of parameters) {
-    const resolved = unwrapStaticExpression(parameter)
-    const contextName = bindingIdentifier(resolved)
+    const contextName = bindingIdentifier(parameter)
     if (contextName) {
       bindings.contextObjects.add(contextName)
       continue
     }
-    if (resolved?.type !== 'ObjectPattern' || !Array.isArray(resolved.properties)) {
-      continue
-    }
-    for (const property of resolved.properties) {
-      if (
-        !isAstNode(property) ||
-        property.type !== 'Property' ||
-        property.computed === true ||
-        propertyName(property.key) !== 'skip'
-      ) {
-        continue
-      }
-      const localName = bindingIdentifier(property.value)
-      if (localName) bindings.directCalls.add(localName)
-    }
+    collectRuntimeSkipPatternBindings(parameter, bindings)
   }
   return bindings
 }
 
-function isRuntimeContextSkipCall(
+function objectPatternContainsSkip(value: unknown): boolean {
+  const pattern = bindingPattern(value)
+  if (pattern?.type !== 'ObjectPattern' || !Array.isArray(pattern.properties)) {
+    return false
+  }
+  return pattern.properties.some((property) => {
+    if (
+      !isAstNode(property) ||
+      property.type !== 'Property' ||
+      property.computed === true
+    ) {
+      return false
+    }
+    return (
+      propertyName(property.key) === 'skip' ||
+      objectPatternContainsSkip(property.value)
+    )
+  })
+}
+
+function isRuntimeContextSkipReference(
   value: unknown,
   bindings: RuntimeSkipBindings,
 ): boolean {
-  const call = unwrapStaticExpression(value)
+  const node = unwrapStaticExpression(value)
   if (
-    call?.type !== 'CallExpression' ||
-    call.optional === true ||
-    !isAstNode(call.callee)
-  ) {
-    return false
-  }
-  const callee = unwrapStaticExpression(call.callee)
-  if (
-    callee?.type === 'Identifier' &&
-    typeof callee.name === 'string' &&
-    bindings.directCalls.has(callee.name)
+    node?.type === 'Identifier' &&
+    typeof node.name === 'string' &&
+    bindings.directCalls.has(node.name)
   ) {
     return true
   }
-  return (
-    callee?.type === 'MemberExpression' &&
-    callee.optional !== true &&
-    propertyName(callee.property) === 'skip' &&
-    isAstNode(callee.object) &&
-    callee.object.type === 'Identifier' &&
-    typeof callee.object.name === 'string' &&
-    bindings.contextObjects.has(callee.object.name)
-  )
+  if (
+    node?.type === 'MemberExpression' &&
+    propertyName(node.property) === 'skip' &&
+    isAstNode(node.object) &&
+    node.object.type === 'Identifier' &&
+    typeof node.object.name === 'string' &&
+    bindings.contextObjects.has(node.object.name)
+  ) {
+    return true
+  }
+  if (
+    node?.type === 'VariableDeclarator' &&
+    objectPatternContainsSkip(node.id)
+  ) {
+    const initializer = unwrapStaticExpression(node.init)
+    return (
+      initializer?.type === 'Identifier' &&
+      typeof initializer.name === 'string' &&
+      bindings.contextObjects.has(initializer.name)
+    )
+  }
+  return false
 }
 
 function containsRuntimeContextSkip(
@@ -506,18 +550,11 @@ function containsRuntimeContextSkip(
   if (
     !isAstNode(value) ||
     isFunctionNode(value) ||
-    [
-      'LogicalExpression',
-      'ConditionalExpression',
-      'ChainExpression',
-      'ClassExpression',
-      'ClassDeclaration',
-    ].includes(value.type) ||
-    value.optional === true
+    ['ClassExpression', 'ClassDeclaration'].includes(value.type)
   ) {
     return false
   }
-  if (isRuntimeContextSkipCall(value, bindings)) return true
+  if (isRuntimeContextSkipReference(value, bindings)) return true
   return nodeChildren(value).some((child) =>
     containsRuntimeContextSkip(child, bindings),
   )
@@ -696,54 +733,13 @@ function hasReachableAssertion(
   ).hasAssertion
 }
 
-interface RuntimeSkipReachability {
-  hasRuntimeSkip: boolean
-  hitBarrier: boolean
-}
-
-function scanReachableRuntimeSkipStatements(
-  statements: AstNode[],
-  bindings: RuntimeSkipBindings,
-): RuntimeSkipReachability {
-  for (const statement of statements) {
-    if (statement.type === 'BlockStatement') {
-      const nested = scanReachableRuntimeSkipStatements(
-        Array.isArray(statement.body) ? statement.body.filter(isAstNode) : [],
-        bindings,
-      )
-      if (nested.hasRuntimeSkip || nested.hitBarrier) return nested
-      continue
-    }
-
-    if (executionBarriers.has(statement.type)) {
-      const expression = statementExpression(statement)
-      return {
-        hasRuntimeSkip:
-          expression !== undefined &&
-          containsRuntimeContextSkip(expression, bindings),
-        hitBarrier: true,
-      }
-    }
-    if (containsRuntimeContextSkip(statement, bindings)) {
-      return { hasRuntimeSkip: true, hitBarrier: false }
-    }
-  }
-  return { hasRuntimeSkip: false, hitBarrier: false }
-}
-
-function hasReachableRuntimeContextSkip(callback: FunctionAstNode): boolean {
+function hasRuntimeContextSkipReference(callback: FunctionAstNode): boolean {
   const bindings = runtimeSkipBindings(callback)
   if (bindings.directCalls.size === 0 && bindings.contextObjects.size === 0) {
     return false
   }
   if (!isAstNode(callback.body)) return false
-  if (callback.body.type !== 'BlockStatement') {
-    return containsRuntimeContextSkip(callback.body, bindings)
-  }
-  return scanReachableRuntimeSkipStatements(
-    directStatements(callback),
-    bindings,
-  ).hasRuntimeSkip
+  return containsRuntimeContextSkip(callback.body, bindings)
 }
 
 function scanBehaviorSpecText(text: string, absoluteFile: string): SpecCoverage {
@@ -829,14 +825,14 @@ function scanBehaviorSpecText(text: string, absoluteFile: string): SpecCoverage 
         ) {
           const coverageCalls = directCoverageCalls(callback)
           const hasAssertion = hasReachableAssertion(callback)
-          const hasRuntimeSkip = hasReachableRuntimeContextSkip(callback)
+          const hasRuntimeSkip = hasRuntimeContextSkipReference(callback)
 
           for (const coverageCall of coverageCalls) {
             const line = coverageCall.loc?.start.line ?? 0
             testCoverageLines.add(line)
             if (hasRuntimeSkip) {
               violations.push(
-                `${path.relative(webRoot, absoluteFile)}:${line}: reachable TestContext.skip in test callback`,
+                `${path.relative(webRoot, absoluteFile)}:${line}: TestContext.skip reference in test callback`,
               )
               continue
             }
@@ -1001,6 +997,28 @@ describe('interaction coverage contract', () => {
         expect(true).toBe(true)
         skip()
       })`,
+      `it('post assertion conditional runtime skip', (ctx) => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+        if (process.env.CI) ctx.skip()
+      })`,
+      `it('logical runtime skip', (ctx) => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+        process.env.CI && ctx.skip()
+      })`,
+      `it('ternary runtime skip', (ctx) => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+        process.env.CI ? ctx.skip() : undefined
+      })`,
+      `it('try branch runtime skip', (ctx) => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+        try {
+          ctx.skip()
+        } catch {}
+      })`,
       `it('runtime skip in nested block', (context) => {
         coversInteractions('app.skip-to-composer')
         {
@@ -1022,6 +1040,48 @@ describe('interaction coverage contract', () => {
         coversInteractions('app.skip-to-composer')
         void ctx.skip()
         expect(true).toBe(true)
+      })`,
+      `it('optional context runtime skip', (ctx) => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+        ctx.skip?.()
+      })`,
+      `it('optional context object runtime skip', (ctx) => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+        ctx?.skip()
+      })`,
+      `it('optional destructured runtime skip', ({ skip }) => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+        skip?.()
+      })`,
+      `it('default object pattern runtime skip', ({ skip } = {}) => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+        skip()
+      })`,
+      `it('rest alias runtime skip', ({ ...ctx }) => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+        ctx.skip()
+      })`,
+      `it('nested aliased runtime skip', ({ metadata: { skip: omit } }) => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+        omit()
+      })`,
+      `it('local property alias runtime skip', (ctx) => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+        const localSkip = ctx.skip
+        localSkip()
+      })`,
+      `it('local destructured alias runtime skip', (ctx) => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+        const { skip: localSkip } = ctx
+        localSkip()
       })`,
       `it.each([1])('parameter skip is conservative', (row) => {
         coversInteractions('app.skip-to-composer')
