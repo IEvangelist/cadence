@@ -19,7 +19,7 @@ function FrameHarness({
   return (
     <StudioFrame
       projectControls={<button type="button">Project menu</button>}
-      transportControls={<button type="button">Play</button>}
+      transportControls={<StatefulTransport />}
       rail={<button type="button">Track one</button>}
       editor={<div role="application" aria-label="Piano roll" tabIndex={0} />}
       inspector={inspector ? <button type="button">Detail control</button> : undefined}
@@ -32,6 +32,15 @@ function FrameHarness({
       inspectorOpen={inspectorOpen}
       onInspectorToggle={() => setInspectorOpen((open) => !open)}
     />
+  )
+}
+
+function StatefulTransport() {
+  const [position, setPosition] = useState(0)
+  return (
+    <button type="button" onClick={() => setPosition((value) => value + 1)}>
+      Play {position}
+    </button>
   )
 }
 
@@ -76,8 +85,10 @@ describe('<StudioFrame />', () => {
     const { rerender } = render(<FrameHarness />)
 
     expect(screen.queryByRole('complementary', { name: 'Inspector' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Inspector' })).not.toHaveAttribute('aria-controls')
     await user.click(screen.getByRole('button', { name: 'Inspector' }))
     expect(screen.getByRole('complementary', { name: 'Inspector' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Inspector' })).toHaveAttribute('aria-controls')
 
     rerender(<FrameHarness railOpen={false} />)
     expect(screen.queryByRole('complementary', { name: 'Track rail' })).not.toBeInTheDocument()
@@ -89,7 +100,7 @@ describe('<StudioFrame />', () => {
 
     const expected = [
       'Project menu',
-      'Play',
+      'Play 0',
       'Track one',
       'Piano roll',
       'Write',
@@ -107,6 +118,17 @@ describe('<StudioFrame />', () => {
           : screen.getByRole('button', { name }),
       ).toHaveFocus()
     }
+  })
+
+  it('preserves persistent transport state while the workspace view changes', async () => {
+    const user = userEvent.setup()
+    render(<FrameHarness />)
+
+    await user.click(screen.getByRole('button', { name: 'Play 0' }))
+    expect(screen.getByRole('button', { name: 'Play 1' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Mix' }))
+    expect(screen.getByRole('button', { name: 'Play 1' })).toBeInTheDocument()
   })
 })
 

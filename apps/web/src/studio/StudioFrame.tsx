@@ -8,8 +8,8 @@ export interface StudioFrameProps {
   transportControls: ReactNode
   rail: ReactNode
   editor: ReactNode
+  mix: ReactNode
   inspector?: ReactNode
-  mix?: ReactNode
   collaborationControls?: ReactNode
   utilityControls?: ReactNode
   view: StudioView
@@ -42,7 +42,7 @@ export function StudioFrame({
 }: StudioFrameProps) {
   const inspectorId = useId()
   const hasInspector = Boolean(inspector && inspectorOpen)
-  const workSurface = view === 'mix' && mix ? mix : editor
+  const workSurface = view === 'mix' ? mix : editor
   const className = [
     'studio-frame',
     railOpen ? 'studio-frame--rail-open' : '',
@@ -82,6 +82,7 @@ export function StudioFrame({
         {workSurface}
       </section>
 
+      {/* Painted in the app bar but kept after the editor in DOM focus order. */}
       <div className="studio-frame__utilities">
         <div className="studio-frame__view-switch" role="group" aria-label="Workspace view">
           <button
@@ -109,7 +110,7 @@ export function StudioFrame({
             type="button"
             className="studio-frame__utility-button"
             data-interaction="studio.inspector.toggle"
-            aria-controls={inspectorId}
+            aria-controls={hasInspector ? inspectorId : undefined}
             aria-expanded={hasInspector}
             onClick={onInspectorToggle}
           >
