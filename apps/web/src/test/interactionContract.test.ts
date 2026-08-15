@@ -357,7 +357,12 @@ function hasConditionalOptions(options: unknown[]): boolean {
 function unwrapStaticExpression(value: unknown): AstNode | undefined {
   if (!isAstNode(value)) return undefined
   if (
-    ['TSAsExpression', 'TSTypeAssertion', 'TSNonNullExpression'].includes(value.type) &&
+    [
+      'TSAsExpression',
+      'TSTypeAssertion',
+      'TSNonNullExpression',
+      'ParenthesizedExpression',
+    ].includes(value.type) &&
     isAstNode(value.expression)
   ) {
     return unwrapStaticExpression(value.expression)
@@ -518,13 +523,16 @@ function isRuntimeContextSkipReference(
   }
   if (
     node?.type === 'MemberExpression' &&
-    propertyName(node.property) === 'skip' &&
-    isAstNode(node.object) &&
-    node.object.type === 'Identifier' &&
-    typeof node.object.name === 'string' &&
-    bindings.contextObjects.has(node.object.name)
+    propertyName(node.property) === 'skip'
   ) {
-    return true
+    const object = unwrapStaticExpression(node.object)
+    if (
+      object?.type === 'Identifier' &&
+      typeof object.name === 'string' &&
+      bindings.contextObjects.has(object.name)
+    ) {
+      return true
+    }
   }
   if (
     node?.type === 'VariableDeclarator' &&
@@ -1083,6 +1091,31 @@ describe('interaction coverage contract', () => {
         const { skip: localSkip } = ctx
         localSkip()
       })`,
+      `it('non-null context runtime skip', (ctx) => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+        ctx!.skip()
+      })`,
+      `it('cast context runtime skip', (ctx) => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+        ;(ctx as TestContext).skip()
+      })`,
+      `it('parenthesized context runtime skip', (ctx) => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+        ;(ctx).skip()
+      })`,
+      `it('computed cast context runtime skip', (ctx) => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+        ;(ctx as TestContext)['skip']()
+      })`,
+      `it('computed non-null context runtime skip', (ctx) => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+        ctx!['skip']()
+      })`,
       `it.each([1])('parameter skip is conservative', (row) => {
         coversInteractions('app.skip-to-composer')
         row.skip()
@@ -1271,6 +1304,11 @@ describe('interaction coverage contract', () => {
       `it('non-skip context method', (ctx) => {
         coversInteractions('app.skip-to-composer')
         ctx.onTestFailed(() => undefined)
+        expect(true).toBe(true)
+      })`,
+      `it('cast non-skip context method', (ctx) => {
+        coversInteractions('app.skip-to-composer')
+        ;(ctx as TestContext).onTestFailed(() => undefined)
         expect(true).toBe(true)
       })`,
       `it('nested runtime skip is not invoked', (ctx) => {
