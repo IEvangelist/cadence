@@ -69,7 +69,12 @@ export function ProfilePage({ onClose }: ProfilePageProps) {
     <section className="profile" aria-labelledby={`${fieldId}-title`}>
       <div className="profile-head">
         <h2 id={`${fieldId}-title`}>Your profile</h2>
-        <button type="button" className="btn btn-sm" onClick={onClose}>
+        <button
+          type="button"
+          className="btn btn-sm"
+          data-interaction="profile.close"
+          onClick={onClose}
+        >
           Back to composer
         </button>
       </div>
@@ -92,6 +97,7 @@ export function ProfilePage({ onClose }: ProfilePageProps) {
             <input
               id={`${fieldId}-name`}
               type="text"
+              data-interaction="profile.display-name"
               value={displayName}
               onChange={(event) => {
                 setDisplayName(event.target.value)
@@ -105,6 +111,7 @@ export function ProfilePage({ onClose }: ProfilePageProps) {
             <textarea
               id={`${fieldId}-bio`}
               rows={3}
+              data-interaction="profile.bio"
               value={bio}
               onChange={(event) => {
                 setBio(event.target.value)
@@ -118,6 +125,7 @@ export function ProfilePage({ onClose }: ProfilePageProps) {
             <input
               id={`${fieldId}-avatar`}
               type="url"
+              data-interaction="profile.avatar-url"
               value={avatarUrl}
               onChange={(event) => {
                 setAvatarUrl(event.target.value)
@@ -126,7 +134,12 @@ export function ProfilePage({ onClose }: ProfilePageProps) {
             />
           </div>
 
-          <button type="submit" className="btn btn-primary" disabled={busy}>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            data-interaction="profile.save"
+            disabled={busy}
+          >
             Save changes
           </button>
 

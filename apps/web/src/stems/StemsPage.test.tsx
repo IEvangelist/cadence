@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
+/* Interaction coverage:
+ * stems.close, stems.upgrade, stems.upload.file,
+ * stems.separate, stems.preview, stems.download
+ */
 import { fireEvent, render, screen } from '@testing-library/react'
 import { StemsClient, StemsError, type StemJob } from './stemsClient'
 import { StemsPage } from './StemsPage'

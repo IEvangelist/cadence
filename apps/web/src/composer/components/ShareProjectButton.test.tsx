@@ -1,4 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+/* Interaction coverage:
+ * studio.share.toggle, studio.share.create-editor, studio.share.create-viewer,
+ * studio.share.copy, studio.share.revoke
+ */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ShareProjectButton } from './ShareProjectButton'
 import { CollabShareClient, type ShareLink } from '../model/collab/collabClient'

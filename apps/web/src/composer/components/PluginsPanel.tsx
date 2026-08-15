@@ -43,6 +43,7 @@ function KeybindingRecorder({
     <button
       type="button"
       className="btn btn-sm plugin-shortcut"
+      data-interaction="studio.plugins.keybinding.record"
       aria-pressed={recording}
       aria-label={`Shortcut for command${binding ? `, currently ${formatKeybinding(binding)}` : ', not set'}`}
       onClick={() => setRecording((value) => !value)}
@@ -84,6 +85,7 @@ export function PluginsPanel({ plugins }: PluginsPanelProps) {
             <label className="plugin-toggle">
               <input
                 type="checkbox"
+                data-interaction="studio.plugins.plugin.toggle"
                 checked={plugin.enabled}
                 disabled={plugin.builtin}
                 onChange={(event) => setPluginEnabled(plugin.id, event.target.checked)}
@@ -105,6 +107,7 @@ export function PluginsPanel({ plugins }: PluginsPanelProps) {
                 <button
                   type="button"
                   className="btn btn-sm"
+                  data-interaction="studio.plugins.command.run"
                   onClick={() => runCommand(command.id)}
                 >
                   {command.title}
@@ -129,6 +132,7 @@ export function PluginsPanel({ plugins }: PluginsPanelProps) {
                 <label className="plugin-toggle">
                   <input
                     type="checkbox"
+                    data-interaction="studio.plugins.panel.toggle"
                     checked={isPanelVisible(panel.id)}
                     onChange={(event) => setPanelVisible(panel.id, event.target.checked)}
                   />

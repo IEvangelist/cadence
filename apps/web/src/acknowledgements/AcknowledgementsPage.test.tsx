@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
+/* Interaction coverage: licenses.external-link, licenses.close */
 import { describe, expect, it, vi } from 'vitest'
 import { AcknowledgementsPage } from './AcknowledgementsPage'
 

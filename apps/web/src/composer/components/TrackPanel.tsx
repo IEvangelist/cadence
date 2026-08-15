@@ -34,13 +34,19 @@ export function TrackPanel({ controller }: TrackPanelProps) {
             <button
               type="button"
               className={`btn btn-sm${allVisible ? ' is-active' : ''}`}
+              data-interaction="studio.track.visibility-all"
               aria-pressed={allVisible}
               onClick={() => setAllTracksVisible(!allVisible)}
             >
               {allVisible ? 'Show only selected' : 'Show all tracks'}
             </button>
           )}
-          <button type="button" className="btn btn-sm" onClick={addTrack}>
+          <button
+            type="button"
+            className="btn btn-sm"
+            data-interaction="studio.track.add"
+            onClick={addTrack}
+          >
             + Add track
           </button>
         </div>
@@ -58,6 +64,7 @@ export function TrackPanel({ controller }: TrackPanelProps) {
               <button
                 type="button"
                 className="track-select"
+                data-interaction="studio.track.select"
                 aria-pressed={selected}
                 onClick={() => selectTrack(track.id)}
               >
@@ -71,6 +78,7 @@ export function TrackPanel({ controller }: TrackPanelProps) {
               <input
                 id={`name-${track.id}`}
                 className="track-name"
+                data-interaction="studio.track.name"
                 value={track.name}
                 onChange={(event) => renameTrack(track.id, event.target.value)}
               />
@@ -82,6 +90,7 @@ export function TrackPanel({ controller }: TrackPanelProps) {
               <button
                 type="button"
                 className={`btn btn-sm${visible ? ' is-active' : ''}`}
+                data-interaction="studio.track.visibility"
                 aria-pressed={visible}
                 disabled={selected}
                 onClick={() => toggleTrackVisibility(track.id)}
@@ -99,6 +108,7 @@ export function TrackPanel({ controller }: TrackPanelProps) {
               <button
                 type="button"
                 className={`btn btn-sm${track.muted ? ' is-active' : ''}`}
+                data-interaction="studio.track.mute"
                 aria-pressed={track.muted}
                 onClick={() => toggleMute(track.id)}
               >
@@ -107,6 +117,7 @@ export function TrackPanel({ controller }: TrackPanelProps) {
               <button
                 type="button"
                 className="btn btn-sm btn-danger"
+                data-interaction="studio.track.delete"
                 onClick={() => removeTrack(track.id)}
                 disabled={project.tracks.length <= 1}
                 aria-label={`Delete ${track.name}`}

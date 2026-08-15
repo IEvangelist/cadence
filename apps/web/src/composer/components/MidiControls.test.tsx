@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
+/* Interaction coverage: studio.midi.device, studio.midi.arm, studio.midi.quantize */
 import { describe, expect, it, vi } from 'vitest'
 import { MidiControls } from './MidiControls'
 import { type ComposerController, type ComposerMidi } from '../hooks/useComposer'

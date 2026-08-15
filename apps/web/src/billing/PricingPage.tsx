@@ -132,7 +132,12 @@ export function PricingPage({ onClose, client, redirect }: PricingPageProps) {
           </p>
         </div>
         {onClose && (
-          <button type="button" className="pricing-btn" onClick={onClose}>
+          <button
+            type="button"
+            className="pricing-btn"
+            data-interaction="pricing.close"
+            onClick={onClose}
+          >
             Back to composer
           </button>
         )}
@@ -187,6 +192,7 @@ export function PricingPage({ onClose, client, redirect }: PricingPageProps) {
                   <button
                     type="button"
                     className="pricing-btn pricing-btn-primary"
+                    data-interaction="pricing.upgrade"
                     onClick={upgrade}
                     disabled={busy !== null}
                   >
@@ -197,6 +203,7 @@ export function PricingPage({ onClose, client, redirect }: PricingPageProps) {
                   <button
                     type="button"
                     className="pricing-btn"
+                    data-interaction="pricing.manage"
                     onClick={manage}
                     disabled={busy !== null}
                   >

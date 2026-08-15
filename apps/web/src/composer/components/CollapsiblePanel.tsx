@@ -30,6 +30,7 @@ export function CollapsiblePanel({ id, title, open, onToggle, children }: Collap
         <button
           type="button"
           className="rail-item__toggle"
+          data-interaction="studio.panel.toggle"
           aria-expanded={open}
           aria-controls={bodyId}
           onClick={() => onToggle(id)}

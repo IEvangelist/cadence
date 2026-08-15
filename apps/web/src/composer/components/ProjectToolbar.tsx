@@ -177,19 +177,35 @@ export function ProjectToolbar({
         <span className="visually-hidden">Project name</span>
         <input
           className="project-name"
+          data-interaction="studio.project.name"
           value={project.name}
           onChange={(event) => setProjectName(event.target.value)}
           aria-label="Project name"
         />
       </label>
 
-      <button type="button" className="btn btn-sm" onClick={newProject}>
+      <button
+        type="button"
+        className="btn btn-sm"
+        data-interaction="studio.project.new"
+        onClick={newProject}
+      >
         New
       </button>
-      <button type="button" className="btn btn-sm" onClick={loadDemo}>
+      <button
+        type="button"
+        className="btn btn-sm"
+        data-interaction="studio.project.demo"
+        onClick={loadDemo}
+      >
         Demo
       </button>
-      <button type="button" className="btn btn-sm" onClick={() => void saveProject()}>
+      <button
+        type="button"
+        className="btn btn-sm"
+        data-interaction="studio.project.save"
+        onClick={() => void saveProject()}
+      >
         Save
       </button>
 
@@ -197,6 +213,7 @@ export function ProjectToolbar({
         <span className="visually-hidden">Open project</span>
         <select
           className="open-select"
+          data-interaction="studio.project.open"
           value=""
           aria-label="Open project"
           onChange={(event) => {
@@ -215,6 +232,7 @@ export function ProjectToolbar({
       <button
         type="button"
         className="btn btn-sm"
+        data-interaction="studio.project.import.trigger"
         onClick={() => importRef.current?.click()}
       >
         Import file
@@ -222,6 +240,7 @@ export function ProjectToolbar({
       <input
         ref={importRef}
         type="file"
+        data-interaction="studio.project.import.file"
         accept={importAccept}
         className="visually-hidden"
         aria-label="Import project or MusicXML file"
@@ -235,6 +254,7 @@ export function ProjectToolbar({
         <span className="visually-hidden">Export as</span>
         <select
           className="export-select"
+          data-interaction="studio.project.export"
           value=""
           aria-label="Export as"
           onChange={(event) => {
@@ -254,16 +274,27 @@ export function ProjectToolbar({
         </select>
       </label>
 
-      <button type="button" className="btn btn-sm" onClick={handleShare}>
+      <button
+        type="button"
+        className="btn btn-sm"
+        data-interaction="studio.project.share"
+        onClick={handleShare}
+      >
         Share
       </button>
 
-      <button type="button" className="btn btn-sm" onClick={() => midiRef.current?.click()}>
+      <button
+        type="button"
+        className="btn btn-sm"
+        data-interaction="studio.project.midi-import.trigger"
+        onClick={() => midiRef.current?.click()}
+      >
         Import MIDI
       </button>
       <input
         ref={midiRef}
         type="file"
+        data-interaction="studio.project.midi-import.file"
         accept=".mid,.midi,audio/midi"
         className="visually-hidden"
         aria-label="Import MIDI file"
@@ -272,7 +303,12 @@ export function ProjectToolbar({
           event.target.value = ''
         }}
       />
-      <button type="button" className="btn btn-sm" onClick={handleExportMidi}>
+      <button
+        type="button"
+        className="btn btn-sm"
+        data-interaction="studio.project.midi-export"
+        onClick={handleExportMidi}
+      >
         Export MIDI
       </button>
 

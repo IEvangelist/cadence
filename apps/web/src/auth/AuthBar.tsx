@@ -45,12 +45,18 @@ export function AuthBar({ onShowProfile, profileActive }: AuthBarProps) {
         <button
           type="button"
           className="btn btn-sm"
+          data-interaction="auth.profile.open"
           aria-pressed={profileActive}
           onClick={onShowProfile}
         >
           Profile
         </button>
-        <button type="button" className="btn btn-sm" onClick={() => void auth.signOut()}>
+        <button
+          type="button"
+          className="btn btn-sm"
+          data-interaction="auth.sign-out"
+          onClick={() => void auth.signOut()}
+        >
           Sign out
         </button>
       </div>
@@ -98,6 +104,7 @@ export function AuthBar({ onShowProfile, profileActive }: AuthBarProps) {
       <button
         type="button"
         className="btn btn-primary btn-sm"
+        data-interaction="auth.panel.toggle"
         aria-expanded={open}
         aria-controls={`${formId}-panel`}
         onClick={() => setOpen((value) => !value)}
@@ -118,6 +125,7 @@ export function AuthBar({ onShowProfile, profileActive }: AuthBarProps) {
                 <input
                   id={`${formId}-name`}
                   type="text"
+                  data-interaction="auth.registration.display-name"
                   autoComplete="nickname"
                   value={displayName}
                   onChange={(event) => setDisplayName(event.target.value)}
@@ -130,6 +138,7 @@ export function AuthBar({ onShowProfile, profileActive }: AuthBarProps) {
               <input
                 id={`${formId}-email`}
                 type="email"
+                data-interaction="auth.credentials.email"
                 required
                 autoComplete="email"
                 value={email}
@@ -145,6 +154,7 @@ export function AuthBar({ onShowProfile, profileActive }: AuthBarProps) {
               <input
                 id={`${formId}-password`}
                 type="password"
+                data-interaction="auth.credentials.password"
                 required
                 autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
                 value={password}
@@ -152,7 +162,12 @@ export function AuthBar({ onShowProfile, profileActive }: AuthBarProps) {
               />
             </div>
 
-            <button type="submit" className="btn btn-primary" disabled={busy}>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              data-interaction="auth.credentials.submit"
+              disabled={busy}
+            >
               {mode === 'signin' ? 'Sign in' : 'Create account'}
             </button>
 
@@ -167,6 +182,7 @@ export function AuthBar({ onShowProfile, profileActive }: AuthBarProps) {
           <button
             type="button"
             className="auth-link"
+            data-interaction="auth.mode.toggle"
             onClick={() => {
               setRegisterSent(false)
               setMode((value) => (value === 'signin' ? 'register' : 'signin'))
@@ -183,6 +199,7 @@ export function AuthBar({ onShowProfile, profileActive }: AuthBarProps) {
               <input
                 id={`${formId}-magic`}
                 type="email"
+                data-interaction="auth.magic-link.email"
                 required
                 autoComplete="email"
                 placeholder="you@example.com"
@@ -193,7 +210,12 @@ export function AuthBar({ onShowProfile, profileActive }: AuthBarProps) {
                 }}
               />
             </div>
-            <button type="submit" className="btn" disabled={busy}>
+            <button
+              type="submit"
+              className="btn"
+              data-interaction="auth.magic-link.submit"
+              disabled={busy}
+            >
               Email me a link
             </button>
             {magicSent && (
@@ -211,6 +233,7 @@ export function AuthBar({ onShowProfile, profileActive }: AuthBarProps) {
                   <a
                     key={provider}
                     className="btn btn-sm"
+                    data-interaction="auth.provider.sign-in"
                     href={auth.client.externalSignInUrl(provider)}
                   >
                     {provider}

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+/* Interaction coverage: studio.track.instrument */
 import { describe, expect, it, vi } from 'vitest'
 import { InstrumentPicker } from './InstrumentPicker'
 import type { InstrumentDefinition } from '../instruments/registry'

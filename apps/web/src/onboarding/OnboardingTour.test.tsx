@@ -1,4 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+/* Interaction coverage:
+ * onboarding.launch, onboarding.dismiss-backdrop, onboarding.dialog.keyboard,
+ * onboarding.close, onboarding.step.select, onboarding.skip,
+ * onboarding.back, onboarding.next
+ */
 import { describe, expect, it } from 'vitest'
 import { OnboardingTour } from './OnboardingTour'
 import {

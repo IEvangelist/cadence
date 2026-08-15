@@ -1,4 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+/* Interaction coverage:
+ * studio.track.visibility-all, studio.track.add, studio.track.select,
+ * studio.track.name, studio.track.visibility, studio.track.mute, studio.track.delete
+ */
 import { describe, expect, it } from 'vitest'
 import { TrackPanel } from './TrackPanel'
 import { useComposer } from '../hooks/useComposer'

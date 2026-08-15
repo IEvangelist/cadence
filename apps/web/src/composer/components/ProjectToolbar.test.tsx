@@ -1,4 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+/* Interaction coverage:
+ * studio.project.name, studio.project.new, studio.project.demo, studio.project.save,
+ * studio.project.open, studio.project.import.trigger, studio.project.import.file,
+ * studio.project.export, studio.project.share, studio.project.midi-import.trigger,
+ * studio.project.midi-import.file, studio.project.midi-export
+ */
 import { describe, expect, it, vi } from 'vitest'
 import { ProjectToolbar } from './ProjectToolbar'
 import { useComposer, type UseComposerOptions } from '../hooks/useComposer'

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+/* Interaction coverage: studio.empty.load-demo */
 import { describe, expect, it } from 'vitest'
 import { Composer } from './Composer'
 import { SilentAudioEngine } from './audio/engine'

@@ -1,4 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+/* Interaction coverage:
+ * studio.automation.add-point, studio.automation.clear,
+ * studio.automation.lane, studio.automation.remove-point
+ */
 import { describe, expect, it, vi } from 'vitest'
 import { AutomationLane } from './AutomationLane'
 import { pointFromPointer } from './automationLaneGeometry'

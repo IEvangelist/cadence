@@ -1,4 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+/* Interaction coverage:
+ * studio.assistant.action.select, studio.assistant.temperature,
+ * studio.assistant.length, studio.assistant.generate, studio.assistant.preview,
+ * studio.assistant.accept, studio.assistant.discard
+ */
 import { describe, expect, it } from 'vitest'
 import { Composer } from '../Composer'
 import { SilentAudioEngine } from '../audio/engine'

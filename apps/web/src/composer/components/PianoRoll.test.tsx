@@ -1,5 +1,15 @@
 import { useEffect } from 'react'
+/* Interaction coverage:
+ * studio.piano-roll.zoom.time-out, studio.piano-roll.zoom.time-in,
+ * studio.piano-roll.zoom.pitch-out, studio.piano-roll.zoom.pitch-in,
+ * studio.piano-roll.zoom.reset, studio.piano-roll.quantize.strength,
+ * studio.piano-roll.quantize.apply, studio.piano-roll.velocity.toggle,
+ * studio.piano-roll.grid, studio.piano-roll.note,
+ * studio.piano-roll.note.resize-start, studio.piano-roll.note.resize-end,
+ * studio.piano-roll.velocity.note, studio.piano-roll.velocity.selected
+ */
 import { act, fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PianoRoll } from './PianoRoll'
 import { useComposer } from '../hooks/useComposer'
@@ -153,6 +163,39 @@ describe('<PianoRoll />', () => {
     fireEvent.click(screen.getByRole('button', { name: /Zoom in horizontally/ }))
     const zoomed = screen.getAllByRole('button').find((b) => b.className.includes('pr-note'))!
     expect(parseFloat(zoomed.style.width)).toBeGreaterThan(beforeWidth)
+  })
+
+  it('updates and resets zoom, quantize strength, and velocity controls', async () => {
+    const user = userEvent.setup()
+    mockGridRect()
+    render(<Harness />)
+
+    const zoom = screen.getByRole('status', { name: 'Current zoom' })
+    await user.click(screen.getByRole('button', { name: 'Zoom in horizontally (time)' }))
+    await user.click(screen.getByRole('button', { name: 'Zoom in vertically (pitch)' }))
+    expect(zoom).not.toHaveTextContent('100% × 100%')
+    await user.click(screen.getByRole('button', { name: 'Zoom out horizontally (time)' }))
+    await user.click(screen.getByRole('button', { name: 'Zoom out vertically (pitch)' }))
+    await user.click(screen.getByRole('button', { name: 'Reset zoom' }))
+    expect(zoom).toHaveTextContent('100% × 100%')
+
+    fireEvent.change(screen.getByRole('slider', { name: 'Quantize strength' }), {
+      target: { value: '0.5' },
+    })
+    expect(screen.getByText('50%')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Toggle velocity lane' }))
+    expect(screen.queryByRole('group', { name: 'Velocity lane' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Toggle velocity lane' }))
+    expect(screen.getByRole('group', { name: 'Velocity lane' })).toBeInTheDocument()
+
+    fireEvent.pointerDown(screen.getByRole('application'), { clientX: 96, clientY: 80 })
+    const velocityBar = screen.getByRole('button', { name: /Velocity for/ })
+    const before = velocityBar.getAttribute('aria-label')
+    fireEvent.change(screen.getByRole('slider', { name: /Velocity/ }), {
+      target: { value: '0.25' },
+    })
+    expect(velocityBar.getAttribute('aria-label')).not.toBe(before)
   })
 
   it('runs quantize on the selected note without dropping it', () => {

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
+/* Interaction coverage: studio.quick-start.load */
 import { describe, expect, it, vi } from 'vitest'
 import { QuickStartGallery } from './QuickStartGallery'
 import { HOUSE_DUBS } from '../templates'

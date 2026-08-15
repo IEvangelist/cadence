@@ -1,4 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+/* Interaction coverage:
+ * studio.transport.play, studio.transport.stop, studio.transport.tempo,
+ * studio.transport.loop, studio.transport.snap
+ */
 import { describe, expect, it } from 'vitest'
 import { TransportBar } from './TransportBar'
 import { useComposer } from '../hooks/useComposer'

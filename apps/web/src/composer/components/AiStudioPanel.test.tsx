@@ -1,4 +1,10 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
+/* Interaction coverage:
+ * studio.ai.feature.select, studio.ai.motif.prompt, studio.ai.motif.length,
+ * studio.ai.motif.create, studio.ai.style.select, studio.ai.style.apply,
+ * studio.ai.groove.select, studio.ai.groove.intensity, studio.ai.groove.apply,
+ * studio.ai.mastering.analyze
+ */
 import { describe, expect, it } from 'vitest'
 import { Composer } from '../Composer'
 import { SilentAudioEngine } from '../audio/engine'

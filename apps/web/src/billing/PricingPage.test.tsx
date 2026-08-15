@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+/* Interaction coverage: pricing.close, pricing.upgrade, pricing.manage */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { EntitlementsClient, type Entitlements } from './entitlementsClient'
 import { PricingPage } from './PricingPage'

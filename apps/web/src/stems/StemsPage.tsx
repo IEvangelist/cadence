@@ -139,7 +139,12 @@ export function StemsPage({
           </p>
         </div>
         {onClose && (
-          <button type="button" className="stems-btn" onClick={onClose}>
+          <button
+            type="button"
+            className="stems-btn"
+            data-interaction="stems.close"
+            onClick={onClose}
+          >
             Back to composer
           </button>
         )}
@@ -156,7 +161,12 @@ export function StemsPage({
             Upgrade to Pro to split your mixes into isolated, downloadable stems.
           </p>
           {onUpgrade && (
-            <button type="button" className="stems-btn stems-btn-primary" onClick={onUpgrade}>
+            <button
+              type="button"
+              className="stems-btn stems-btn-primary"
+              data-interaction="stems.upgrade"
+              onClick={onUpgrade}
+            >
               See Pro plans
             </button>
           )}
@@ -177,6 +187,7 @@ export function StemsPage({
               id={fileInputId}
               className="stems-file"
               type="file"
+              data-interaction="stems.upload.file"
               accept="audio/*"
               onChange={(event) => {
                 setFile(event.target.files?.[0] ?? null)
@@ -186,6 +197,7 @@ export function StemsPage({
             <button
               type="submit"
               className="stems-btn stems-btn-primary"
+              data-interaction="stems.separate"
               disabled={!file || busy}
             >
               {busy ? 'Uploading…' : 'Separate stems'}
@@ -233,12 +245,14 @@ export function StemsPage({
                               <audio
                                 className="stems-audio"
                                 controls
+                                data-interaction="stems.preview"
                                 preload="none"
                                 src={href}
                                 aria-label={`${stem.label} stem preview`}
                               />
                               <a
                                 className="stems-download"
+                                data-interaction="stems.download"
                                 href={href}
                                 download={`${job.originalFileName}-${stem.label}.wav`}
                               >

@@ -47,6 +47,7 @@ export function MidiControls({ controller }: MidiControlsProps) {
       />
       <select
         className="midi-select"
+        data-interaction="studio.midi.device"
         aria-label="MIDI device"
         value={midi.selectedInputId ?? ''}
         onChange={(event) => midi.selectInput(event.target.value || null)}
@@ -65,6 +66,7 @@ export function MidiControls({ controller }: MidiControlsProps) {
       <button
         type="button"
         className="btn btn-sm btn-toggle midi-arm"
+        data-interaction="studio.midi.arm"
         aria-pressed={midi.armed}
         onClick={midi.toggleArmed}
         title="Record notes played on the MIDI device into the selected track"
@@ -74,6 +76,7 @@ export function MidiControls({ controller }: MidiControlsProps) {
       <label className="field midi-quantize">
         <input
           type="checkbox"
+          data-interaction="studio.midi.quantize"
           checked={midi.quantize}
           onChange={(event) => midi.setQuantize(event.target.checked)}
         />

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+/* Interaction coverage: studio.plugins.example.run-command */
 
 /** Minimal Tone mock: only what the Music Box voice constructs. */
 const h = vi.hoisted(() => ({ trigger: vi.fn(), dispose: vi.fn() }))

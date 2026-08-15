@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+/* Interaction coverage:
+ * profile.close, profile.display-name, profile.bio, profile.avatar-url, profile.save
+ */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { AuthClient, Profile } from './authClient'
 import { AuthContext, type AuthContextValue } from './authContext'

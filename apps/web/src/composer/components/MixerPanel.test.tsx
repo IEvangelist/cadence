@@ -1,4 +1,10 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
+/* Interaction coverage:
+ * studio.mixer.track.gain, studio.mixer.track.pan, studio.mixer.track.mute,
+ * studio.mixer.track.solo, studio.mixer.insert.toggle, studio.mixer.insert.remove,
+ * studio.mixer.insert.select, studio.mixer.insert.add, studio.mixer.master.gain,
+ * studio.mixer.master.limiter, studio.mixer.master.ceiling
+ */
 import { describe, expect, it, vi } from 'vitest'
 import { MixerPanel } from './MixerPanel'
 import type { MixerViewModel, MixerTrackView } from '../hooks/useMixer'
