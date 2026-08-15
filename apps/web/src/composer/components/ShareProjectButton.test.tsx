@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 /* Interaction coverage:
  * studio.share.toggle, studio.share.create-editor, studio.share.create-viewer,
  * studio.share.copy, studio.share.revoke
@@ -39,9 +40,38 @@ describe('ShareProjectButton', () => {
     await waitFor(() => expect(screen.getByText('Editor')).toBeInTheDocument())
   })
 
-  it('creates a viewer link and copies it to the clipboard', async () => {
-    const client = fakeClient()
+  it.each(['editor', 'viewer'] as const)(
+    'creates a %s link and copies it to the clipboard',
+    async (role) => {
+      const client = fakeClient()
+      const clipboard = vi.fn(async () => {})
+      const user = userEvent.setup()
+      render(
+        <ShareProjectButton
+          projectId="p1"
+          client={client}
+          origin="https://app.test"
+          clipboard={clipboard}
+        />,
+      )
+      await user.click(screen.getByRole('button', { name: 'Share' }))
+      await user.click(
+        await screen.findByRole('button', { name: `Create ${role} link` }),
+      )
+
+      await waitFor(() =>
+        expect(clipboard).toHaveBeenCalledWith(
+          `https://app.test/?collab=p1&role=${role}&share=tok-${role}`,
+        ),
+      )
+      expect(client.create).toHaveBeenCalledWith('p1', role)
+    },
+  )
+
+  it('copies an existing link and reports the copied state', async () => {
+    const client = fakeClient([link('t1', 'editor')])
     const clipboard = vi.fn(async () => {})
+    const user = userEvent.setup()
     render(
       <ShareProjectButton
         projectId="p1"
@@ -50,15 +80,14 @@ describe('ShareProjectButton', () => {
         clipboard={clipboard}
       />,
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Share' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Create viewer link' }))
 
-    await waitFor(() =>
-      expect(clipboard).toHaveBeenCalledWith(
-        'https://app.test/?collab=p1&role=viewer&share=tok-viewer',
-      ),
+    await user.click(screen.getByRole('button', { name: 'Share' }))
+    await user.click(await screen.findByRole('button', { name: 'Copy link' }))
+
+    expect(clipboard).toHaveBeenCalledWith(
+      'https://app.test/?collab=p1&role=editor&share=t1',
     )
-    expect(client.create).toHaveBeenCalledWith('p1', 'viewer')
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
   })
 
   it('revokes a link', async () => {

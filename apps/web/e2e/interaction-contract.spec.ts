@@ -52,6 +52,10 @@ const completedJob = {
     },
   ],
 }
+const existingShares = [
+  { token: 'editor-token', role: 'editor', createdAt: '2025-01-01T00:00:00Z' },
+  { token: 'viewer-token', role: 'viewer', createdAt: '2025-01-01T00:00:00Z' },
+]
 const manifestById = new Map(interactionManifest.map((entry) => [entry.id, entry]))
 
 async function mockApi(route: Route, authenticated: boolean): Promise<void> {
@@ -71,7 +75,9 @@ async function mockApi(route: Route, authenticated: boolean): Promise<void> {
     )
   }
   if (path === '/api/projects' && method === 'GET') return json([])
-  if (/^\/api\/projects\/[^/]+\/shares$/.test(path) && method === 'GET') return json([])
+  if (/^\/api\/projects\/[^/]+\/shares$/.test(path) && method === 'GET') {
+    return json(authenticated ? existingShares : [])
+  }
   if (path === '/api/stems/jobs' && method === 'GET') {
     return json(authenticated ? [completedJob] : [])
   }
@@ -234,6 +240,8 @@ test.describe('production interaction contract', () => {
     const shareToggle = page.locator('[data-interaction="studio.share.toggle"]')
     await shareToggle.click()
     await expect(page.getByRole('group', { name: 'Share links' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Copy link' })).toHaveCount(2)
+    await expect(page.getByRole('button', { name: 'Revoke' })).toHaveCount(2)
     await assertInteractionContract(page, 'authenticated share panel')
     await shareToggle.click()
 
