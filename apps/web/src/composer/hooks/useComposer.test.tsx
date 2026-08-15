@@ -4,7 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useComposer } from './useComposer'
 import { type AudioEngine, type TransportState } from '../audio/engine'
 import { createMixerController, type MixerController } from '../audio/mixerController'
-import { LocalStorageProjectStore, MemoryStorage } from '../model/storage'
+import {
+  LocalStorageProjectStore,
+  MemoryStorage,
+  type ProjectStore,
+  type StoredProjectMeta,
+} from '../model/storage'
 import { createEmptyProject, type Project } from '../model/project'
 import { projectToMidiBytes } from '../midi/midi'
 import { defaultPluginHost } from '../plugins/defaultHost'
@@ -358,6 +363,184 @@ describe('useComposer — StrictMode lifecycle (regression #97)', () => {
       engine.calls.lastIndexOf('dispose'),
     )
   })
+
+  describe('useComposer — revision-aware autosave', () => {
+    function deferred<T>() {
+      let resolve!: (value: T) => void
+      let reject!: (reason?: unknown) => void
+      const promise = new Promise<T>((accept, decline) => {
+        resolve = accept
+        reject = decline
+      })
+      return { promise, resolve, reject }
+    }
+
+    function fakeStore(save: ProjectStore['save']): ProjectStore {
+      return {
+        save,
+        load: vi.fn(async () => null),
+        list: vi.fn(async () => []),
+        remove: vi.fn(async () => undefined),
+        loadLast: vi.fn(async () => null),
+        setLast: vi.fn(async () => undefined),
+      }
+    }
+
+    it('flushes the latest revision before the debounce expires', async () => {
+      const save = vi.fn(async (project: Project): Promise<StoredProjectMeta> => ({
+        id: project.id,
+        name: project.name,
+        updatedAt: 1,
+      }))
+      const hook = renderHook(() =>
+        useComposer({
+          createEngine: () => new FakeEngine(),
+          store: fakeStore(save),
+          initialProject: createEmptyProject('flush'),
+          autosaveDelay: 60_000,
+        }),
+      )
+      act(() => hook.result.current.setProjectName('Latest edit'))
+      await waitFor(() => expect(hook.result.current.project.name).toBe('Latest edit'))
+
+      await act(() => hook.result.current.flushAutosave())
+
+      expect(save).toHaveBeenCalledTimes(1)
+      expect(save.mock.calls[0][0].name).toBe('Latest edit')
+      expect(hook.result.current.isDirty).toBe(false)
+    })
+
+    it('continues flushing when a newer revision arrives during a slow save', async () => {
+      const first = deferred<StoredProjectMeta>()
+      const save = vi
+        .fn<ProjectStore['save']>()
+        .mockImplementationOnce(() => first.promise)
+        .mockImplementation(async (project) => ({
+          id: project.id,
+          name: project.name,
+          updatedAt: 2,
+        }))
+      const hook = renderHook(() =>
+        useComposer({
+          createEngine: () => new FakeEngine(),
+          store: fakeStore(save),
+          initialProject: createEmptyProject('slow'),
+          autosaveDelay: 60_000,
+        }),
+      )
+
+      act(() => hook.result.current.setProjectName('First revision'))
+      await waitFor(() => expect(hook.result.current.project.name).toBe('First revision'))
+      const flushing = hook.result.current.flushAutosave()
+      await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+      act(() => hook.result.current.setProjectName('Second revision'))
+      first.resolve({ id: 'slow', name: 'First revision', updatedAt: 1 })
+      await act(() => flushing)
+
+      expect(save).toHaveBeenCalledTimes(2)
+      expect(save.mock.calls[1][0].name).toBe('Second revision')
+      expect(hook.result.current.isDirty).toBe(false)
+    })
+
+    it('does not publish async autosave state after unmount', async () => {
+      const pending = deferred<StoredProjectMeta>()
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      const hook = renderHook(() =>
+        useComposer({
+          createEngine: () => new FakeEngine(),
+          store: fakeStore(vi.fn(() => pending.promise)),
+          initialProject: createEmptyProject('unmount'),
+          autosaveDelay: 60_000,
+        }),
+      )
+      const flushing = hook.result.current.flushAutosave()
+      hook.unmount()
+      pending.resolve({ id: 'unmount', name: 'Untitled', updatedAt: 1 })
+
+      await flushing
+      expect(consoleError).not.toHaveBeenCalled()
+    })
+
+    it('queues a later autosave when a newer revision joins a rejected flush', async () => {
+      const first = deferred<StoredProjectMeta>()
+      const save = vi
+        .fn<ProjectStore['save']>()
+        .mockImplementationOnce(() => first.promise)
+        .mockImplementation(async (project) => ({
+          id: project.id,
+          name: project.name,
+          updatedAt: 2,
+        }))
+      const hook = renderHook(() =>
+        useComposer({
+          createEngine: () => new FakeEngine(),
+          store: fakeStore(save),
+          initialProject: createEmptyProject('retry'),
+          autosaveDelay: 20,
+        }),
+      )
+
+      act(() => hook.result.current.setProjectName('Revision one'))
+      await waitFor(() => expect(hook.result.current.project.name).toBe('Revision one'))
+      const failedFlush = hook.result.current.flushAutosave()
+      await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+      act(() => hook.result.current.setProjectName('Revision two'))
+      first.reject(new Error('offline'))
+      await expect(failedFlush).rejects.toThrow('offline')
+
+      await waitFor(() => expect(save).toHaveBeenCalledTimes(2), { timeout: 1_500 })
+      expect(save.mock.calls[1][0].name).toBe('Revision two')
+      await waitFor(() => expect(hook.result.current.isDirty).toBe(false))
+    })
+
+    it('explicit retry after failure persists the latest revision', async () => {
+      const save = vi
+        .fn<ProjectStore['save']>()
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockImplementation(async (project) => ({
+          id: project.id,
+          name: project.name,
+          updatedAt: 2,
+        }))
+      const hook = renderHook(() =>
+        useComposer({
+          createEngine: () => new FakeEngine(),
+          store: fakeStore(save),
+          initialProject: createEmptyProject('explicit-retry'),
+          autosaveDelay: 60_000,
+        }),
+      )
+
+      act(() => hook.result.current.setProjectName('Newest revision'))
+      await waitFor(() => expect(hook.result.current.project.name).toBe('Newest revision'))
+      await expect(hook.result.current.flushAutosave()).rejects.toThrow('offline')
+      await act(() => hook.result.current.flushAutosave())
+
+      expect(save).toHaveBeenCalledTimes(2)
+      expect(save.mock.calls[1][0].name).toBe('Newest revision')
+      expect(hook.result.current.isDirty).toBe(false)
+    })
+
+    it('does not retry the same persistently failing revision in a loop', async () => {
+      const save = vi.fn(async () => Promise.reject(new Error('offline')))
+      const hook = renderHook(() =>
+        useComposer({
+          createEngine: () => new FakeEngine(),
+          store: fakeStore(save),
+          initialProject: createEmptyProject('no-hot-loop'),
+          autosaveDelay: 20,
+        }),
+      )
+
+      act(() => hook.result.current.setProjectName('One failing revision'))
+      await waitFor(() => expect(hook.result.current.project.name).toBe('One failing revision'))
+      await expect(hook.result.current.flushAutosave()).rejects.toThrow('offline')
+      await new Promise((resolve) => setTimeout(resolve, 600))
+
+      expect(save).toHaveBeenCalledTimes(1)
+      expect(hook.result.current.isDirty).toBe(true)
+    })
+  })
 })
 
 describe('useComposer — format interop', () => {
@@ -552,13 +735,17 @@ describe('useComposer — share open from URL', () => {
     seed.name = 'Shared On Load'
     seed.tracks[0].notes = [{ id: 'n', pitch: 72, start: 0, duration: 1, velocity: 0.8 }]
     const { encodeProjectToFragment } = await import('../formats/share')
-    window.location.hash = `#${encodeProjectToFragment(seed)}`
+    const sharedProjectHash = `#${encodeProjectToFragment(seed)}`
+    window.location.hash = sharedProjectHash
+    const onSharedProjectConsumed = vi.fn()
 
     const hook = renderHook(() =>
       useComposer({
         createEngine: () => new FakeEngine(),
         store: new LocalStorageProjectStore(new MemoryStorage()),
         autosaveDelay: 0,
+        sharedProjectHash,
+        onSharedProjectConsumed,
       }),
     )
 
@@ -567,5 +754,6 @@ describe('useComposer — share open from URL', () => {
     )
     expect(hook.result.current.status).toBe('Opened shared project')
     expect(hook.result.current.project.tracks[0].notes[0].pitch).toBe(72)
+    expect(onSharedProjectConsumed).toHaveBeenCalledTimes(1)
   })
 })

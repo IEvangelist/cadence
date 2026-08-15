@@ -49,6 +49,7 @@ test.describe('auth', () => {
     await page.goto('/')
 
     await page.getByRole('button', { name: 'Sign in' }).click()
+    await expect(page.getByRole('dialog', { name: 'Sign in to Cadence' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Sign in to Cadence' })).toBeVisible()
 
     const results = await new AxeBuilder({ page })

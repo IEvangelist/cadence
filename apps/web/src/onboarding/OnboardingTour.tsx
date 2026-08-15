@@ -8,6 +8,8 @@ import {
   useRef,
   useState,
 } from 'react'
+import { X } from 'lucide-react'
+import { Icon } from '../ui/Icon'
 import './OnboardingTour.css'
 import { type OnboardingStorage } from './onboardingStorage'
 import { ONBOARDING_STEPS } from './steps'
@@ -262,7 +264,7 @@ export function OnboardingTour({
               aria-label="Close onboarding tour"
               onClick={close}
             >
-              ×
+              <Icon icon={X} size={16} />
             </button>
             <p className="onboarding-tour__step" aria-live="polite">
               Step {stepIndex + 1} of {stepCount}

@@ -93,13 +93,36 @@ export function useCollaboration(
   // duplicate. In-memory/test providers (no onSynced) mirror immediately.
   const mirrorReadyRef = useRef(false)
   const canWrite = config ? config.role !== 'viewer' : false
+  const projectId = config?.projectId
+  const role = config?.role
+  const url = config?.url
+  const token = config?.token
+  const userId = config?.user.id
+  const userName = config?.user.name
+  const userColor = config?.user.color
 
   // Reset happens via the previous run's cleanup; the hook returns INERT while
   // config is null, so no state writes are needed here (and none should run
   // synchronously inside the effect).
   useEffect(() => {
-    if (!config) return
-    const provider = providerFactory(config)
+    if (
+      !projectId ||
+      !role ||
+      !url ||
+      userId == null ||
+      userName == null ||
+      userColor == null
+    ) {
+      return
+    }
+    const activeConfig: CollabConfig = {
+      projectId,
+      role,
+      url,
+      token,
+      user: { id: userId, name: userName, color: userColor },
+    }
+    const provider = providerFactory(activeConfig)
     // A real network provider seeds after its initial sync (see onSynced below)
     // so only the first client — the one that finds an empty server doc — seeds,
     // and late joiners adopt the shared project instead of duplicating it.
@@ -109,8 +132,8 @@ export function useCollaboration(
     const session = createCollabSession({
       doc: provider.doc,
       awareness: provider.awareness,
-      user: config.user,
-      canWrite: config.role !== 'viewer',
+      user: activeConfig.user,
+      canWrite: role !== 'viewer',
       initialProject: deferSeed ? undefined : bindingRef.current.project,
       onRemoteProject: (project) => bindingRef.current.applyRemoteProject(project),
     })
@@ -137,8 +160,16 @@ export function useCollaboration(
       mirrorReadyRef.current = false
       setConnected(false)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config?.projectId, config?.url, config?.token, config?.role, providerFactory])
+  }, [
+    projectId,
+    url,
+    token,
+    role,
+    userId,
+    userName,
+    userColor,
+    providerFactory,
+  ])
 
   // Mirror local project edits into the shared doc (echo-safe; viewers no-op).
   // Skipped until the initial sync so a joiner never duplicates the seed.

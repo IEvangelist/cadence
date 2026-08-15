@@ -76,6 +76,13 @@ test.describe('pwa', () => {
     await page.goto('/')
     await waitForServiceWorkerReady(page)
     await expectServiceWorkerController(page)
+    await page.waitForFunction(
+      () =>
+        (window as unknown as { __CADENCE_ROUTE_PREFETCH_READY__?: boolean })
+          .__CADENCE_ROUTE_PREFETCH_READY__ === true,
+      undefined,
+      { timeout: 30_000 },
+    )
 
     try {
       await page.context().setOffline(true)
@@ -85,6 +92,72 @@ test.describe('pwa', () => {
         page.getByRole('heading', { level: 1, name: 'Cadence' }),
       ).toBeVisible()
       await expect(page.locator('main.app')).toBeVisible()
+    } finally {
+      await page.context().setOffline(false)
+    }
+  })
+
+  test('opens unvisited secondary routes after background warming while offline', async ({
+    page,
+  }) => {
+    test.setTimeout(90_000)
+    const routes = [
+      ['/stems', 'Stem separation'],
+      ['/pricing', 'Plans & pricing'],
+      ['/profile', 'Sign in to view your profile'],
+      ['/licenses', 'Acknowledgements & third-party licenses'],
+    ] as const
+
+    await page.goto('/')
+    await waitForServiceWorkerReady(page)
+    await expectServiceWorkerController(page)
+    await page.waitForFunction(
+      () =>
+        (window as unknown as { __CADENCE_ROUTE_PREFETCH_READY__?: boolean })
+          .__CADENCE_ROUTE_PREFETCH_READY__ === true,
+      undefined,
+      { timeout: 30_000 },
+    )
+    const cacheAudit = await page.evaluate(async () => {
+      const urls = [
+        ...new Set(
+          performance
+            .getEntriesByType('resource')
+            .map((entry) => new URL(entry.name, location.href))
+            .filter(
+              (url) =>
+                url.origin === location.origin && url.pathname.startsWith('/assets/'),
+            )
+            .map((url) => url.href),
+        ),
+      ]
+      const cache = await caches.open('cadence-shell-v1')
+      const missing = []
+      for (const url of urls) {
+        if (!(await cache.match(url, { ignoreVary: true }))) missing.push(url)
+      }
+      return {
+        cacheReady: (
+          window as unknown as { __CADENCE_ROUTE_PREFETCH_CACHE_READY__?: boolean }
+        ).__CADENCE_ROUTE_PREFETCH_CACHE_READY__,
+        urls,
+        missing,
+      }
+    })
+    expect(cacheAudit.cacheReady).toBe(true)
+    expect(cacheAudit.missing).toEqual([])
+    for (const routeName of ['StemsRoute', 'PricingRoute', 'ProfileRoute', 'LicensesRoute']) {
+      expect(cacheAudit.urls.some((url) => url.includes(`${routeName}-`))).toBe(true)
+    }
+
+    try {
+      await page.context().setOffline(true)
+      for (const [path, heading] of routes) {
+        await page.goto(path)
+        await expect(page.getByRole('heading', { name: heading })).toBeVisible()
+        await page.reload()
+        await expect(page.getByRole('heading', { name: heading })).toBeVisible()
+      }
     } finally {
       await page.context().setOffline(false)
     }

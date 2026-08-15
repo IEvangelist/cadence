@@ -139,6 +139,28 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     '/Third-party licenses|Back to composer/',
     'Shows the licenses and acknowledgements surface or returns to the composer.',
   ),
+  app(
+    'app.theme.open',
+    'studio',
+    'button',
+    'Choose theme',
+    'Opens the theme menu and exposes system, light, and dark choices.',
+  ),
+  app(
+    'app.theme.select',
+    'studio',
+    'menuitemradio',
+    '/System theme|Light theme|Dark theme/',
+    'Persists the selected theme preference and applies it to the document.',
+    'repeated',
+  ),
+  app(
+    'app.not-found.studio',
+    'studio',
+    'button',
+    'Return to Studio',
+    'Returns an unknown browser-history route to the Studio route.',
+  ),
 
   licenses(
     'licenses.external-link',
@@ -943,6 +965,20 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'button',
     'Load a demo pattern',
     'Loads the demo pattern from the empty composer state.',
+  ),
+  traced('src/app/StudioNavigationGuard.test.tsx', 'e2e/routing.spec.ts')(
+    'studio.autosave.retry',
+    'studio',
+    'button',
+    'Retry save',
+    'Retries a failed route-exit autosave and proceeds only after it succeeds.',
+  ),
+  traced('src/app/StudioNavigationGuard.test.tsx', 'e2e/routing.spec.ts')(
+    'studio.autosave.discard',
+    'studio',
+    'button',
+    'Discard changes',
+    'Explicitly abandons a failed route-exit autosave and continues navigation.',
   ),
   examplePlugin(
     'studio.plugins.example.run-command',

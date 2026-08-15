@@ -25,6 +25,7 @@ import {
 } from './model/collab/useCollaboration'
 import { CollaborationStatusContext } from './contract/collaborationContext'
 import { selectCollaborationStatus } from './contract/collaborationSelector'
+import { StudioNavigationGuard } from '../app/StudioNavigationGuard'
 import './Composer.css'
 
 interface ComposerProps {
@@ -44,6 +45,8 @@ interface ComposerProps {
   canShare?: boolean
   /** Injectable AI Studio entitlements — used by tests; defaults to context. */
   aiStudioOptions?: UseAiStudioOptions
+  /** Await project persistence before the Studio route unmounts. */
+  guardNavigation?: boolean
 }
 
 /** The flagship composing surface: toolbar, transport, tracks, and piano roll. */
@@ -54,6 +57,7 @@ export function Composer({
   collabProviderFactory,
   canShare = false,
   aiStudioOptions,
+  guardNavigation = false,
 }: ComposerProps = {}) {
   const controller = useComposer(options)
   const assistant = useAssistant(controller, assistantOptions)
@@ -88,6 +92,7 @@ export function Composer({
 
   return (
     <CollaborationStatusContext.Provider value={collaborationStatus}>
+    {guardNavigation ? <StudioNavigationGuard controller={controller} /> : null}
     <section className="composer" aria-label="Composer" id="composer-main" tabIndex={-1}>
       <div className="composer-topbar">
         <ProjectToolbar controller={controller} />

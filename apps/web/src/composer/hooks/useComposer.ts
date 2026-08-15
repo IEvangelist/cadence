@@ -72,6 +72,10 @@ export interface UseComposerOptions {
   midiEnabled?: boolean
   /** Injectable Web MIDI access request for tests/e2e (defaults to navigator). */
   requestMidiAccess?: () => Promise<MidiAccessLike | null>
+  /** Router-owned hash used to import a shared project on Studio mount. */
+  sharedProjectHash?: string
+  /** Called after a shared project hash is imported so the router can replace it. */
+  onSharedProjectConsumed?: () => void
 }
 
 /**
@@ -117,6 +121,9 @@ export interface ComposerController {
   savedProjects: StoredProjectMeta[]
   status: string
   audioReady: boolean
+  isDirty: boolean
+  isFlushing: boolean
+  flushAutosave: () => Promise<void>
   /** Show a transient status message (used by the CommandApi `notify`). */
   notify: (message: string) => void
 
@@ -267,6 +274,14 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   const [positionBeats, setPositionBeats] = useState(0)
   const [savedProjects, setSavedProjects] = useState<StoredProjectMeta[]>([])
   const [status, setStatus] = useState('Ready')
+  const [savedProject, setSavedProject] = useState(state.project)
+  const [isFlushing, setIsFlushing] = useState(false)
+  const [joinedFailure, setJoinedFailure] = useState(0)
+  const mountedRef = useRef(true)
+  const revisionRef = useRef(0)
+  const savedRevisionRef = useRef(0)
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const flushPromiseRef = useRef<Promise<void> | null>(null)
   // #131 multi-track view: ids of tracks shown on the piano roll as read-only
   // context, in ADDITION to the always-visible selected track. Deliberately
   // EPHEMERAL — it is view state, so it stays out of the persisted `project`
@@ -302,6 +317,16 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   useEffect(() => {
     projectRef.current = state.project
   }, [state.project])
+  useEffect(
+    () => {
+      mountedRef.current = true
+      return () => {
+        mountedRef.current = false
+        if (autosaveTimerRef.current !== null) clearTimeout(autosaveTimerRef.current)
+      }
+    },
+    [],
+  )
 
   // --- Live MIDI input (#111) -------------------------------------------------
   // Additive and #97-safe: monitoring reuses engine.previewNote (the existing
@@ -357,7 +382,9 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   }, [engine, transportState])
 
   const refreshList = useCallback(() => {
-    void store.list().then(setSavedProjects)
+    void store.list().then((projects) => {
+      if (mountedRef.current) setSavedProjects(projects)
+    })
   }, [store])
 
   useEffect(() => {
@@ -372,7 +399,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     let cancelled = false
     const shared =
       typeof window !== 'undefined'
-        ? decodeProjectFromFragment(window.location.hash)
+        ? decodeProjectFromFragment(options.sharedProjectHash ?? window.location.hash)
         : null
     if (shared) {
       // Defer to a microtask so we don't call setState synchronously inside the
@@ -381,14 +408,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         if (cancelled) return
         dispatch({ type: 'load-project', project: { ...shared, id: newId('project') } })
         setStatus('Opened shared project')
-        // Clear the fragment so a reload/autosave doesn't re-import it.
-        if (typeof window !== 'undefined' && window.history?.replaceState) {
-          window.history.replaceState(
-            null,
-            '',
-            window.location.pathname + window.location.search,
-          )
-        }
+        options.onSharedProjectConsumed?.()
       })
       return () => {
         cancelled = true
@@ -408,22 +428,99 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     async (project: Project) => {
       await store.save(project)
       await store.setLast(project.id)
-      refreshList()
+      const projects = await store.list()
+      if (mountedRef.current) setSavedProjects(projects)
     },
-    [store, refreshList],
+    [store],
   )
 
-  // Debounced autosave on any project change.
+  const flushAutosave = useCallback((): Promise<void> => {
+    if (autosaveTimerRef.current !== null) {
+      clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
+    }
+    if (flushPromiseRef.current) return flushPromiseRef.current
+    if (mountedRef.current) setIsFlushing(true)
+
+    const flush = async () => {
+      let attemptedRevision = savedRevisionRef.current
+      try {
+        while (savedRevisionRef.current < revisionRef.current) {
+          attemptedRevision = revisionRef.current
+          const project = projectRef.current
+          await persist(project)
+          savedRevisionRef.current = Math.max(savedRevisionRef.current, attemptedRevision)
+          if (mountedRef.current) setSavedProject(project)
+        }
+      } catch (error) {
+        if (mountedRef.current && revisionRef.current > attemptedRevision) {
+          setJoinedFailure((value) => value + 1)
+        }
+        throw error
+      }
+    }
+    const pending = flush().finally(() => {
+      if (flushPromiseRef.current === pending) flushPromiseRef.current = null
+      if (mountedRef.current) {
+        setIsFlushing(false)
+      }
+    })
+    flushPromiseRef.current = pending
+    return pending
+  }, [persist])
+
+  // A failed in-flight save may have been joined by a newer revision's debounce.
+  // Once that attempt settles, queue one normal-delay retry for any still-dirty
+  // revision. Repeated failures remain spaced by the debounce (never a hot loop).
   useEffect(() => {
-    if (autosaveDelay <= 0) {
-      void persist(state.project)
+    if (
+      joinedFailure === 0 ||
+      savedRevisionRef.current >= revisionRef.current ||
+      autosaveTimerRef.current !== null
+    ) {
       return
     }
-    const id = setTimeout(() => {
-      void persist(state.project).then(() => setStatus('Autosaved'))
+    const retryDelay = Math.max(autosaveDelay, 250)
+    autosaveTimerRef.current = setTimeout(() => {
+      autosaveTimerRef.current = null
+      void flushAutosave()
+        .then(() => {
+          if (mountedRef.current) setStatus('Autosaved')
+        })
+        .catch(() => undefined)
+    }, retryDelay)
+    return () => {
+      if (autosaveTimerRef.current !== null) {
+        clearTimeout(autosaveTimerRef.current)
+        autosaveTimerRef.current = null
+      }
+    }
+  }, [autosaveDelay, flushAutosave, joinedFailure])
+
+  // Debounced autosave on any project change. Explicit route-exit flushes cancel
+  // this timer and await the same serialized persistence path.
+  useEffect(() => {
+    revisionRef.current += 1
+    if (autosaveTimerRef.current !== null) clearTimeout(autosaveTimerRef.current)
+    if (autosaveDelay <= 0) {
+      void flushAutosave().catch(() => undefined)
+      return
+    }
+    autosaveTimerRef.current = setTimeout(() => {
+      autosaveTimerRef.current = null
+      void flushAutosave()
+        .then(() => {
+          if (mountedRef.current) setStatus('Autosaved')
+        })
+        .catch(() => undefined)
     }, autosaveDelay)
-    return () => clearTimeout(id)
-  }, [state.project, autosaveDelay, persist])
+    return () => {
+      if (autosaveTimerRef.current !== null) {
+        clearTimeout(autosaveTimerRef.current)
+        autosaveTimerRef.current = null
+      }
+    }
+  }, [state.project, autosaveDelay, flushAutosave])
 
   const play = useCallback(() => {
     void engine.play()
@@ -664,9 +761,9 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     dispatch({ type: 'sync-remote', project })
   }, [])
   const saveProject = useCallback(async () => {
-    await persist(projectRef.current)
-    setStatus('Saved')
-  }, [persist])
+    await flushAutosave()
+    if (mountedRef.current) setStatus('Saved')
+  }, [flushAutosave])
   const loadProject = useCallback(
     async (id: string) => {
       const project = await store.load(id)
@@ -799,6 +896,9 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     savedProjects,
     status,
     audioReady,
+    isDirty: state.project !== savedProject,
+    isFlushing,
+    flushAutosave,
     notify,
     play,
     pause,

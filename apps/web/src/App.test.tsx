@@ -1,30 +1,42 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import App from './App'
+import { createAppMemoryRouter } from './app/router'
+import { LocalStorageProjectStore, MemoryStorage } from './composer/model/storage'
 import { coversInteractions } from './test/coversInteractions'
 
 describe('<App />', () => {
-  it('renders the product name as a heading', () => {
-    render(<App />)
+  const renderApp = (path = '/') =>
+    render(
+      <App
+        router={createAppMemoryRouter(
+          [path],
+          new LocalStorageProjectStore(new MemoryStorage()),
+        )}
+      />,
+    )
+
+  it('renders the product name as a heading', async () => {
+    renderApp()
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Cadence' }),
+      await screen.findByRole('heading', { level: 1, name: 'Cadence' }, { timeout: 5_000 }),
     ).toBeInTheDocument()
   })
 
-  it('renders the tagline', () => {
-    render(<App />)
+  it('renders the tagline', async () => {
+    renderApp()
     expect(
-      screen.getByText('AI-powered, cross-platform music studio'),
+      await screen.findByText('AI-powered, cross-platform music studio'),
     ).toBeInTheDocument()
   })
 
   it('moves to the composer target from the skip link', async () => {
     coversInteractions('app.skip-to-composer')
     const user = userEvent.setup()
-    render(<App />)
+    renderApp()
 
-    await user.click(screen.getByRole('link', { name: 'Skip to editor' }))
+    await user.click(await screen.findByRole('link', { name: 'Skip to editor' }))
 
     expect(window.location.hash).toBe('#composer-main')
   })
@@ -32,42 +44,68 @@ describe('<App />', () => {
   it('toggles the pricing view from the nav', async () => {
     coversInteractions('app.nav.pricing')
     const user = userEvent.setup()
-    render(<App />)
-    await user.click(screen.getByRole('button', { name: 'Pricing' }))
+    renderApp()
+    await user.click(await screen.findByRole('button', { name: 'Pricing' }))
     expect(
-      screen.getByRole('heading', { name: 'Plans & pricing' }),
+      await screen.findByRole('heading', { name: 'Plans & pricing' }, { timeout: 5_000 }),
     ).toBeInTheDocument()
-    // The toggle now offers a way back to the composer (nav + page both do).
-    expect(
-      screen.getAllByRole('button', { name: 'Back to composer' }).length,
-    ).toBeGreaterThanOrEqual(1)
+    expect(screen.getByRole('button', { name: 'Back to composer' })).toBeInTheDocument()
   })
 
   it('toggles the standalone stems view from the nav', async () => {
     coversInteractions('app.nav.stems')
     const user = userEvent.setup()
-    render(<App />)
-    await user.click(screen.getByRole('button', { name: 'Stems' }))
+    renderApp()
+    await user.click(await screen.findByRole('button', { name: 'Stems' }))
     expect(
-      screen.getByRole('heading', { name: 'Stem separation' }),
+      await screen.findByRole('heading', { name: 'Stem separation' }, { timeout: 5_000 }),
     ).toBeInTheDocument()
-    expect(
-      screen.getAllByRole('button', { name: 'Back to composer' }).length,
-    ).toBeGreaterThanOrEqual(1)
+    expect(screen.getByRole('button', { name: 'Back to composer' })).toBeInTheDocument()
   })
 
   it('opens the third-party licenses surface from the footer', async () => {
     coversInteractions('app.nav.licenses')
     const user = userEvent.setup()
-    render(<App />)
-    await user.click(screen.getByRole('button', { name: 'Third-party licenses' }))
+    renderApp()
+    await user.click(await screen.findByRole('button', { name: 'Third-party licenses' }))
     expect(
-      screen.getByRole('heading', {
+      await screen.findByRole('heading', {
         name: /acknowledgements & third-party licenses/i,
-      }),
+      }, { timeout: 5_000 }),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('link', { name: /lame project/i }),
     ).toHaveAttribute('href', 'https://lame.sourceforge.io/')
+  })
+
+  it('persists a selected theme from the shared menu', async () => {
+    coversInteractions('app.theme.open', 'app.theme.select')
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(await screen.findByRole('button', { name: 'Choose theme' }))
+    await user.click(screen.getByRole('menuitemradio', { name: 'Dark theme' }))
+
+    expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
+    expect(localStorage.getItem('cadence.v1.theme')).toBe('dark')
+  })
+
+  it('returns an unknown route to Studio without dropping URL suffixes', async () => {
+    coversInteractions('app.not-found.studio')
+    const user = userEvent.setup()
+    const router = createAppMemoryRouter(
+      ['/missing?collab=room#project=snapshot'],
+      new LocalStorageProjectStore(new MemoryStorage()),
+    )
+    render(<App router={router} />)
+    await user.click(await screen.findByRole('button', { name: 'Return to Studio' }))
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Composer' })).toBeInTheDocument(),
+    )
+    expect(router.state.location).toMatchObject({
+      pathname: '/',
+      search: '?collab=room',
+      hash: '#project=snapshot',
+    })
   })
 })
