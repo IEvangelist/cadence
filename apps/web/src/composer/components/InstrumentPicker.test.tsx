@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-/* Interaction coverage: studio.track.instrument */
 import { describe, expect, it, vi } from 'vitest'
+import { coversInteractions } from '../../test/coversInteractions'
 import { InstrumentPicker } from './InstrumentPicker'
 import type { InstrumentDefinition } from '../instruments/registry'
 
@@ -19,6 +19,7 @@ const def = (
 
 describe('<InstrumentPicker />', () => {
   it('renders every registry instrument and reports changes', () => {
+    coversInteractions('studio.track.instrument')
     const onChange = vi.fn()
     render(<InstrumentPicker value="poly-synth" onChange={onChange} />)
     const select = screen.getByLabelText('Instrument') as HTMLSelectElement

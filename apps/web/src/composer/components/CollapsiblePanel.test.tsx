@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-/* Interaction coverage: studio.panel.toggle */
 import { describe, expect, it, vi } from 'vitest'
+import { coversInteractions } from '../../test/coversInteractions'
 import { CollapsiblePanel } from './CollapsiblePanel'
 
 function renderPanel(open: boolean, onToggle = vi.fn()) {
@@ -43,6 +43,7 @@ describe('<CollapsiblePanel />', () => {
   })
 
   it('calls onToggle with its id when the disclosure is clicked', async () => {
+    coversInteractions('studio.panel.toggle')
     const user = userEvent.setup()
     const onToggle = renderPanel(false)
     await user.click(screen.getByRole('button', { name: 'Mixer' }))

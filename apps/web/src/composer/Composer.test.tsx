@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-/* Interaction coverage: studio.empty.load-demo */
 import { describe, expect, it } from 'vitest'
+import { coversInteractions } from '../test/coversInteractions'
 import { Composer } from './Composer'
 import { SilentAudioEngine } from './audio/engine'
 import { LocalStorageProjectStore, MemoryStorage } from './model/storage'
@@ -17,6 +17,7 @@ function options() {
 
 describe('<Composer />', () => {
   it('shows the empty state and dismisses it after loading the demo', () => {
+    coversInteractions('studio.empty.load-demo')
     render(<Composer options={options()} />)
     expect(screen.getByText('Your canvas is empty.')).toBeInTheDocument()
 

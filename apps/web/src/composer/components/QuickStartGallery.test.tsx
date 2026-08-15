@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
-/* Interaction coverage: studio.quick-start.load */
 import { describe, expect, it, vi } from 'vitest'
+import { coversInteractions } from '../../test/coversInteractions'
 import { QuickStartGallery } from './QuickStartGallery'
 import { HOUSE_DUBS } from '../templates'
 import type { SongTemplate } from '../templates'
@@ -28,6 +28,7 @@ describe('<QuickStartGallery />', () => {
   })
 
   it('loads the chosen template on click', () => {
+    coversInteractions('studio.quick-start.load')
     const onLoad = vi.fn()
     render(<QuickStartGallery onLoad={onLoad} />)
     const target = HOUSE_DUBS[0]

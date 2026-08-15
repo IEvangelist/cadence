@@ -1,10 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-/* Interaction coverage:
- * onboarding.launch, onboarding.dismiss-backdrop, onboarding.dialog.keyboard,
- * onboarding.close, onboarding.step.select, onboarding.skip,
- * onboarding.back, onboarding.next
- */
 import { describe, expect, it } from 'vitest'
+import { coversInteractions } from '../test/coversInteractions'
 import { OnboardingTour } from './OnboardingTour'
 import {
   MemoryOnboardingStorage,
@@ -51,6 +47,7 @@ describe('<OnboardingTour />', () => {
   })
 
   it('moves next, back, and directly across steps', async () => {
+    coversInteractions('onboarding.next', 'onboarding.back', 'onboarding.step.select')
     renderTour()
     await findDialog()
 
@@ -84,6 +81,7 @@ describe('<OnboardingTour />', () => {
   it('skips, closes, and dismisses from the backdrop with persistence', async () => {
     const skipStorage = renderTour()
     await findDialog()
+    coversInteractions('onboarding.skip')
     fireEvent.click(screen.getByRole('button', { name: 'Skip tour' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(skipStorage.getItem(ONBOARDING_SEEN_KEY)).toBe('1')
@@ -91,6 +89,7 @@ describe('<OnboardingTour />', () => {
     const closeStorage = new MemoryOnboardingStorage()
     render(<OnboardingTour storage={closeStorage} autoOpenDelay={0} />)
     await findDialog()
+    coversInteractions('onboarding.close')
     fireEvent.click(screen.getByRole('button', { name: 'Close onboarding tour' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(closeStorage.getItem(ONBOARDING_SEEN_KEY)).toBe('1')
@@ -98,12 +97,14 @@ describe('<OnboardingTour />', () => {
     const backdropStorage = new MemoryOnboardingStorage()
     render(<OnboardingTour storage={backdropStorage} autoOpenDelay={0} />)
     await findDialog()
+    coversInteractions('onboarding.dismiss-backdrop')
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss onboarding tour' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(backdropStorage.getItem(ONBOARDING_SEEN_KEY)).toBe('1')
   })
 
   it('supports Escape and arrow-key navigation', async () => {
+    coversInteractions('onboarding.dialog.keyboard')
     const storage = renderTour()
     const dialog = await findDialog()
 
@@ -119,6 +120,7 @@ describe('<OnboardingTour />', () => {
   })
 
   it('opens from the launcher even after the seen flag is set', async () => {
+    coversInteractions('onboarding.launch')
     const storage = new MemoryOnboardingStorage()
     storage.setItem(ONBOARDING_SEEN_KEY, '1')
     render(<OnboardingTour storage={storage} autoOpenDelay={0} />)

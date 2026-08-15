@@ -1,10 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-/* Interaction coverage:
- * studio.share.toggle, studio.share.create-editor, studio.share.create-viewer,
- * studio.share.copy, studio.share.revoke
- */
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { coversInteractions } from '../../test/coversInteractions'
 import { ShareProjectButton } from './ShareProjectButton'
 import { CollabShareClient, type ShareLink } from '../model/collab/collabClient'
 
@@ -34,41 +31,58 @@ afterEach(() => vi.restoreAllMocks())
 
 describe('ShareProjectButton', () => {
   it('loads existing links when opened', async () => {
+    coversInteractions('studio.share.toggle')
     const client = fakeClient([link('t1', 'editor')])
     render(<ShareProjectButton projectId="p1" client={client} origin="https://app.test" />)
     fireEvent.click(screen.getByRole('button', { name: 'Share' }))
     await waitFor(() => expect(screen.getByText('Editor')).toBeInTheDocument())
   })
 
-  it.each(['editor', 'viewer'] as const)(
-    'creates a %s link and copies it to the clipboard',
-    async (role) => {
-      const client = fakeClient()
-      const clipboard = vi.fn(async () => {})
-      const user = userEvent.setup()
-      render(
-        <ShareProjectButton
-          projectId="p1"
-          client={client}
-          origin="https://app.test"
-          clipboard={clipboard}
-        />,
-      )
-      await user.click(screen.getByRole('button', { name: 'Share' }))
-      await user.click(
-        await screen.findByRole('button', { name: `Create ${role} link` }),
-      )
+  async function createAndCopy(role: 'editor' | 'viewer') {
+    const client = fakeClient()
+    const clipboard = vi.fn(async () => {})
+    const user = userEvent.setup()
+    render(
+      <ShareProjectButton
+        projectId="p1"
+        client={client}
+        origin="https://app.test"
+        clipboard={clipboard}
+      />,
+    )
+    await user.click(screen.getByRole('button', { name: 'Share' }))
+    await user.click(
+      await screen.findByRole('button', { name: `Create ${role} link` }),
+    )
 
-      await waitFor(() =>
-        expect(clipboard).toHaveBeenCalledWith(
-          `https://app.test/?collab=p1&role=${role}&share=tok-${role}`,
-        ),
-      )
-      expect(client.create).toHaveBeenCalledWith('p1', role)
-    },
-  )
+    await waitFor(() => {
+      if (clipboard.mock.calls.length === 0) {
+        throw new Error('Share link was not copied')
+      }
+    })
+    return { client, clipboard }
+  }
+
+  it('creates an editor link and copies it to the clipboard', async () => {
+    coversInteractions('studio.share.create-editor')
+    const { client, clipboard } = await createAndCopy('editor')
+    expect(client.create).toHaveBeenCalledWith('p1', 'editor')
+    expect(clipboard).toHaveBeenCalledWith(
+      'https://app.test/?collab=p1&role=editor&share=tok-editor',
+    )
+  })
+
+  it('creates a viewer link and copies it to the clipboard', async () => {
+    coversInteractions('studio.share.create-viewer')
+    const { client, clipboard } = await createAndCopy('viewer')
+    expect(client.create).toHaveBeenCalledWith('p1', 'viewer')
+    expect(clipboard).toHaveBeenCalledWith(
+      'https://app.test/?collab=p1&role=viewer&share=tok-viewer',
+    )
+  })
 
   it('copies an existing link and reports the copied state', async () => {
+    coversInteractions('studio.share.copy')
     const client = fakeClient([link('t1', 'editor')])
     const clipboard = vi.fn(async () => {})
     const user = userEvent.setup()
@@ -91,6 +105,7 @@ describe('ShareProjectButton', () => {
   })
 
   it('revokes a link', async () => {
+    coversInteractions('studio.share.revoke')
     const client = fakeClient([link('t1', 'viewer')])
     render(<ShareProjectButton projectId="p1" client={client} origin="https://app.test" />)
     fireEvent.click(screen.getByRole('button', { name: 'Share' }))

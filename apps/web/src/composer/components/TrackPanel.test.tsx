@@ -1,10 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-/* Interaction coverage:
- * studio.track.visibility-all, studio.track.add, studio.track.select,
- * studio.track.name, studio.track.visibility, studio.track.mute, studio.track.delete
- */
 import { describe, expect, it } from 'vitest'
+import { coversInteractions } from '../../test/coversInteractions'
 import { TrackPanel } from './TrackPanel'
 import { useComposer } from '../hooks/useComposer'
 import { SilentAudioEngine } from '../audio/engine'
@@ -23,6 +20,12 @@ function Harness() {
 
 describe('<TrackPanel />', () => {
   it('adds, renames, mutes, and removes tracks', () => {
+    coversInteractions(
+      'studio.track.add',
+      'studio.track.name',
+      'studio.track.mute',
+      'studio.track.delete',
+    )
     render(<Harness />)
 
     // Single track: delete is disabled.
@@ -53,6 +56,7 @@ describe('<TrackPanel />', () => {
   })
 
   it('selects a different track for editing', async () => {
+    coversInteractions('studio.track.select')
     const user = userEvent.setup()
     render(<Harness />)
     await user.click(screen.getByRole('button', { name: '+ Add track' }))
@@ -75,6 +79,7 @@ describe('<TrackPanel />', () => {
   })
 
   it('toggles a non-selected track onto and off the piano roll', () => {
+    coversInteractions('studio.track.visibility')
     render(<Harness />)
     // Add a second track — it becomes selected, leaving Synth as context.
     fireEvent.click(screen.getByRole('button', { name: '+ Add track' }))
@@ -88,6 +93,7 @@ describe('<TrackPanel />', () => {
   })
 
   it('shows all tracks and collapses back to just the selected one', () => {
+    coversInteractions('studio.track.visibility-all')
     render(<Harness />)
     fireEvent.click(screen.getByRole('button', { name: '+ Add track' }))
 

@@ -1,9 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-/* Interaction coverage:
- * studio.automation.add-point, studio.automation.clear,
- * studio.automation.lane, studio.automation.remove-point
- */
 import { describe, expect, it, vi } from 'vitest'
+import { coversInteractions } from '../../test/coversInteractions'
 import { AutomationLane } from './AutomationLane'
 import { pointFromPointer } from './automationLaneGeometry'
 
@@ -60,6 +57,7 @@ describe('AutomationLane', () => {
   })
 
   it('renders a remove button per point with a descriptive label', () => {
+    coversInteractions('studio.automation.remove-point')
     render(<AutomationLane {...baseProps} />)
     const remove = screen.getByRole('button', { name: /Remove Volume point at beat 0/ })
     fireEvent.click(remove)
@@ -67,12 +65,14 @@ describe('AutomationLane', () => {
   })
 
   it('adds a point at the playhead via the button', () => {
+    coversInteractions('studio.automation.add-point')
     render(<AutomationLane {...baseProps} />)
     fireEvent.click(screen.getByRole('button', { name: 'Add point' }))
     expect(baseProps.onAddAtPlayhead).toHaveBeenCalledTimes(1)
   })
 
   it('clears the lane', () => {
+    coversInteractions('studio.automation.clear')
     render(<AutomationLane {...baseProps} />)
     fireEvent.click(screen.getByRole('button', { name: 'Clear Volume automation' }))
     expect(baseProps.onClear).toHaveBeenCalledTimes(1)
@@ -84,6 +84,7 @@ describe('AutomationLane', () => {
   })
 
   it('writes a point when the lane surface is clicked', () => {
+    coversInteractions('studio.automation.lane')
     const onWritePoint = vi.fn()
     const { container } = render(<AutomationLane {...baseProps} onWritePoint={onWritePoint} />)
     const svg = container.querySelector('.automation-lane__graph') as SVGSVGElement

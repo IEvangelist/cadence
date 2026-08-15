@@ -1,12 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-/* Interaction coverage:
- * auth.profile.open, auth.sign-out, auth.panel.toggle,
- * auth.registration.display-name, auth.credentials.email, auth.credentials.password,
- * auth.credentials.submit, auth.mode.toggle, auth.magic-link.email,
- * auth.magic-link.submit, auth.provider.sign-in
- */
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { coversInteractions } from '../test/coversInteractions'
 import type { AuthClient } from './authClient'
 import { AuthContext, type AuthContextValue } from './authContext'
 import { AuthBar } from './AuthBar'
@@ -41,6 +36,7 @@ describe('AuthBar', () => {
   })
 
   it('shows the signed-in greeting and account actions', async () => {
+    coversInteractions('auth.profile.open', 'auth.sign-out')
     const user = userEvent.setup()
     const signOut = vi.fn(async () => undefined)
     const onShowProfile = vi.fn()
@@ -63,6 +59,12 @@ describe('AuthBar', () => {
   })
 
   it('opens the panel and submits local sign-in', async () => {
+    coversInteractions(
+      'auth.panel.toggle',
+      'auth.credentials.email',
+      'auth.credentials.password',
+      'auth.credentials.submit',
+    )
     const user = userEvent.setup()
     const signIn = vi.fn(async () => undefined)
     renderBar(makeValue({ signIn }))
@@ -76,6 +78,7 @@ describe('AuthBar', () => {
   })
 
   it('toggles to register mode, submits, and confirms a verification email was sent', async () => {
+    coversInteractions('auth.mode.toggle', 'auth.registration.display-name')
     const user = userEvent.setup()
     const register = vi.fn(async () => undefined)
     renderBar(makeValue({ register }))
@@ -93,6 +96,7 @@ describe('AuthBar', () => {
   })
 
   it('requests a magic link and confirms it was sent', async () => {
+    coversInteractions('auth.magic-link.email', 'auth.magic-link.submit')
     const user = userEvent.setup()
     const requestMagicLink = vi.fn(async () => undefined)
     renderBar(makeValue({ requestMagicLink }))
@@ -106,6 +110,7 @@ describe('AuthBar', () => {
   })
 
   it('renders external provider links', async () => {
+    coversInteractions('auth.provider.sign-in')
     const user = userEvent.setup()
     renderBar(makeValue({ providers: ['GitHub'] }))
 

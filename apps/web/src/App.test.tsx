@@ -1,10 +1,8 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-/* Interaction coverage:
- * app.skip-to-composer, app.nav.stems, app.nav.pricing, app.nav.licenses
- */
 import { describe, expect, it } from 'vitest'
 import App from './App'
+import { coversInteractions } from './test/coversInteractions'
 
 describe('<App />', () => {
   it('renders the product name as a heading', () => {
@@ -22,6 +20,7 @@ describe('<App />', () => {
   })
 
   it('moves to the composer target from the skip link', async () => {
+    coversInteractions('app.skip-to-composer')
     const user = userEvent.setup()
     render(<App />)
 
@@ -31,6 +30,7 @@ describe('<App />', () => {
   })
 
   it('toggles the pricing view from the nav', async () => {
+    coversInteractions('app.nav.pricing')
     const user = userEvent.setup()
     render(<App />)
     await user.click(screen.getByRole('button', { name: 'Pricing' }))
@@ -44,6 +44,7 @@ describe('<App />', () => {
   })
 
   it('toggles the standalone stems view from the nav', async () => {
+    coversInteractions('app.nav.stems')
     const user = userEvent.setup()
     render(<App />)
     await user.click(screen.getByRole('button', { name: 'Stems' }))
@@ -56,6 +57,7 @@ describe('<App />', () => {
   })
 
   it('opens the third-party licenses surface from the footer', async () => {
+    coversInteractions('app.nav.licenses')
     const user = userEvent.setup()
     render(<App />)
     await user.click(screen.getByRole('button', { name: 'Third-party licenses' }))

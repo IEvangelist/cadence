@@ -1,11 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
-/* Interaction coverage:
- * studio.ai.feature.select, studio.ai.motif.prompt, studio.ai.motif.length,
- * studio.ai.motif.create, studio.ai.style.select, studio.ai.style.apply,
- * studio.ai.groove.select, studio.ai.groove.intensity, studio.ai.groove.apply,
- * studio.ai.mastering.analyze
- */
 import { describe, expect, it } from 'vitest'
+import { coversInteractions } from '../../test/coversInteractions'
 import { Composer } from '../Composer'
 import { SilentAudioEngine } from '../audio/engine'
 import { LocalStorageProjectStore, MemoryStorage } from '../model/storage'
@@ -79,6 +74,7 @@ describe('<AiStudioPanel />', () => {
   })
 
   it('shows a Free badge and locks pro features on the free tier', () => {
+    coversInteractions('studio.ai.feature.select')
     renderStudio({ entitlements: null })
     const panel = studioRanelRegion()
     expect(within(panel).getByText(/Free · on-device/)).toBeInTheDocument()
@@ -92,21 +88,34 @@ describe('<AiStudioPanel />', () => {
   })
 
   it('generates a motif from a prompt through the composer controller', () => {
+    coversInteractions(
+      'studio.ai.motif.prompt',
+      'studio.ai.motif.length',
+      'studio.ai.motif.create',
+    )
     renderStudio({ entitlements: null })
     const panel = studioRanelRegion()
 
-    fireEvent.change(within(panel).getByRole('textbox', { name: 'Prompt' }), {
-      target: { value: 'a bright happy melody' },
+    const prompt = within(panel).getByRole('textbox', { name: 'Prompt' })
+    const length = within(panel).getByRole('slider', { name: /Motif length/ })
+    fireEvent.change(prompt, {
+      target: { value: 'a dark melody in D minor' },
     })
-    fireEvent.change(within(panel).getByRole('slider', { name: /Motif length/ }), {
+    fireEvent.change(length, {
       target: { value: '6' },
     })
+    expect(prompt).toHaveValue('a dark melody in D minor')
+    expect(length).toHaveValue('6')
+    expect(within(panel).getByText('6 beats')).toBeInTheDocument()
     fireEvent.click(within(panel).getByRole('button', { name: 'Create motif' }))
 
-    expect(within(panel).getByRole('status')).toHaveTextContent(/Added \d+-note motif/)
+    expect(within(panel).getByRole('status')).toHaveTextContent(
+      /Added \d+-note motif in D Minor/,
+    )
   })
 
   it('applies a style on the pro tier', () => {
+    coversInteractions('studio.ai.style.select', 'studio.ai.style.apply')
     renderStudio({ entitlements: proEntitlements() })
     const panel = studioRanelRegion()
 
@@ -120,22 +129,33 @@ describe('<AiStudioPanel />', () => {
   })
 
   it('applies a groove with an intensity control on any tier', () => {
+    coversInteractions(
+      'studio.ai.groove.select',
+      'studio.ai.groove.intensity',
+      'studio.ai.groove.apply',
+    )
     renderStudio({ entitlements: null })
     const panel = studioRanelRegion()
 
     fireEvent.click(within(panel).getByRole('radio', { name: /Groove/ }))
-    fireEvent.change(within(panel).getByRole('combobox', { name: 'Groove' }), {
+    const groove = within(panel).getByRole('combobox', { name: 'Groove' })
+    const intensity = within(panel).getByRole('slider', { name: /Intensity/ })
+    fireEvent.change(groove, {
       target: { value: 'human' },
     })
-    fireEvent.change(within(panel).getByRole('slider', { name: /Intensity/ }), {
+    fireEvent.change(intensity, {
       target: { value: '0.5' },
     })
+    expect(groove).toHaveValue('human')
+    expect(intensity).toHaveValue('0.5')
+    expect(within(panel).getByText('50%')).toBeInTheDocument()
     fireEvent.click(within(panel).getByRole('button', { name: 'Apply groove' }))
 
     expect(within(panel).getByRole('status')).toHaveTextContent(/Applied Human groove/)
   })
 
   it('produces a mastering report on the pro tier', () => {
+    coversInteractions('studio.ai.mastering.analyze')
     renderStudio({ entitlements: proEntitlements() })
     const panel = studioRanelRegion()
 

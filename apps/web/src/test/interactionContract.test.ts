@@ -213,6 +213,155 @@ function scanSource() {
   return { interactions, missing, encounteredAllowlist }
 }
 
+interface SpecCoverage {
+  ids: Set<string>
+  violations: string[]
+}
+
+function nodeChildren(node: AstNode): unknown[] {
+  return Object.entries(node)
+    .filter(([key]) => !['parent', 'loc', 'range'].includes(key))
+    .map(([, child]) => child)
+}
+
+function visitAst(value: unknown, visit: (node: AstNode) => void): void {
+  if (Array.isArray(value)) {
+    value.forEach((child) => visitAst(child, visit))
+    return
+  }
+  if (!isAstNode(value)) return
+  visit(value)
+  nodeChildren(value).forEach((child) => visitAst(child, visit))
+}
+
+function callRootName(value: unknown): string | undefined {
+  if (!isAstNode(value)) return undefined
+  if (value.type === 'Identifier' && typeof value.name === 'string') return value.name
+  if (value.type === 'MemberExpression') return callRootName(value.object)
+  if (value.type === 'CallExpression') return callRootName(value.callee)
+  return undefined
+}
+
+function callArguments(node: AstNode): unknown[] {
+  return node.type === 'CallExpression' && Array.isArray(node.arguments) ? node.arguments : []
+}
+
+function callMembers(value: unknown): string[] {
+  if (!isAstNode(value)) return []
+  if (value.type === 'MemberExpression') {
+    const property =
+      isAstNode(value.property) &&
+      value.property.type === 'Identifier' &&
+      typeof value.property.name === 'string'
+        ? [value.property.name]
+        : []
+    return [...callMembers(value.object), ...property]
+  }
+  if (value.type === 'CallExpression') return callMembers(value.callee)
+  return []
+}
+
+function isFunctionNode(value: unknown): value is AstNode {
+  return (
+    isAstNode(value) &&
+    ['ArrowFunctionExpression', 'FunctionExpression'].includes(value.type)
+  )
+}
+
+function visitDirectCallback(value: unknown, visit: (node: AstNode) => void): void {
+  if (Array.isArray(value)) {
+    value.forEach((child) => visitDirectCallback(child, visit))
+    return
+  }
+  if (!isAstNode(value) || isFunctionNode(value)) return
+  visit(value)
+  nodeChildren(value).forEach((child) => visitDirectCallback(child, visit))
+}
+
+function scanBehaviorSpecText(text: string, absoluteFile: string): SpecCoverage {
+  const sourceFile = parseForESLint(text, {
+    filePath: absoluteFile,
+    jsx: true,
+    loc: true,
+  }).ast
+  const ids = new Set<string>()
+  const violations: string[] = []
+  const allCoverageLines = new Set<number>()
+  const testCoverageLines = new Set<number>()
+
+  visitAst(sourceFile, (node) => {
+    if (
+      node.type === 'CallExpression' &&
+      callRootName(node.callee) === 'coversInteractions'
+    ) {
+      allCoverageLines.add(node.loc?.start.line ?? 0)
+    }
+
+    if (
+      node.type !== 'CallExpression' ||
+      !['it', 'test'].includes(callRootName(node.callee) ?? '') ||
+      callMembers(node.callee).some((member) => ['skip', 'todo'].includes(member))
+    ) {
+      return
+    }
+
+    const callback = callArguments(node).find(isFunctionNode)
+    if (!callback) return
+    let hasAssertion = false
+    const coverageCalls: AstNode[] = []
+
+    visitAst(callback, (candidate) => {
+      if (candidate.type !== 'CallExpression') return
+      const name = callRootName(candidate.callee)
+      if (name === 'expect') hasAssertion = true
+    })
+    visitDirectCallback(callback.body, (candidate) => {
+      if (
+        candidate.type === 'CallExpression' &&
+        callRootName(candidate.callee) === 'coversInteractions'
+      ) {
+        coverageCalls.push(candidate)
+      }
+    })
+
+    for (const coverageCall of coverageCalls) {
+      const line = coverageCall.loc?.start.line ?? 0
+      testCoverageLines.add(line)
+      if (!hasAssertion) {
+        violations.push(`${path.relative(webRoot, absoluteFile)}:${line}: no expect in test callback`)
+        continue
+      }
+      for (const argument of callArguments(coverageCall)) {
+        if (
+          isAstNode(argument) &&
+          argument.type === 'Literal' &&
+          typeof argument.value === 'string'
+        ) {
+          ids.add(argument.value)
+        } else {
+          violations.push(
+            `${path.relative(webRoot, absoluteFile)}:${line}: interaction id must be a string literal`,
+          )
+        }
+      }
+    }
+  })
+
+  for (const line of allCoverageLines) {
+    if (!testCoverageLines.has(line)) {
+      violations.push(
+        `${path.relative(webRoot, absoluteFile)}:${line}: coversInteractions is outside it/test`,
+      )
+    }
+  }
+
+  return { ids, violations }
+}
+
+function scanBehaviorSpec(absoluteFile: string): SpecCoverage {
+  return scanBehaviorSpecText(readFileSync(absoluteFile, 'utf8'), absoluteFile)
+}
+
 describe('interaction coverage contract', () => {
   const source = scanSource()
   const manifestIds = interactionManifest.map(({ id }) => id)
@@ -230,15 +379,53 @@ describe('interaction coverage contract', () => {
     expect([...sourceIds].sort()).toEqual([...manifestIds].sort())
   })
 
-  it('links every interaction to an existing behavior spec coverage marker', () => {
+  it('links every interaction to an asserted executable behavior test', () => {
+    const scans = new Map<string, SpecCoverage>()
     const deadLinks = interactionManifest.flatMap(({ id, behaviorSpec }) => {
       const absoluteSpec = path.resolve(webRoot, behaviorSpec)
       if (!existsSync(absoluteSpec)) return [`${id}: missing ${behaviorSpec}`]
-      return readFileSync(absoluteSpec, 'utf8').includes(id)
+      const scan =
+        scans.get(behaviorSpec) ??
+        (() => {
+          const result = scanBehaviorSpec(absoluteSpec)
+          scans.set(behaviorSpec, result)
+          return result
+        })()
+      return scan.ids.has(id)
         ? []
-        : [`${id}: no coverage marker in ${behaviorSpec}`]
+        : [`${id}: no asserted coversInteractions call in ${behaviorSpec}`]
     })
-    expect(deadLinks).toEqual([])
+    const violations = [...scans.values()].flatMap(({ violations: invalid }) => invalid)
+    const wrongSpec = [...scans.entries()].flatMap(([behaviorSpec, scan]) =>
+      [...scan.ids]
+        .filter(
+          (id) =>
+            !interactionManifest.some(
+              (entry) => entry.id === id && entry.behaviorSpec === behaviorSpec,
+            ),
+        )
+        .map((id) => `${id}: registered in the wrong behavior spec ${behaviorSpec}`),
+    )
+    expect([...deadLinks, ...violations, ...wrongSpec]).toEqual([])
+  })
+
+  it('rejects non-executable interaction coverage declarations', () => {
+    const cases = [
+      `coversInteractions('app.skip-to-composer')`,
+      `it.skip('skipped', () => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+      })`,
+      `it('nested', () => {
+        const neverCalled = () => coversInteractions('app.skip-to-composer')
+        expect(neverCalled).toBeTypeOf('function')
+      })`,
+    ]
+    const scans = cases.map((code, index) =>
+      scanBehaviorSpecText(code, path.resolve(webRoot, `invalid-coverage-${index}.tsx`)),
+    )
+    expect(scans.map(({ ids }) => [...ids])).toEqual([[], [], []])
+    expect(scans.map(({ violations }) => violations.length)).toEqual([1, 1, 1])
   })
 
   it('links related E2E metadata only to existing specs', () => {

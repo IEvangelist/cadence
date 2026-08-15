@@ -1,12 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-/* Interaction coverage:
- * studio.project.name, studio.project.new, studio.project.demo, studio.project.save,
- * studio.project.open, studio.project.import.trigger, studio.project.import.file,
- * studio.project.export, studio.project.share, studio.project.midi-import.trigger,
- * studio.project.midi-import.file, studio.project.midi-export
- */
 import { describe, expect, it, vi } from 'vitest'
+import { coversInteractions } from '../../test/coversInteractions'
 import { ProjectToolbar } from './ProjectToolbar'
 import { useComposer, type UseComposerOptions } from '../hooks/useComposer'
 import { SilentAudioEngine } from '../audio/engine'
@@ -54,6 +49,7 @@ const selectValue = (label: string, value: string): void => {
 
 describe('<ProjectToolbar />', () => {
   it('renames, loads the demo, and creates a new project', () => {
+    coversInteractions('studio.project.name', 'studio.project.demo', 'studio.project.new')
     render(<Harness download={vi.fn()} />)
     const name = screen.getByLabelText('Project name') as HTMLInputElement
     fireEvent.change(name, { target: { value: 'Hello' } })
@@ -67,6 +63,7 @@ describe('<ProjectToolbar />', () => {
   })
 
   it('exports the project to a downloadable .mid file', () => {
+    coversInteractions('studio.project.midi-export')
     const download = vi.fn()
     render(<Harness download={download} />)
     fireEvent.click(screen.getByRole('button', { name: 'Export MIDI' }))
@@ -77,6 +74,7 @@ describe('<ProjectToolbar />', () => {
   })
 
   it('saves a project and loads it from Open', async () => {
+    coversInteractions('studio.project.save', 'studio.project.open')
     const user = userEvent.setup()
     render(<Harness download={vi.fn()} />)
     const name = screen.getByLabelText('Project name')
@@ -93,6 +91,10 @@ describe('<ProjectToolbar />', () => {
   })
 
   it('opens each hidden file chooser from its visible trigger', async () => {
+    coversInteractions(
+      'studio.project.import.trigger',
+      'studio.project.midi-import.trigger',
+    )
     const user = userEvent.setup()
     render(<Harness download={vi.fn()} />)
     const projectInput = screen.getByLabelText('Import project or MusicXML file')
@@ -108,6 +110,7 @@ describe('<ProjectToolbar />', () => {
   })
 
   it('imports a MIDI file into the project', async () => {
+    coversInteractions('studio.project.midi-import.file')
     render(<Harness download={vi.fn()} />)
     const bytes = projectToMidiBytes(createDemoProject('demo'))
     const file = new File([bytes as BlobPart], 'my-song.mid', { type: 'audio/midi' })
@@ -148,6 +151,7 @@ describe('<ProjectToolbar />', () => {
 
 describe('<ProjectToolbar /> — multi-format export', () => {
   it('exports a MusicXML file', async () => {
+    coversInteractions('studio.project.export')
     const download = vi.fn()
     render(<Harness download={download} />)
     selectValue('Export as', 'musicxml')
@@ -217,6 +221,7 @@ describe('<ProjectToolbar /> — multi-format export', () => {
 
 describe('<ProjectToolbar /> — multi-format import', () => {
   it('opens a .cadence.json project file', async () => {
+    coversInteractions('studio.project.import.file')
     render(<Harness download={vi.fn()} />)
     const text = projectToFile(createDemoProject('demo'))
     const file = new File([text], 'my-project.cadence.json', { type: 'application/json' })
@@ -269,6 +274,7 @@ describe('<ProjectToolbar /> — multi-format import', () => {
 
 describe('<ProjectToolbar /> — share', () => {
   it('copies a shareable link for a small project', async () => {
+    coversInteractions('studio.project.share')
     const copyText = vi.fn()
     render(<Harness download={vi.fn()} copyText={copyText} />)
     fireEvent.click(screen.getByRole('button', { name: 'Share' }))

@@ -58,7 +58,11 @@ const existingShares = [
 ]
 const manifestById = new Map(interactionManifest.map((entry) => [entry.id, entry]))
 
-async function mockApi(route: Route, authenticated: boolean): Promise<void> {
+async function mockApi(
+  route: Route,
+  authenticated: boolean,
+  pro = authenticated,
+): Promise<void> {
   const request = route.request()
   const path = new URL(request.url()).pathname
   const method = request.method()
@@ -70,7 +74,7 @@ async function mockApi(route: Route, authenticated: boolean): Promise<void> {
   if (path === '/api/entitlements') {
     return json(
       authenticated
-        ? proEntitlements
+        ? { ...proEntitlements, tier: pro ? 'Pro' : 'Free', stemSeparation: pro }
         : { ...proEntitlements, tier: 'Free', stemSeparation: false },
     )
   }
@@ -129,7 +133,11 @@ function expectedAccessibleName({
   return expectedName
 }
 
-async function assertInteractionContract(page: Page, state: string): Promise<void> {
+async function assertInteractionContract(
+  page: Page,
+  state: string,
+  observed: Set<string>,
+): Promise<void> {
   const rendered = page.locator(interactiveSelector)
   const failures: string[] = []
   const visibleCounts = new Map<string, number>()
@@ -173,6 +181,7 @@ async function assertInteractionContract(page: Page, state: string): Promise<voi
   }
 
   for (const [id, count] of visibleCounts) {
+    observed.add(id)
     const entry = manifestById.get(id)
     if (!entry) continue
     if (entry.multiplicity === 'one' && count !== 1) {
@@ -197,105 +206,163 @@ async function openPanel(page: Page, name: string): Promise<Locator> {
 }
 
 test.describe('production interaction contract', () => {
-  test.describe.configure({ timeout: 90_000 })
+  test.describe.configure({ timeout: 180_000 })
 
-  test('covers studio, auth, pricing, stems, and licenses states', async ({ page }) => {
+  test('observes every registered interaction across current production states', async ({
+    page,
+    browser,
+    baseURL,
+  }) => {
+    const observed = new Set<string>()
     await page.route('**/api/**', (route) => mockApi(route, false))
     await page.goto('/')
 
-    await assertInteractionContract(page, 'studio')
+    await assertInteractionContract(page, 'studio', observed)
 
     await page.getByRole('button', { name: 'Sign in' }).click()
-    await assertInteractionContract(page, 'auth sign-in')
+    await assertInteractionContract(page, 'auth sign-in', observed)
     await page.getByRole('button', { name: /Create an account/ }).click()
-    await assertInteractionContract(page, 'auth registration')
+    await assertInteractionContract(page, 'auth registration', observed)
     await page.getByRole('button', { name: 'Close', exact: true }).click()
 
     await page.getByRole('button', { name: 'Pricing' }).click()
-    await assertInteractionContract(page, 'pricing')
+    await assertInteractionContract(page, 'pricing', observed)
 
     await page.getByRole('button', { name: 'Stems' }).click()
-    await assertInteractionContract(page, 'stems free tier')
+    await assertInteractionContract(page, 'stems free tier', observed)
 
     await page.getByRole('button', { name: 'Third-party licenses' }).click()
-    await assertInteractionContract(page, 'licenses')
-  })
+    await assertInteractionContract(page, 'licenses', observed)
 
-  test('covers authenticated studio conditional states, profile, pricing, and stems', async ({
-    page,
-  }) => {
-    await page.addInitScript(() => {
+    const origin = baseURL ?? 'http://127.0.0.1:4173'
+    const returningStorage = {
+      cookies: [],
+      origins: [
+        {
+          origin,
+          localStorage: [{ name: 'cadence.v1.onboarding.seen', value: '1' }],
+        },
+      ],
+    }
+    const freeUserContext = await browser.newContext({
+      baseURL: origin,
+      storageState: returningStorage,
+    })
+    const freeUserPage = await freeUserContext.newPage()
+    await freeUserPage.route('**/api/**', (route) => mockApi(route, true, false))
+    await freeUserPage.goto('/')
+    await expect(freeUserPage.getByRole('button', { name: 'Profile' })).toBeVisible()
+    await freeUserPage.getByRole('button', { name: 'Stems' }).click()
+    await expect(freeUserPage.getByRole('button', { name: 'See Pro plans' })).toBeVisible()
+    await assertInteractionContract(freeUserPage, 'authenticated free stems', observed)
+    await freeUserContext.close()
+
+    const authenticatedContext = await browser.newContext({
+      baseURL: origin,
+      storageState: returningStorage,
+    })
+    const authenticatedPage = await authenticatedContext.newPage()
+    await authenticatedPage.addInitScript(() => {
       ;(window as unknown as { __CADENCE_AI_MOCK__: boolean }).__CADENCE_AI_MOCK__ = true
     })
-    await page.route('**/api/**', (route) => mockApi(route, true))
-    await page.goto('/')
-    await expect(page.getByRole('button', { name: 'Profile' })).toBeVisible()
+    await authenticatedPage.route('**/api/**', (route) => mockApi(route, true))
+    await authenticatedPage.goto('/')
+    await expect(authenticatedPage.getByRole('button', { name: 'Profile' })).toBeVisible()
 
-    const skipLink = page.getByRole('link', { name: 'Skip to editor' })
+    const skipLink = authenticatedPage.getByRole('link', { name: 'Skip to editor' })
     await skipLink.focus()
-    await page.keyboard.press('Enter')
-    await expect(page.locator('#composer-main')).toBeFocused()
-    await assertInteractionContract(page, 'authenticated studio')
+    await authenticatedPage.keyboard.press('Enter')
+    await expect(authenticatedPage.locator('#composer-main')).toBeFocused()
+    await assertInteractionContract(authenticatedPage, 'authenticated studio', observed)
 
-    const shareToggle = page.locator('[data-interaction="studio.share.toggle"]')
+    const note = authenticatedPage.locator('[data-interaction="studio.piano-roll.note"]').first()
+    await note.click()
+    await expect(
+      authenticatedPage.locator('[data-interaction="studio.piano-roll.velocity.selected"]'),
+    ).toBeVisible()
+    await assertInteractionContract(authenticatedPage, 'selected piano note', observed)
+
+    const shareToggle = authenticatedPage.locator('[data-interaction="studio.share.toggle"]')
     await shareToggle.click()
-    await expect(page.getByRole('group', { name: 'Share links' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Copy link' })).toHaveCount(2)
-    await expect(page.getByRole('button', { name: 'Revoke' })).toHaveCount(2)
-    await assertInteractionContract(page, 'authenticated share panel')
+    await expect(authenticatedPage.getByRole('group', { name: 'Share links' })).toBeVisible()
+    await expect(authenticatedPage.getByRole('button', { name: 'Copy link' })).toHaveCount(2)
+    await expect(authenticatedPage.getByRole('button', { name: 'Revoke' })).toHaveCount(2)
+    await assertInteractionContract(authenticatedPage, 'authenticated share panel', observed)
     await shareToggle.click()
 
-    await openPanel(page, 'Quick Starts')
-    await assertInteractionContract(page, 'quick starts open')
+    await openPanel(authenticatedPage, 'Quick Starts')
+    await assertInteractionContract(authenticatedPage, 'quick starts open', observed)
 
-    const aiStudio = await openPanel(page, 'AI Studio')
+    const aiStudio = await openPanel(authenticatedPage, 'AI Studio')
     await expect(aiStudio.getByText('Pro · on-device')).toBeVisible()
-    await assertInteractionContract(page, 'AI Studio text to motif')
+    await assertInteractionContract(authenticatedPage, 'AI Studio text to motif', observed)
     await aiStudio.getByRole('radio', { name: /Style transfer/ }).check()
-    await assertInteractionContract(page, 'AI Studio style transfer')
+    await assertInteractionContract(authenticatedPage, 'AI Studio style transfer', observed)
     await aiStudio.getByRole('radio', { name: /Groove & humanize/ }).check()
-    await assertInteractionContract(page, 'AI Studio groove')
+    await assertInteractionContract(authenticatedPage, 'AI Studio groove', observed)
     await aiStudio.getByRole('radio', { name: /Auto-master/ }).check()
-    await assertInteractionContract(page, 'AI Studio auto-master')
+    await assertInteractionContract(authenticatedPage, 'AI Studio auto-master', observed)
 
-    await openPanel(page, 'Mixer')
-    await assertInteractionContract(page, 'mixer open')
+    const mixer = await openPanel(authenticatedPage, 'Mixer')
+    const firstStrip = mixer.locator('fieldset').first()
+    await firstStrip.getByRole('button', { name: 'Add', exact: true }).click()
+    const volumeAutomation = firstStrip.getByRole('group', { name: 'Volume automation' })
+    await volumeAutomation.getByRole('button', { name: 'Add point' }).click()
+    await expect(volumeAutomation.getByRole('button', { name: /Remove Volume point/ })).toBeVisible()
+    await expect(
+      volumeAutomation.getByRole('button', { name: 'Clear Volume automation' }),
+    ).toBeVisible()
+    await assertInteractionContract(authenticatedPage, 'mixer with insert and automation', observed)
 
-    const extensions = await openPanel(page, 'Extensions')
+    const extensions = await openPanel(authenticatedPage, 'Extensions')
     await extensions.getByRole('checkbox', { name: /Hello Cadence \(example\)/ }).check()
-    await expect(page.getByRole('region', { name: 'Example plugin' })).toBeVisible()
-    await assertInteractionContract(page, 'extensions enabled')
+    await expect(authenticatedPage.getByRole('region', { name: 'Example plugin' })).toBeVisible()
+    await assertInteractionContract(authenticatedPage, 'extensions enabled', observed)
 
-    await page.getByRole('button', { name: 'New' }).click()
-    await expect(page.getByText('Your canvas is empty.')).toBeVisible()
-    await assertInteractionContract(page, 'empty project')
+    await authenticatedPage.getByRole('button', { name: 'New' }).click()
+    await expect(authenticatedPage.getByText('Your canvas is empty.')).toBeVisible()
+    await assertInteractionContract(authenticatedPage, 'empty project', observed)
 
-    const assistant = await openPanel(page, 'AI Assistant')
+    const assistant = await openPanel(authenticatedPage, 'AI Assistant')
     await assistant.getByRole('radio', { name: /Generate melody/ }).check()
     await assistant.getByRole('button', { name: 'Generate' }).click()
     await expect(assistant.getByRole('button', { name: 'Accept' })).toBeVisible()
-    await assertInteractionContract(page, 'assistant suggestion')
+    await assertInteractionContract(authenticatedPage, 'assistant suggestion', observed)
 
-    await page.getByRole('button', { name: 'Pricing' }).click()
-    await expect(page.getByRole('button', { name: 'Manage billing' })).toBeVisible()
-    await assertInteractionContract(page, 'pricing pro tier')
+    await authenticatedPage.getByRole('button', { name: 'Pricing' }).click()
+    await expect(authenticatedPage.getByRole('button', { name: 'Manage billing' })).toBeVisible()
+    await assertInteractionContract(authenticatedPage, 'pricing pro tier', observed)
 
-    await page.getByRole('button', { name: 'Profile' }).click()
-    await assertInteractionContract(page, 'profile')
+    await authenticatedPage.getByRole('button', { name: 'Profile' }).click()
+    await assertInteractionContract(authenticatedPage, 'profile', observed)
 
-    await page.getByRole('button', { name: 'Stems' }).click()
-    await expect(page.getByLabel('bass stem preview')).toBeVisible()
-    await assertInteractionContract(page, 'stems pro results')
-  })
-})
+    await authenticatedPage.getByRole('button', { name: 'Stems' }).click()
+    await expect(authenticatedPage.getByLabel('bass stem preview')).toBeVisible()
+    await assertInteractionContract(authenticatedPage, 'stems pro results', observed)
+    await authenticatedContext.close()
 
-test.describe('first-run interaction contract', () => {
-  test.use({ storageState: { cookies: [], origins: [] } })
+    const firstRunContext = await browser.newContext({
+      baseURL: origin,
+      storageState: { cookies: [], origins: [] },
+    })
+    const firstRunPage = await firstRunContext.newPage()
+    await firstRunPage.route('**/api/**', (route) => mockApi(route, false))
+    await firstRunPage.goto('/')
+    await expect(firstRunPage.getByRole('dialog')).toBeVisible()
+    await assertInteractionContract(firstRunPage, 'first-run onboarding step 1', observed)
 
-  test('covers the visible onboarding dialog', async ({ page }) => {
-    await page.route('**/api/**', (route) => mockApi(route, false))
-    await page.goto('/')
-    await expect(page.getByRole('dialog')).toBeVisible()
-    await assertInteractionContract(page, 'first-run onboarding')
+    await firstRunPage.getByRole('button', { name: 'Next' }).click()
+    await assertInteractionContract(firstRunPage, 'first-run onboarding step 2', observed)
+    await firstRunPage.getByRole('button', { name: 'Back' }).click()
+    await firstRunPage.getByRole('button', { name: 'Next' }).click()
+    await firstRunPage.getByRole('button', { name: 'Next' }).click()
+    await assertInteractionContract(firstRunPage, 'first-run onboarding final step', observed)
+    await firstRunContext.close()
+
+    const missing = interactionManifest
+      .map(({ id }) => id)
+      .filter((id) => !observed.has(id))
+      .sort()
+    expect(missing, 'manifest interactions not observed in a rendered production state').toEqual([])
   })
 })
