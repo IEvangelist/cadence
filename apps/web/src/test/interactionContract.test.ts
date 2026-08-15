@@ -342,7 +342,7 @@ function hasConditionalOptions(options: unknown[]): boolean {
       const key = propertyName(property.key)
       return (
         !key ||
-        ['skip', 'todo', 'skipIf', 'runIf'].includes(key) ||
+        ['skip', 'todo', 'skipIf', 'runIf', 'fails'].includes(key) ||
         property.computed === true
       )
     })
@@ -417,9 +417,58 @@ function directCoverageCalls(callback: AstNode): AstNode[] {
   return calls
 }
 
-function containsCallOutsideNestedFunctions(value: unknown, name: string): boolean {
+const expectChainQualifiers = new Set(['not', 'resolves', 'rejects'])
+
+function isExpectFactoryCall(value: unknown): boolean {
+  const call = unwrapStaticExpression(value)
+  return (
+    call?.type === 'CallExpression' &&
+    call.optional !== true &&
+    isAstNode(call.callee) &&
+    call.callee.type === 'Identifier' &&
+    call.callee.name === 'expect'
+  )
+}
+
+function isInvokedExpectMatcher(value: unknown): boolean {
+  const call = unwrapStaticExpression(value)
+  if (
+    call?.type !== 'CallExpression' ||
+    call.optional === true ||
+    !isAstNode(call.callee)
+  ) {
+    return false
+  }
+  const callee = unwrapStaticExpression(call.callee)
+  if (
+    callee?.type !== 'MemberExpression' ||
+    callee.optional === true ||
+    hasConditionalCallChain(callee)
+  ) {
+    return false
+  }
+  const matcher = propertyName(callee.property)
+  if (!matcher || expectChainQualifiers.has(matcher)) return false
+
+  let target = unwrapStaticExpression(callee.object)
+  while (target?.type === 'MemberExpression') {
+    if (
+      target.optional === true ||
+      hasConditionalCallChain(target) ||
+      !propertyName(target.property)
+    ) {
+      return false
+    }
+    target = unwrapStaticExpression(target.object)
+  }
+  return isExpectFactoryCall(target)
+}
+
+function containsInvokedMatcherOutsideNestedFunctions(value: unknown): boolean {
   if (Array.isArray(value)) {
-    return value.some((child) => containsCallOutsideNestedFunctions(child, name))
+    return value.some((child) =>
+      containsInvokedMatcherOutsideNestedFunctions(child),
+    )
   }
   if (
     !isAstNode(value) ||
@@ -435,9 +484,9 @@ function containsCallOutsideNestedFunctions(value: unknown, name: string): boole
   ) {
     return false
   }
-  if (isIdentifierCall(value, name)) return true
+  if (isInvokedExpectMatcher(value)) return true
   return nodeChildren(value).some((child) =>
-    containsCallOutsideNestedFunctions(child, name),
+    containsInvokedMatcherOutsideNestedFunctions(child),
   )
 }
 
@@ -490,26 +539,52 @@ function directHelperHasAssertion(value: unknown): boolean {
     .some((callback) => hasReachableAssertion(callback, false))
 }
 
+interface AssertionReachability {
+  hasAssertion: boolean
+  hitBarrier: boolean
+}
+
+function scanReachableStatements(
+  statements: AstNode[],
+  allowAssertionHelpers: boolean,
+): AssertionReachability {
+  for (const statement of statements) {
+    if (statement.type === 'BlockStatement') {
+      const nested = scanReachableStatements(
+        Array.isArray(statement.body) ? statement.body.filter(isAstNode) : [],
+        allowAssertionHelpers,
+      )
+      if (nested.hasAssertion || nested.hitBarrier) return nested
+      continue
+    }
+
+    const expression = statementExpression(statement)
+    if (
+      expression &&
+      (containsInvokedMatcherOutsideNestedFunctions(expression) ||
+        (allowAssertionHelpers && directHelperHasAssertion(expression)))
+    ) {
+      return { hasAssertion: true, hitBarrier: false }
+    }
+    if (executionBarriers.has(statement.type)) {
+      return { hasAssertion: false, hitBarrier: true }
+    }
+  }
+  return { hasAssertion: false, hitBarrier: false }
+}
+
 function hasReachableAssertion(
   callback: AstNode,
   allowAssertionHelpers = true,
 ): boolean {
   if (!isAstNode(callback.body)) return false
   if (callback.body.type !== 'BlockStatement') {
-    return containsCallOutsideNestedFunctions(callback.body, 'expect')
+    return containsInvokedMatcherOutsideNestedFunctions(callback.body)
   }
-  for (const statement of directStatements(callback)) {
-    const expression = statementExpression(statement)
-    if (
-      expression &&
-      (containsCallOutsideNestedFunctions(expression, 'expect') ||
-        (allowAssertionHelpers && directHelperHasAssertion(expression)))
-    ) {
-      return true
-    }
-    if (executionBarriers.has(statement.type)) return false
-  }
-  return false
+  return scanReachableStatements(
+    directStatements(callback),
+    allowAssertionHelpers,
+  ).hasAssertion
 }
 
 function scanBehaviorSpecText(text: string, absoluteFile: string): SpecCoverage {
@@ -549,7 +624,6 @@ function scanBehaviorSpecText(text: string, absoluteFile: string): SpecCoverage 
     'concurrent',
     'sequential',
     'shuffle',
-    'fails',
     'each',
   ])
 
@@ -741,6 +815,38 @@ describe('interaction coverage contract', () => {
         }
         expect(true).toBe(true)
       })`,
+      `it.fails('expected failure', () => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+      })`,
+      `test.fails('expected failure', () => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+      })`,
+      `describe.fails('expected failure suite', () => {
+        it('nested test', () => {
+          coversInteractions('app.skip-to-composer')
+          expect(true).toBe(true)
+        })
+      })`,
+      `it('expected failure options', { fails: true }, () => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+      })`,
+      `test('disabled expected failure options', { fails: false }, () => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+      })`,
+      `test('dynamic expected failure options', { fails: shouldFail }, () => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).toBe(true)
+      })`,
+      `describe('expected failure options suite', { fails: false }, () => {
+        it('nested test', () => {
+          coversInteractions('app.skip-to-composer')
+          expect(true).toBe(true)
+        })
+      })`,
       `it('nested', () => {
         const neverCalled = () => coversInteractions('app.skip-to-composer')
         expect(neverCalled).toBeTypeOf('function')
@@ -753,6 +859,32 @@ describe('interaction coverage contract', () => {
       `it('conditional assertion', () => {
         coversInteractions('app.skip-to-composer')
         false && expect(true).toBe(true)
+      })`,
+      `it('bare expect factory', () => {
+        coversInteractions('app.skip-to-composer')
+        expect(true)
+      })`,
+      `it('assertion count only', () => {
+        coversInteractions('app.skip-to-composer')
+        expect.assertions(1)
+      })`,
+      `it('uninvoked modifier', () => {
+        coversInteractions('app.skip-to-composer')
+        expect(true).not
+      })`,
+      `it('nested block return barrier', () => {
+        coversInteractions('app.skip-to-composer')
+        {
+          return
+        }
+        expect(true).toBe(true)
+      })`,
+      `it('nested block throw barrier', () => {
+        coversInteractions('app.skip-to-composer')
+        {
+          throw new Error('stop')
+        }
+        expect(true).toBe(true)
       })`,
       `it['skip']('computed skip', () => {
         coversInteractions('app.skip-to-composer')
@@ -844,6 +976,24 @@ describe('interaction coverage contract', () => {
       `it('async helper', async () => {
         coversInteractions('app.skip-to-composer')
         await waitFor(() => expect(true).toBe(true))
+      })`,
+      `it('negated matcher', () => {
+        coversInteractions('app.skip-to-composer')
+        expect(false).not.toBe(true)
+      })`,
+      `it('resolved matcher', async () => {
+        coversInteractions('app.skip-to-composer')
+        await expect(Promise.resolve(true)).resolves.toBe(true)
+      })`,
+      `it('rejected matcher', async () => {
+        coversInteractions('app.skip-to-composer')
+        await expect(Promise.reject(new Error('failure'))).rejects.toThrow('failure')
+      })`,
+      `it('unconditional nested block', () => {
+        coversInteractions('app.skip-to-composer')
+        {
+          expect(true).toBe(true)
+        }
       })`,
     ]
     const scans = cases.map((code, index) =>
