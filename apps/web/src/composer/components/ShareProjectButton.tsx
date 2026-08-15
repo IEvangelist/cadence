@@ -94,6 +94,7 @@ export function ShareProjectButton({
       <button
         type="button"
         className="btn"
+        data-interaction="studio.share.toggle"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls={panelId}
@@ -103,10 +104,22 @@ export function ShareProjectButton({
       {open && (
         <div id={panelId} className="share-panel" role="group" aria-label="Share links">
           <div className="share-actions">
-            <button type="button" className="btn" disabled={busy} onClick={() => create('editor')}>
+            <button
+              type="button"
+              className="btn"
+              data-interaction="studio.share.create-editor"
+              disabled={busy}
+              onClick={() => create('editor')}
+            >
               Create editor link
             </button>
-            <button type="button" className="btn" disabled={busy} onClick={() => create('viewer')}>
+            <button
+              type="button"
+              className="btn"
+              data-interaction="studio.share.create-viewer"
+              disabled={busy}
+              onClick={() => create('viewer')}
+            >
               Create viewer link
             </button>
           </div>
@@ -122,6 +135,7 @@ export function ShareProjectButton({
                 <button
                   type="button"
                   className="btn"
+                  data-interaction="studio.share.copy"
                   onClick={async () => {
                     await copy(shareLinkUrl(pageOrigin, projectId, link))
                     setCopied(link.token)
@@ -129,7 +143,13 @@ export function ShareProjectButton({
                 >
                   {copied === link.token ? 'Copied' : 'Copy link'}
                 </button>
-                <button type="button" className="btn" disabled={busy} onClick={() => revoke(link.token)}>
+                <button
+                  type="button"
+                  className="btn"
+                  data-interaction="studio.share.revoke"
+                  disabled={busy}
+                  onClick={() => revoke(link.token)}
+                >
                   Revoke
                 </button>
               </li>

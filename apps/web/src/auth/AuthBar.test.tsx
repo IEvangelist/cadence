@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { coversInteractions } from '../test/coversInteractions'
 import type { AuthClient } from './authClient'
 import { AuthContext, type AuthContextValue } from './authContext'
 import { AuthBar } from './AuthBar'
@@ -33,7 +35,9 @@ describe('AuthBar', () => {
     expect(container.querySelector('button')).toBeNull()
   })
 
-  it('shows the signed-in greeting and account actions', () => {
+  it('shows the signed-in greeting and account actions', async () => {
+    coversInteractions('auth.profile.open', 'auth.sign-out')
+    const user = userEvent.setup()
     const signOut = vi.fn(async () => undefined)
     const onShowProfile = vi.fn()
     renderBar(
@@ -47,35 +51,44 @@ describe('AuthBar', () => {
     )
 
     expect(screen.getByText('Ada')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    await user.click(screen.getByRole('button', { name: 'Profile' }))
     expect(onShowProfile).toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    await user.click(screen.getByRole('button', { name: 'Sign out' }))
     expect(signOut).toHaveBeenCalled()
   })
 
-  it('opens the panel and submits local sign-in', () => {
+  it('opens the panel and submits local sign-in', async () => {
+    coversInteractions(
+      'auth.panel.toggle',
+      'auth.credentials.email',
+      'auth.credentials.password',
+      'auth.credentials.submit',
+    )
+    const user = userEvent.setup()
     const signIn = vi.fn(async () => undefined)
     renderBar(makeValue({ signIn }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@b.com' } })
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret12' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    await user.type(screen.getByLabelText('Email'), 'a@b.com')
+    await user.type(screen.getByLabelText('Password'), 'secret12')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
 
     expect(signIn).toHaveBeenCalledWith('a@b.com', 'secret12')
   })
 
   it('toggles to register mode, submits, and confirms a verification email was sent', async () => {
+    coversInteractions('auth.mode.toggle', 'auth.registration.display-name')
+    const user = userEvent.setup()
     const register = vi.fn(async () => undefined)
     renderBar(makeValue({ register }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-    fireEvent.click(screen.getByRole('button', { name: /Create an account/ }))
-    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Ada' } })
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@b.com' } })
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret12' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    await user.click(screen.getByRole('button', { name: /Create an account/ }))
+    await user.type(screen.getByLabelText('Display name'), 'Ada')
+    await user.type(screen.getByLabelText('Email'), 'a@b.com')
+    await user.type(screen.getByLabelText('Password'), 'secret12')
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
 
     expect(register).toHaveBeenCalledWith('a@b.com', 'secret12', 'Ada')
     // #76: register does not sign in — the UI must tell the user to check their email.
@@ -83,28 +96,33 @@ describe('AuthBar', () => {
   })
 
   it('requests a magic link and confirms it was sent', async () => {
+    coversInteractions('auth.magic-link.email', 'auth.magic-link.submit')
+    const user = userEvent.setup()
     const requestMagicLink = vi.fn(async () => undefined)
     renderBar(makeValue({ requestMagicLink }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-    fireEvent.change(screen.getByLabelText(/magic sign-in link/), { target: { value: 'a@b.com' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Email me a link' }))
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    await user.type(screen.getByLabelText(/magic sign-in link/), 'a@b.com')
+    await user.click(screen.getByRole('button', { name: 'Email me a link' }))
 
     expect(requestMagicLink).toHaveBeenCalledWith('a@b.com')
     expect(await screen.findByRole('status')).toHaveTextContent(/sign-in link is on its way/)
   })
 
-  it('renders external provider links', () => {
+  it('renders external provider links', async () => {
+    coversInteractions('auth.provider.sign-in')
+    const user = userEvent.setup()
     renderBar(makeValue({ providers: ['GitHub'] }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
     const link = screen.getByRole('link', { name: 'GitHub' })
     expect(link).toHaveAttribute('href', '/api/auth/external/GitHub')
   })
 
-  it('shows the auth error', () => {
+  it('shows the auth error', async () => {
+    const user = userEvent.setup()
     renderBar(makeValue({ error: 'Incorrect email or password.' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
     expect(screen.getByRole('alert')).toHaveTextContent('Incorrect email or password.')
   })
 })

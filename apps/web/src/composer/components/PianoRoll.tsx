@@ -537,6 +537,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
             <button
               type="button"
               className="btn btn-sm"
+              data-interaction="studio.piano-roll.zoom.time-out"
               onClick={() => zoomTime(1 / ZOOM_STEP)}
               aria-label="Zoom out horizontally (time)"
               title="Zoom out — time (−)"
@@ -549,6 +550,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
             <button
               type="button"
               className="btn btn-sm"
+              data-interaction="studio.piano-roll.zoom.time-in"
               onClick={() => zoomTime(ZOOM_STEP)}
               aria-label="Zoom in horizontally (time)"
               title="Zoom in — time (+)"
@@ -560,6 +562,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
             <button
               type="button"
               className="btn btn-sm"
+              data-interaction="studio.piano-roll.zoom.pitch-out"
               onClick={() => zoomPitch(1 / ZOOM_STEP)}
               aria-label="Zoom out vertically (pitch)"
               title="Zoom out — pitch (Shift −)"
@@ -572,6 +575,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
             <button
               type="button"
               className="btn btn-sm"
+              data-interaction="studio.piano-roll.zoom.pitch-in"
               onClick={() => zoomPitch(ZOOM_STEP)}
               aria-label="Zoom in vertically (pitch)"
               title="Zoom in — pitch (Shift +)"
@@ -582,6 +586,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
           <button
             type="button"
             className="btn btn-sm"
+            data-interaction="studio.piano-roll.zoom.reset"
             onClick={resetZoom}
             aria-label="Reset zoom"
             title="Reset zoom"
@@ -601,6 +606,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
             <span className="pr-tool-sub">Strength</span>
             <input
               type="range"
+              data-interaction="studio.piano-roll.quantize.strength"
               min={0}
               max={1}
               step={0.05}
@@ -613,6 +619,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
           <button
             type="button"
             className="btn btn-sm"
+            data-interaction="studio.piano-roll.quantize.apply"
             onClick={runQuantize}
             disabled={!track || track.notes.length === 0}
             aria-label={`${quantizeLabel} to the current snap grid`}
@@ -625,6 +632,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
           <button
             type="button"
             className={`btn btn-sm${showVelocity ? ' is-active' : ''}`}
+            data-interaction="studio.piano-roll.velocity.toggle"
             onClick={() => setShowVelocity((v) => !v)}
             aria-pressed={showVelocity}
             aria-label="Toggle velocity lane"
@@ -677,6 +685,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
         <div
           ref={gridRef}
           className="pr-grid"
+          data-interaction="studio.piano-roll.grid"
           role="application"
           aria-label="Note grid. Use arrow keys to move the caret, Enter to add a note, Delete to remove the selected note. With a note selected, arrow keys nudge it and Shift+Left/Right resize it. Press + or - to zoom."
           tabIndex={0}
@@ -728,6 +737,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
                 key={note.id}
                 type="button"
                 className={`pr-note${selected ? ' is-selected' : ''}`}
+                data-interaction="studio.piano-roll.note"
                 style={{
                   left: rect.left,
                   top: rowOfPitch(note.pitch) * layout.rowHeight,
@@ -743,11 +753,13 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
               >
                 <span
                   className="pr-note-resize pr-note-resize-start"
+                  data-interaction="studio.piano-roll.note.resize-start"
                   aria-hidden="true"
                   onPointerDown={(event) => startResize(event, note.id, 'start')}
                 />
                 <span
                   className="pr-note-resize pr-note-resize-end"
+                  data-interaction="studio.piano-roll.note.resize-end"
                   aria-hidden="true"
                   onPointerDown={(event) => startResize(event, note.id, 'end')}
                 />
@@ -795,6 +807,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
                   key={note.id}
                   type="button"
                   className={`pr-vel-bar${selected ? ' is-selected' : ''}`}
+                  data-interaction="studio.piano-roll.velocity.note"
                   style={{
                     left: beatToX(note.start, layout),
                     width: Math.max(4, layout.beatWidth * 0.35),
@@ -819,6 +832,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
             <span>Velocity</span>
             <input
               type="range"
+              data-interaction="studio.piano-roll.velocity.selected"
               min={0}
               max={1}
               step={0.05}

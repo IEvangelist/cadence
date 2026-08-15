@@ -88,6 +88,7 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
               <span>Gain</span>
               <input
                 type="range"
+                data-interaction="studio.mixer.track.gain"
                 min={GAIN_MIN}
                 max={GAIN_MAX}
                 step={0.5}
@@ -101,6 +102,7 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
               <span>Pan</span>
               <input
                 type="range"
+                data-interaction="studio.mixer.track.pan"
                 min={-1}
                 max={1}
                 step={0.02}
@@ -114,6 +116,7 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
               <button
                 type="button"
                 className="btn btn-toggle"
+                data-interaction="studio.mixer.track.mute"
                 aria-pressed={track.muted}
                 onClick={() => toggleMute(track.id)}
               >
@@ -122,6 +125,7 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
               <button
                 type="button"
                 className="btn btn-toggle"
+                data-interaction="studio.mixer.track.solo"
                 aria-pressed={track.solo}
                 onClick={() => toggleSolo(track.id)}
               >
@@ -138,6 +142,7 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
                       <label className="mixer-insert-toggle">
                         <input
                           type="checkbox"
+                          data-interaction="studio.mixer.insert.toggle"
                           checked={insert.enabled}
                           onChange={() => toggleInsert(track.id, insert.id)}
                         />
@@ -146,6 +151,7 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
                       <button
                         type="button"
                         className="btn btn-ghost"
+                        data-interaction="studio.mixer.insert.remove"
                         aria-label={`Remove ${effectName(insert.effectId)} from ${track.name}`}
                         onClick={() => removeInsert(track.id, insert.id)}
                       >
@@ -159,6 +165,7 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
                 <label className="field">
                   <span className="visually-hidden">Add insert to {track.name}</span>
                   <select
+                    data-interaction="studio.mixer.insert.select"
                     value={selectionFor(track.id)}
                     onChange={(event) =>
                       setPendingInsert((prev) => ({ ...prev, [track.id]: event.target.value }))
@@ -174,6 +181,7 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
                 <button
                   type="button"
                   className="btn"
+                  data-interaction="studio.mixer.insert.add"
                   disabled={availableEffects.length === 0}
                   onClick={() => addInsert(track.id, selectionFor(track.id))}
                 >
@@ -227,6 +235,7 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
           <span>Gain</span>
           <input
             type="range"
+            data-interaction="studio.mixer.master.gain"
             min={GAIN_MIN}
             max={GAIN_MAX}
             step={0.5}
@@ -239,6 +248,7 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
         <label className="mixer-insert-toggle">
           <input
             type="checkbox"
+            data-interaction="studio.mixer.master.limiter"
             checked={master.limiterEnabled}
             onChange={(event) => setLimiterEnabled(event.target.checked)}
           />
@@ -249,6 +259,7 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
           <span>Ceiling</span>
           <input
             type="range"
+            data-interaction="studio.mixer.master.ceiling"
             min={THRESHOLD_MIN}
             max={THRESHOLD_MAX}
             step={0.5}

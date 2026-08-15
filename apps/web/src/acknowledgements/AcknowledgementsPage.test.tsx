@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { coversInteractions } from '../test/coversInteractions'
 import { AcknowledgementsPage } from './AcknowledgementsPage'
 
 describe('<AcknowledgementsPage />', () => {
@@ -33,6 +34,7 @@ describe('<AcknowledgementsPage />', () => {
   })
 
   it('links to the LAME credit page at lame.sourceforge.io', () => {
+    coversInteractions('licenses.external-link')
     render(<AcknowledgementsPage />)
     const lame = screen.getByRole('link', { name: /lame project/i })
     expect(lame).toHaveAttribute('href', 'https://lame.sourceforge.io/')
@@ -75,6 +77,7 @@ describe('<AcknowledgementsPage />', () => {
   })
 
   it('invokes onClose from the back button', () => {
+    coversInteractions('licenses.close')
     const onClose = vi.fn()
     render(<AcknowledgementsPage onClose={onClose} />)
     fireEvent.click(screen.getByRole('button', { name: /back to composer/i }))

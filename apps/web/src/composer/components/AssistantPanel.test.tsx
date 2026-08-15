@@ -1,13 +1,21 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { coversInteractions } from '../../test/coversInteractions'
 import { Composer } from '../Composer'
 import { SilentAudioEngine } from '../audio/engine'
 import { LocalStorageProjectStore, MemoryStorage } from '../model/storage'
 import { createEmptyProject, createNote, createTrack } from '../model/project'
 import { MockAssistant } from '../ai/mockProvider'
-import type { AssistantSuggestion, CompositionAssistant } from '../ai/types'
+import type {
+  AssistantRequest,
+  AssistantSuggestion,
+  CompositionAssistant,
+} from '../ai/types'
 
-function renderComposer(provider: CompositionAssistant = new MockAssistant()) {
+function renderComposer(
+  provider: CompositionAssistant = new MockAssistant(),
+  engine: SilentAudioEngine = new SilentAudioEngine(),
+) {
   const project = createEmptyProject('p')
   project.tracks = [
     createTrack(
@@ -21,7 +29,7 @@ function renderComposer(provider: CompositionAssistant = new MockAssistant()) {
   return render(
     <Composer
       options={{
-        createEngine: () => new SilentAudioEngine(),
+        createEngine: () => engine,
         store: new LocalStorageProjectStore(new MemoryStorage()),
         initialProject: project,
         autosaveDelay: 0,
@@ -48,6 +56,7 @@ describe('<AssistantPanel />', () => {
   })
 
   it('is keyboard-operable: selecting an action and generating with the keyboard', async () => {
+    coversInteractions('studio.assistant.action.select', 'studio.assistant.generate')
     renderComposer()
     const panel = assistantRegion()
 
@@ -66,8 +75,46 @@ describe('<AssistantPanel />', () => {
     )
   })
 
+  it('updates generation temperature and length and passes them to the provider', async () => {
+    coversInteractions('studio.assistant.temperature', 'studio.assistant.length')
+    const generate = vi.fn(
+      async (request: AssistantRequest): Promise<AssistantSuggestion> => ({
+        action: request.action,
+        notes: [{ pitch: 64, start: 1, duration: 1, velocity: 0.8 }],
+        label: 'Captured parameters',
+      }),
+    )
+    const provider: CompositionAssistant = {
+      id: 'parameter-capture',
+      capabilities: ['continue', 'generate', 'harmonize'],
+      generate,
+    }
+    renderComposer(provider)
+    const panel = assistantRegion()
+    const temperature = within(panel).getByRole('slider', { name: /Temperature/ })
+    const length = within(panel).getByRole('slider', { name: /Length/ })
+
+    fireEvent.change(temperature, { target: { value: '1.7' } })
+    fireEvent.change(length, { target: { value: '12' } })
+
+    expect(temperature).toHaveValue('1.7')
+    expect(length).toHaveValue('12')
+    expect(within(temperature.closest('label')!).getByText('1.7')).toBeInTheDocument()
+    expect(within(length.closest('label')!).getByText('12')).toBeInTheDocument()
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Generate' }))
+    await waitFor(() => expect(generate).toHaveBeenCalledOnce())
+    expect(generate.mock.calls[0][0].params).toEqual({
+      temperature: 1.7,
+      lengthBeats: 12,
+    })
+  })
+
   it('runs the full generate → preview → accept flow, inserting notes', async () => {
-    const { container } = renderComposer()
+    coversInteractions('studio.assistant.preview', 'studio.assistant.accept')
+    const engine = new SilentAudioEngine()
+    const previewNote = vi.spyOn(engine, 'previewNote')
+    const { container } = renderComposer(new MockAssistant(), engine)
     const panel = assistantRegion()
 
     const notesBefore = container.querySelectorAll('.pr-note:not(.is-preview)').length
@@ -81,8 +128,8 @@ describe('<AssistantPanel />', () => {
     // Ghost preview notes are rendered, visually distinct.
     expect(container.querySelectorAll('.pr-note.is-preview').length).toBeGreaterThan(0)
 
-    // Preview (audition) does not throw with the silent engine.
     fireEvent.click(within(panel).getByRole('button', { name: 'Preview' }))
+    await waitFor(() => expect(previewNote).toHaveBeenCalled())
 
     fireEvent.click(within(panel).getByRole('button', { name: 'Accept' }))
 
@@ -95,6 +142,7 @@ describe('<AssistantPanel />', () => {
   })
 
   it('discards a suggestion, removing the preview without inserting notes', async () => {
+    coversInteractions('studio.assistant.discard')
     const { container } = renderComposer()
     const panel = assistantRegion()
     const notesBefore = container.querySelectorAll('.pr-note:not(.is-preview)').length

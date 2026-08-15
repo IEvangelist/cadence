@@ -1,11 +1,13 @@
 import { useEffect } from 'react'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { coversInteractions } from '../../test/coversInteractions'
 import { PianoRoll } from './PianoRoll'
 import { useComposer } from '../hooks/useComposer'
 import { SilentAudioEngine } from '../audio/engine'
 import { LocalStorageProjectStore, MemoryStorage } from '../model/storage'
-import { createEmptyProject } from '../model/project'
+import { createEmptyProject, createNote } from '../model/project'
 import { DEFAULT_LAYOUT } from '../timing/timing'
 
 function Harness() {
@@ -50,6 +52,7 @@ describe('<PianoRoll />', () => {
   })
 
   it('adds a note by clicking the grid and can delete it with the keyboard', () => {
+    coversInteractions('studio.piano-roll.grid')
     mockGridRect()
     render(<Harness />)
     const grid = screen.getByRole('application')
@@ -64,6 +67,7 @@ describe('<PianoRoll />', () => {
   })
 
   it('edits a note velocity from the velocity lane by keyboard', () => {
+    coversInteractions('studio.piano-roll.velocity.note')
     mockGridRect()
     render(<Harness />)
     const grid = screen.getByRole('application')
@@ -76,6 +80,7 @@ describe('<PianoRoll />', () => {
   })
 
   it('moves a note by dragging it', () => {
+    coversInteractions('studio.piano-roll.note')
     mockGridRect()
     render(<Harness />)
     const grid = screen.getByRole('application')
@@ -92,6 +97,7 @@ describe('<PianoRoll />', () => {
   })
 
   it('resizes a note by dragging its right (end) edge', () => {
+    coversInteractions('studio.piano-roll.note.resize-end')
     mockGridRect()
     render(<Harness />)
     const grid = screen.getByRole('application')
@@ -109,6 +115,7 @@ describe('<PianoRoll />', () => {
   })
 
   it('resizes a note from its left (start) edge, holding the end fixed', () => {
+    coversInteractions('studio.piano-roll.note.resize-start')
     mockGridRect()
     render(<Harness />)
     const grid = screen.getByRole('application')
@@ -155,16 +162,83 @@ describe('<PianoRoll />', () => {
     expect(parseFloat(zoomed.style.width)).toBeGreaterThan(beforeWidth)
   })
 
-  it('runs quantize on the selected note without dropping it', () => {
+  it('updates and resets zoom, quantize strength, and velocity controls', async () => {
+    coversInteractions(
+      'studio.piano-roll.zoom.time-out',
+      'studio.piano-roll.zoom.time-in',
+      'studio.piano-roll.zoom.pitch-out',
+      'studio.piano-roll.zoom.pitch-in',
+      'studio.piano-roll.zoom.reset',
+      'studio.piano-roll.quantize.strength',
+      'studio.piano-roll.velocity.toggle',
+      'studio.piano-roll.velocity.selected',
+    )
+    const user = userEvent.setup()
     mockGridRect()
     render(<Harness />)
-    const grid = screen.getByRole('application')
-    fireEvent.pointerDown(grid, { clientX: 0, clientY: 80 })
+
+    const zoom = screen.getByRole('status', { name: 'Current zoom' })
+    await user.click(screen.getByRole('button', { name: 'Zoom in horizontally (time)' }))
+    expect(zoom).not.toHaveTextContent('100% × 100%')
+    await user.click(screen.getByRole('button', { name: 'Zoom out horizontally (time)' }))
+    expect(zoom).toHaveTextContent('100% × 100%')
+
+    await user.click(screen.getByRole('button', { name: 'Zoom in vertically (pitch)' }))
+    expect(zoom).not.toHaveTextContent('100% × 100%')
+    await user.click(screen.getByRole('button', { name: 'Zoom out vertically (pitch)' }))
+    expect(zoom).toHaveTextContent('100% × 100%')
+
+    await user.click(screen.getByRole('button', { name: 'Zoom in horizontally (time)' }))
+    await user.click(screen.getByRole('button', { name: 'Zoom in vertically (pitch)' }))
+    expect(zoom).not.toHaveTextContent('100% × 100%')
+    await user.click(screen.getByRole('button', { name: 'Reset zoom' }))
+    expect(zoom).toHaveTextContent('100% × 100%')
+
+    fireEvent.change(screen.getByRole('slider', { name: 'Quantize strength' }), {
+      target: { value: '0.5' },
+    })
+    expect(screen.getByText('50%')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Toggle velocity lane' }))
+    expect(screen.queryByRole('group', { name: 'Velocity lane' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Toggle velocity lane' }))
+    expect(screen.getByRole('group', { name: 'Velocity lane' })).toBeInTheDocument()
+
+    fireEvent.pointerDown(screen.getByRole('application'), { clientX: 96, clientY: 80 })
+    const velocityBar = screen.getByRole('button', { name: /Velocity for/ })
+    const before = velocityBar.getAttribute('aria-label')
+    const selectedVelocity = screen.getByRole('slider', { name: /Velocity/ })
+    fireEvent.change(selectedVelocity, {
+      target: { value: '0.25' },
+    })
+    expect(selectedVelocity).toHaveValue('0.25')
+    expect(within(selectedVelocity.closest('label')!).getByText('32')).toBeInTheDocument()
+    expect(velocityBar.getAttribute('aria-label')).not.toBe(before)
+  })
+
+  it('quantizes the selected note to the current snap grid', () => {
+    coversInteractions('studio.piano-roll.quantize.apply')
+    mockGridRect()
+    function QuantizeHarness() {
+      const project = createEmptyProject('p')
+      project.tracks[0].notes = [
+        createNote({ pitch: 60, start: 0.3, duration: 1, velocity: 0.8 }, 'off-grid'),
+      ]
+      const controller = useComposer({
+        createEngine: () => new SilentAudioEngine(),
+        store: new LocalStorageProjectStore(new MemoryStorage()),
+        initialProject: project,
+        autosaveDelay: 0,
+      })
+      return <PianoRoll controller={controller} />
+    }
+    render(<QuantizeHarness />)
     const note = screen.getAllByRole('button').find((b) => b.className.includes('pr-note'))!
+    const beforeLeft = note.style.left
     fireEvent.click(note)
     fireEvent.click(screen.getByRole('button', { name: /Quantize/ }))
-    const after = screen.getAllByRole('button').filter((b) => b.className.includes('pr-note'))
-    expect(after).toHaveLength(1)
+    const quantized = screen.getAllByRole('button').find((b) => b.className.includes('pr-note'))!
+    expect(quantized.style.left).not.toBe(beforeLeft)
   })
 
   it('highlights every note in a batch-inserted selection', () => {

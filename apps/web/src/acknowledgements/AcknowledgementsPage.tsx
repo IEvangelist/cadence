@@ -69,21 +69,36 @@ export function AcknowledgementsPage({ onClose }: AcknowledgementsPageProps) {
           <h2 id={headingId}>Acknowledgements &amp; third-party licenses</h2>
           <p className="acknowledgements-sub">
             Cadence is{' '}
-            <a href={REPO_LICENSE_URL} target="_blank" rel="noreferrer">
+            <a
+              href={REPO_LICENSE_URL}
+              target="_blank"
+              rel="noreferrer"
+              data-interaction="licenses.external-link"
+            >
               open-source software (MIT)
             </a>
             . It also builds on third-party open-source projects that it
             redistributes as part of the app. This page credits those projects and
             points to their licenses; the authoritative, complete list — with full
             license texts — lives in{' '}
-            <a href={THIRD_PARTY_NOTICES_URL} target="_blank" rel="noreferrer">
+            <a
+              href={THIRD_PARTY_NOTICES_URL}
+              target="_blank"
+              rel="noreferrer"
+              data-interaction="licenses.external-link"
+            >
               THIRD-PARTY-NOTICES.md
             </a>
             .
           </p>
         </div>
         {onClose && (
-          <button type="button" className="acknowledgements-btn" onClick={onClose}>
+          <button
+            type="button"
+            className="acknowledgements-btn"
+            data-interaction="licenses.close"
+            onClick={onClose}
+          >
             Back to composer
           </button>
         )}
@@ -94,7 +109,12 @@ export function AcknowledgementsPage({ onClose }: AcknowledgementsPageProps) {
         <p>
           Cadence&rsquo;s <strong>MP3 export</strong> is powered by the{' '}
           <strong>LAME</strong> MP3 encoder, via{' '}
-          <a href={LAMEJS_NPM_URL} target="_blank" rel="noreferrer">
+          <a
+            href={LAMEJS_NPM_URL}
+            target="_blank"
+            rel="noreferrer"
+            data-interaction="licenses.external-link"
+          >
             @breezystack/lamejs
           </a>{' '}
           (version 1.2.7) — a pure-JavaScript port of LAME. It is used{' '}
@@ -109,7 +129,12 @@ export function AcknowledgementsPage({ onClose }: AcknowledgementsPageProps) {
           <div className="acknowledgements-fact">
             <dt>LAME project</dt>
             <dd>
-              <a href={LAME_PROJECT_URL} target="_blank" rel="noreferrer">
+              <a
+                href={LAME_PROJECT_URL}
+                target="_blank"
+                rel="noreferrer"
+                data-interaction="licenses.external-link"
+              >
                 The LAME project (lame.sourceforge.io)
               </a>
             </dd>
@@ -117,11 +142,21 @@ export function AcknowledgementsPage({ onClose }: AcknowledgementsPageProps) {
           <div className="acknowledgements-fact">
             <dt>Package</dt>
             <dd>
-              <a href={LAMEJS_NPM_URL} target="_blank" rel="noreferrer">
+              <a
+                href={LAMEJS_NPM_URL}
+                target="_blank"
+                rel="noreferrer"
+                data-interaction="licenses.external-link"
+              >
                 @breezystack/lamejs on npm
               </a>{' '}
               — a fork of the original{' '}
-              <a href={LAMEJS_UPSTREAM_URL} target="_blank" rel="noreferrer">
+              <a
+                href={LAMEJS_UPSTREAM_URL}
+                target="_blank"
+                rel="noreferrer"
+                data-interaction="licenses.external-link"
+              >
                 zhuker/lamejs
               </a>
               . (The direct <code>github.com/breezystack/lamejs</code> link 404s, so
@@ -152,7 +187,12 @@ export function AcknowledgementsPage({ onClose }: AcknowledgementsPageProps) {
             {COMPONENTS.map((component) => (
               <tr key={component.name}>
                 <td>
-                  <a href={component.packageUrl} target="_blank" rel="noreferrer">
+                  <a
+                    href={component.packageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    data-interaction="licenses.external-link"
+                  >
                     {component.name}
                   </a>
                 </td>
@@ -169,19 +209,39 @@ export function AcknowledgementsPage({ onClose }: AcknowledgementsPageProps) {
         <p>
           The full text of the GNU Lesser General Public License v3.0 and the GNU
           General Public License v3.0 (which it supplements) is reproduced in{' '}
-          <a href={THIRD_PARTY_NOTICES_URL} target="_blank" rel="noreferrer">
+          <a
+            href={THIRD_PARTY_NOTICES_URL}
+            target="_blank"
+            rel="noreferrer"
+            data-interaction="licenses.external-link"
+          >
             THIRD-PARTY-NOTICES.md
           </a>
           . You can also read the canonical texts at{' '}
-          <a href={LGPL_TEXT_URL} target="_blank" rel="noreferrer">
+          <a
+            href={LGPL_TEXT_URL}
+            target="_blank"
+            rel="noreferrer"
+            data-interaction="licenses.external-link"
+          >
             gnu.org/licenses/lgpl-3.0
           </a>{' '}
           and{' '}
-          <a href={GPL_TEXT_URL} target="_blank" rel="noreferrer">
+          <a
+            href={GPL_TEXT_URL}
+            target="_blank"
+            rel="noreferrer"
+            data-interaction="licenses.external-link"
+          >
             gnu.org/licenses/gpl-3.0
           </a>
           , or on the{' '}
-          <a href={DOCS_ACKNOWLEDGEMENTS_URL} target="_blank" rel="noreferrer">
+          <a
+            href={DOCS_ACKNOWLEDGEMENTS_URL}
+            target="_blank"
+            rel="noreferrer"
+            data-interaction="licenses.external-link"
+          >
             Cadence acknowledgements page
           </a>
           .

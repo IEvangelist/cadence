@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
+import { coversInteractions } from '../test/coversInteractions'
 import { StemsClient, StemsError, type StemJob } from './stemsClient'
 import { StemsPage } from './StemsPage'
 
@@ -54,6 +55,7 @@ describe('<StemsPage />', () => {
   })
 
   it('shows an upgrade CTA to signed-in free users', () => {
+    coversInteractions('stems.upgrade')
     const onUpgrade = vi.fn()
     const client = fakeClient()
     render(
@@ -67,6 +69,7 @@ describe('<StemsPage />', () => {
   })
 
   it('loads and renders previous separations for entitled users', async () => {
+    coversInteractions('stems.preview', 'stems.download')
     const client = fakeClient({
       listJobs: vi.fn(async () => [
         { id: 'job-1', status: 'Completed', originalFileName: 'mix.wav', sizeBytes: 2048, createdAt: '', updatedAt: '', completedAt: '' },
@@ -77,7 +80,12 @@ describe('<StemsPage />', () => {
     expect(await screen.findByRole('heading', { name: 'mix.wav' })).toBeInTheDocument()
     const download = await screen.findByRole('link', { name: /Download bass/i })
     expect(download).toHaveAttribute('href', 'https://cdn.test/api/stems/jobs/job-1/stems/bass')
-    expect(screen.getByLabelText('bass stem preview')).toBeInTheDocument()
+    const preview = screen.getByLabelText('bass stem preview')
+    expect(preview).toHaveAttribute('controls')
+    expect(preview).toHaveAttribute(
+      'src',
+      'https://cdn.test/api/stems/jobs/job-1/stems/bass',
+    )
   })
 
   it('shows an empty state when there are no separations', async () => {
@@ -88,6 +96,7 @@ describe('<StemsPage />', () => {
   })
 
   it('uploads a selected mix and shows the completed stems', async () => {
+    coversInteractions('stems.upload.file', 'stems.separate')
     const client = fakeClient()
     render(<StemsPage authenticated entitled client={client} />)
     await screen.findByText(/No separations yet/i)
@@ -179,6 +188,7 @@ describe('<StemsPage />', () => {
   })
 
   it('calls onClose from the back button', () => {
+    coversInteractions('stems.close')
     const onClose = vi.fn()
     render(<StemsPage authenticated entitled client={fakeClient()} onClose={onClose} />)
 

@@ -47,6 +47,7 @@ export function InstrumentPicker({
       <select
         id={id}
         className="instrument-select"
+        data-interaction="studio.track.instrument"
         value={value}
         onChange={(event) => onChange(event.target.value as InstrumentId)}
       >

@@ -63,6 +63,7 @@ export function AiStudioPanel({ studio }: AiStudioPanelProps) {
             <label key={item.value} className="ai-studio-radio">
               <input
                 type="radio"
+                data-interaction="studio.ai.feature.select"
                 name="ai-studio-feature"
                 value={item.value}
                 checked={feature === item.value}
@@ -85,6 +86,7 @@ export function AiStudioPanel({ studio }: AiStudioPanelProps) {
             <input
               type="text"
               className="ai-studio-prompt"
+              data-interaction="studio.ai.motif.prompt"
               value={prompt}
               placeholder="e.g. dreamy lo-fi melody in D minor"
               onChange={(event) => setPrompt(event.target.value)}
@@ -94,6 +96,7 @@ export function AiStudioPanel({ studio }: AiStudioPanelProps) {
             <span>Motif length</span>
             <input
               type="range"
+              data-interaction="studio.ai.motif.length"
               min={MOTIF_LENGTH_RANGE.min}
               max={MOTIF_LENGTH_RANGE.max}
               step={MOTIF_LENGTH_RANGE.step}
@@ -102,7 +105,12 @@ export function AiStudioPanel({ studio }: AiStudioPanelProps) {
             />
             <span className="field-suffix">{motifLength} beats</span>
           </label>
-          <button type="button" className="btn btn-primary" onClick={createMotif}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            data-interaction="studio.ai.motif.create"
+            onClick={createMotif}
+          >
             Create motif
           </button>
         </div>
@@ -114,6 +122,7 @@ export function AiStudioPanel({ studio }: AiStudioPanelProps) {
             <span>Style</span>
             <select
               className="ai-studio-select"
+              data-interaction="studio.ai.style.select"
               value={styleId}
               disabled={locked}
               onChange={(event) => setStyleId(event.target.value as typeof styleId)}
@@ -126,7 +135,13 @@ export function AiStudioPanel({ studio }: AiStudioPanelProps) {
             </select>
           </label>
           <p className="ai-studio-hint">{STYLES.find((s) => s.id === styleId)?.description}</p>
-          <button type="button" className="btn btn-primary" onClick={applyStyleToTrack} disabled={locked}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            data-interaction="studio.ai.style.apply"
+            onClick={applyStyleToTrack}
+            disabled={locked}
+          >
             Apply style
           </button>
         </div>
@@ -138,6 +153,7 @@ export function AiStudioPanel({ studio }: AiStudioPanelProps) {
             <span>Groove</span>
             <select
               className="ai-studio-select"
+              data-interaction="studio.ai.groove.select"
               value={groovePresetId}
               onChange={(event) => setGroovePresetId(event.target.value as typeof groovePresetId)}
             >
@@ -152,6 +168,7 @@ export function AiStudioPanel({ studio }: AiStudioPanelProps) {
             <span>Intensity</span>
             <input
               type="range"
+              data-interaction="studio.ai.groove.intensity"
               min={0}
               max={1}
               step={0.05}
@@ -160,7 +177,12 @@ export function AiStudioPanel({ studio }: AiStudioPanelProps) {
             />
             <span className="field-suffix">{Math.round(grooveIntensity * 100)}%</span>
           </label>
-          <button type="button" className="btn btn-primary" onClick={applyGrooveToTrack}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            data-interaction="studio.ai.groove.apply"
+            onClick={applyGrooveToTrack}
+          >
             Apply groove
           </button>
         </div>
@@ -168,7 +190,13 @@ export function AiStudioPanel({ studio }: AiStudioPanelProps) {
 
       {feature === 'auto-master' && (
         <div className="ai-studio-controls">
-          <button type="button" className="btn btn-primary" onClick={analyze} disabled={locked}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            data-interaction="studio.ai.mastering.analyze"
+            onClick={analyze}
+            disabled={locked}
+          >
             Analyze mix
           </button>
           {report && (

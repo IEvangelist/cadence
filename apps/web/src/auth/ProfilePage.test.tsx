@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { coversInteractions } from '../test/coversInteractions'
 import type { AuthClient, Profile } from './authClient'
 import { AuthContext, type AuthContextValue } from './authContext'
 import { ProfilePage } from './ProfilePage'
@@ -56,6 +57,12 @@ describe('ProfilePage', () => {
   })
 
   it('saves edits and refreshes the session', async () => {
+    coversInteractions(
+      'profile.display-name',
+      'profile.bio',
+      'profile.avatar-url',
+      'profile.save',
+    )
     const updateProfile = vi.fn(async () => ({ ...profile, displayName: 'Ada L.' }))
     const refresh = vi.fn(async () => undefined)
     const value = makeValue({ getProfile: vi.fn(async () => profile), updateProfile })
@@ -68,13 +75,19 @@ describe('ProfilePage', () => {
 
     const name = await screen.findByLabelText('Display name')
     fireEvent.change(name, { target: { value: 'Ada L.' } })
+    fireEvent.change(screen.getByLabelText('Bio'), {
+      target: { value: 'Composer and arranger' },
+    })
+    fireEvent.change(screen.getByLabelText('Avatar URL'), {
+      target: { value: 'https://example.test/ada.png' },
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
     await waitFor(() =>
       expect(updateProfile).toHaveBeenCalledWith({
         displayName: 'Ada L.',
-        bio: 'Composer',
-        avatarUrl: '',
+        bio: 'Composer and arranger',
+        avatarUrl: 'https://example.test/ada.png',
       }),
     )
     expect(refresh).toHaveBeenCalled()
@@ -82,6 +95,7 @@ describe('ProfilePage', () => {
   })
 
   it('closes back to the composer', async () => {
+    coversInteractions('profile.close')
     const onClose = vi.fn()
     renderPage({ getProfile: vi.fn(async () => profile) }, onClose)
 

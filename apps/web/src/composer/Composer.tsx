@@ -110,7 +110,12 @@ export function Composer({
           <p className="composer-empty-hint">
             Click the grid to place a note, or start from a ready-made idea.
           </p>
-          <button type="button" className="btn btn-primary" onClick={loadDemo}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            data-interaction="studio.empty.load-demo"
+            onClick={loadDemo}
+          >
             Load a demo pattern
           </button>
         </div>

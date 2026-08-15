@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { coversInteractions } from '../test/coversInteractions'
 import { EntitlementsClient, type Entitlements } from './entitlementsClient'
 import { PricingPage } from './PricingPage'
 
@@ -47,6 +48,7 @@ describe('<PricingPage />', () => {
   })
 
   it('starts checkout and redirects when upgrading', async () => {
+    coversInteractions('pricing.upgrade')
     const redirect = vi.fn()
     const client = fakeClient()
     render(<PricingPage client={client} redirect={redirect} />)
@@ -59,6 +61,7 @@ describe('<PricingPage />', () => {
   })
 
   it('offers the customer portal to pro users', async () => {
+    coversInteractions('pricing.manage')
     const redirect = vi.fn()
     const client = fakeClient({ getEntitlements: vi.fn(async () => proEntitlements) })
     render(<PricingPage client={client} redirect={redirect} />)
@@ -99,6 +102,7 @@ describe('<PricingPage />', () => {
   })
 
   it('calls onClose from the back button', async () => {
+    coversInteractions('pricing.close')
     const onClose = vi.fn()
     render(<PricingPage client={fakeClient()} redirect={vi.fn()} onClose={onClose} />)
 

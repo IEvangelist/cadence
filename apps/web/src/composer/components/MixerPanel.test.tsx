@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { coversInteractions } from '../../test/coversInteractions'
 import { MixerPanel } from './MixerPanel'
 import type { MixerViewModel, MixerTrackView } from '../hooks/useMixer'
 
@@ -76,6 +77,12 @@ describe('MixerPanel', () => {
   })
 
   it('wires gain, pan, mute, and solo controls', () => {
+    coversInteractions(
+      'studio.mixer.track.gain',
+      'studio.mixer.track.pan',
+      'studio.mixer.track.mute',
+      'studio.mixer.track.solo',
+    )
     const mixer = makeViewModel()
     render(<MixerPanel mixer={mixer} />)
     fireEvent.change(leadStrip().getByRole('slider', { name: /Gain/ }), { target: { value: '3' } })
@@ -89,6 +96,12 @@ describe('MixerPanel', () => {
   })
 
   it('adds the selected insert and manages existing inserts', () => {
+    coversInteractions(
+      'studio.mixer.insert.select',
+      'studio.mixer.insert.add',
+      'studio.mixer.insert.toggle',
+      'studio.mixer.insert.remove',
+    )
     const mixer = makeViewModel()
     render(<MixerPanel mixer={mixer} />)
     const strip = leadStrip()
@@ -115,6 +128,11 @@ describe('MixerPanel', () => {
   })
 
   it('wires the master bus controls', () => {
+    coversInteractions(
+      'studio.mixer.master.gain',
+      'studio.mixer.master.limiter',
+      'studio.mixer.master.ceiling',
+    )
     const mixer = makeViewModel()
     render(<MixerPanel mixer={mixer} />)
     const master = masterStrip()

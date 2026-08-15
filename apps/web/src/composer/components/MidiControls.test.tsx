@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { coversInteractions } from '../../test/coversInteractions'
 import { MidiControls } from './MidiControls'
 import { type ComposerController, type ComposerMidi } from '../hooks/useComposer'
 
@@ -32,6 +33,7 @@ describe('<MidiControls />', () => {
   })
 
   it('lists connected devices and reports the current selection', () => {
+    coversInteractions('studio.midi.device')
     const selectInput = vi.fn()
     render(
       <MidiControls
@@ -64,6 +66,7 @@ describe('<MidiControls />', () => {
   })
 
   it('arms recording and reflects the recording indicator state', () => {
+    coversInteractions('studio.midi.arm')
     const toggleArmed = vi.fn()
     const { rerender } = render(
       <MidiControls controller={controllerWith({ armed: false, connected: true, toggleArmed })} />,
@@ -82,6 +85,7 @@ describe('<MidiControls />', () => {
   })
 
   it('toggles opt-in quantize', () => {
+    coversInteractions('studio.midi.quantize')
     const setQuantize = vi.fn()
     render(<MidiControls controller={controllerWith({ quantize: false, setQuantize })} />)
     fireEvent.click(screen.getByRole('checkbox', { name: /quantize/i }))

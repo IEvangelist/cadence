@@ -52,6 +52,7 @@ export function AssistantPanel({ assistant }: AssistantPanelProps) {
             <label key={item.value} className="assistant-radio">
               <input
                 type="radio"
+                data-interaction="studio.assistant.action.select"
                 name="assistant-action"
                 value={item.value}
                 checked={action === item.value}
@@ -70,6 +71,7 @@ export function AssistantPanel({ assistant }: AssistantPanelProps) {
           <span>Temperature</span>
           <input
             type="range"
+            data-interaction="studio.assistant.temperature"
             min={TEMPERATURE_RANGE.min}
             max={TEMPERATURE_RANGE.max}
             step={TEMPERATURE_RANGE.step}
@@ -84,6 +86,7 @@ export function AssistantPanel({ assistant }: AssistantPanelProps) {
           <span>Length (beats)</span>
           <input
             type="range"
+            data-interaction="studio.assistant.length"
             min={LENGTH_RANGE.min}
             max={LENGTH_RANGE.max}
             step={LENGTH_RANGE.step}
@@ -105,6 +108,7 @@ export function AssistantPanel({ assistant }: AssistantPanelProps) {
         <button
           type="button"
           className={isBusy ? 'btn' : 'btn btn-primary'}
+          data-interaction="studio.assistant.generate"
           onClick={isBusy ? cancel : () => void generate()}
           disabled={!isBusy && !canGenerate}
         >
@@ -123,13 +127,28 @@ export function AssistantPanel({ assistant }: AssistantPanelProps) {
             Preview is shown as highlighted notes in the piano roll.
           </p>
           <div className="assistant-actions">
-            <button type="button" className="btn btn-sm" onClick={audition}>
+            <button
+              type="button"
+              className="btn btn-sm"
+              data-interaction="studio.assistant.preview"
+              onClick={audition}
+            >
               Preview
             </button>
-            <button type="button" className="btn btn-sm btn-primary" onClick={accept}>
+            <button
+              type="button"
+              className="btn btn-sm btn-primary"
+              data-interaction="studio.assistant.accept"
+              onClick={accept}
+            >
               Accept
             </button>
-            <button type="button" className="btn btn-sm" onClick={discard}>
+            <button
+              type="button"
+              className="btn btn-sm"
+              data-interaction="studio.assistant.discard"
+              onClick={discard}
+            >
               Discard
             </button>
           </div>

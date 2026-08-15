@@ -51,7 +51,7 @@ function AppShell() {
     <>
       <main className={`app${showComposer ? ' app--composer' : ''}`}>
         {showComposer && (
-          <a className="skip-link" href="#composer-main">
+          <a className="skip-link" href="#composer-main" data-interaction="app.skip-to-composer">
             Skip to editor
           </a>
         )}
@@ -69,6 +69,7 @@ function AppShell() {
               <button
                 type="button"
                 className="app-nav-link"
+                data-interaction="app.nav.stems"
                 onClick={() => setView(showStems ? 'composer' : 'stems')}
                 aria-pressed={showStems}
               >
@@ -77,6 +78,7 @@ function AppShell() {
               <button
                 type="button"
                 className="app-nav-link"
+                data-interaction="app.nav.pricing"
                 onClick={() => setView(showPricing ? 'composer' : 'pricing')}
                 aria-pressed={showPricing}
               >
@@ -114,6 +116,7 @@ function AppShell() {
           <button
             type="button"
             className="app-footer__link"
+            data-interaction="app.nav.licenses"
             onClick={() => setView(showAcknowledgements ? 'composer' : 'acknowledgements')}
             aria-pressed={showAcknowledgements}
           >
