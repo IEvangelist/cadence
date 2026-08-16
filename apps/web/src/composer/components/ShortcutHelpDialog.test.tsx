@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { StudioCommandRegistry } from '../commands/studioCommands'
 import { ShortcutHelpDialog } from './ShortcutHelpDialog'
+import { coversInteractions } from '../../test/coversInteractions'
 
 const registry: StudioCommandRegistry = {
   commands: [
@@ -38,6 +39,11 @@ const registry: StudioCommandRegistry = {
 
 describe('<ShortcutHelpDialog />', () => {
   it('groups, searches, labels disabled commands, and explains conflicts', async () => {
+    coversInteractions(
+      'studio.shortcuts.dialog',
+      'studio.shortcuts.search',
+      'studio.shortcuts.close',
+    )
     const user = userEvent.setup()
     render(<ShortcutHelpDialog open registry={registry} onClose={vi.fn()} />)
     expect(screen.getByRole('heading', { name: 'Transport' })).toBeInTheDocument()

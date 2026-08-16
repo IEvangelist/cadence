@@ -5,6 +5,7 @@ import type { ComposerController } from '../hooks/useComposer'
 import { createNote, createTrack, type Project } from '../model/project'
 import { TrackRail } from './TrackRail'
 import { trackRequiresDeleteConfirmation } from './trackRailModel'
+import { coversInteractions } from '../../test/coversInteractions'
 
 function controller(project: Project): ComposerController {
   return {
@@ -51,6 +52,13 @@ function projectWithTracks(): Project {
 
 describe('<TrackRail />', () => {
   it('selects tracks, exposes the #157 trailing slot, and opens instrument discovery', async () => {
+    coversInteractions(
+      'studio.track.add',
+      'studio.track.select',
+      'studio.track.visibility-all',
+      'studio.track.visibility',
+      'studio.track.mute',
+    )
     const user = userEvent.setup()
     const value = controller(projectWithTracks())
     render(
@@ -66,6 +74,11 @@ describe('<TrackRail />', () => {
   })
 
   it('deletes an empty track immediately but confirms destructive track data', async () => {
+    coversInteractions(
+      'studio.track.delete',
+      'studio.track.delete.confirm',
+      'studio.track.delete.cancel',
+    )
     const user = userEvent.setup()
     const value = controller(projectWithTracks())
     render(<TrackRail controller={value} />)
@@ -80,6 +93,9 @@ describe('<TrackRail />', () => {
     )
     expect(value.removeTrack).not.toHaveBeenCalledWith('written')
 
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Delete Written' }))
     await user.click(screen.getByRole('button', { name: 'Delete track' }))
     expect(value.removeTrack).toHaveBeenCalledWith('written')
   })

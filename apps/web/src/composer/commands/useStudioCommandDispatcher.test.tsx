@@ -81,4 +81,49 @@ describe('useStudioCommandDispatcher', () => {
     act(() => button.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true })))
     expect(core.togglePlay).not.toHaveBeenCalled()
   })
+
+  it('suppresses every command from nested contenteditable descendants only', () => {
+    const core = actions()
+    const extension = plugins()
+    renderHook(() => useStudioCommandDispatcher(core, extension))
+
+    const editable = document.createElement('div')
+    editable.setAttribute('contenteditable', 'true')
+    const nested = document.createElement('span')
+    editable.append(nested)
+    document.body.append(editable)
+
+    act(() => {
+      nested.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }))
+      nested.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }),
+      )
+      nested.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'c',
+          ctrlKey: true,
+          altKey: true,
+          bubbles: true,
+        }),
+      )
+    })
+    expect(core.togglePlay).not.toHaveBeenCalled()
+    expect(core.undo).not.toHaveBeenCalled()
+    expect(extension.runCommand).not.toHaveBeenCalled()
+
+    const nonEditable = document.createElement('div')
+    nonEditable.setAttribute('contenteditable', 'false')
+    const allowedChild = document.createElement('span')
+    nonEditable.append(allowedChild)
+    document.body.append(nonEditable)
+    act(() => {
+      allowedChild.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }))
+    })
+    expect(core.togglePlay).toHaveBeenCalledOnce()
+
+    act(() => {
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }))
+    })
+    expect(core.togglePlay).toHaveBeenCalledTimes(2)
+  })
 })

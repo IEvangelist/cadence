@@ -131,6 +131,9 @@ describe('isStudioShortcutScopeSuppressed', () => {
     const editable = document.createElement('div')
     editable.setAttribute('contenteditable', 'true')
     expect(isStudioShortcutScopeSuppressed(editable)).toBe(true)
+    const editableChild = document.createElement('span')
+    editable.append(editableChild)
+    expect(isStudioShortcutScopeSuppressed(editableChild)).toBe(true)
 
     for (const attribute of ['role="dialog"', 'data-shortcut-recorder="active"']) {
       const host = document.createElement('div')
@@ -142,4 +145,3 @@ describe('isStudioShortcutScopeSuppressed', () => {
     }
   })
 })
-

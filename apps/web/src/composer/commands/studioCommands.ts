@@ -175,9 +175,7 @@ function closestElement(target: EventTarget | null): Element | null {
 export function isStudioShortcutScopeSuppressed(target: EventTarget | null): boolean {
   const element = closestElement(target)
   if (!element) return false
-  if (
-    element.matches('input, textarea, select, [contenteditable]:not([contenteditable="false"])')
-  ) {
+  if (element.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) {
     return true
   }
   return Boolean(

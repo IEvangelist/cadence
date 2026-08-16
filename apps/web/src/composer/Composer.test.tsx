@@ -191,4 +191,26 @@ describe('<Composer />', () => {
       button.className.includes('pr-note'),
     )).toHaveLength(0)
   })
+
+  it('exposes undo, redo, and searchable shortcut help from the Studio command source', () => {
+    coversInteractions(
+      'studio.history.undo',
+      'studio.history.redo',
+      'studio.shortcuts.open',
+    )
+    render(<Composer options={options()} />)
+    const grid = screen.getByRole('application', { name: /Note grid/ })
+    fireEvent.keyDown(grid, { key: 'Enter' })
+    const notes = () =>
+      screen.queryAllByRole('button').filter((button) => button.className.includes('pr-note'))
+    expect(notes()).toHaveLength(1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    expect(notes()).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Redo' }))
+    expect(notes()).toHaveLength(1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Shortcuts' }))
+    expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument()
+  })
 })
