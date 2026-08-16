@@ -393,16 +393,22 @@ function ComposerWorkspace({
     />
   )
 
-  const mobileCoach = (task: MobileTaskId) => (
-    <ContextualCoachMark
-      mark={mobileLayout ? nextCoachMark(task, seenCoachMarks) : null}
-      onDismiss={(id) =>
-        setSeenCoachMarks((seen) =>
-          markCoachMarkSeen(coachStorage, seen, id),
-        )
-      }
-    />
-  )
+  const mobileCoach = (task: MobileTaskId) => {
+    const visible =
+      task === 'notes'
+        ? mobileState.activeTask === 'notes' && mobileState.openSheet === null
+        : mobileState.openSheet === task
+    return (
+      <ContextualCoachMark
+        mark={mobileLayout && visible ? nextCoachMark(task, seenCoachMarks) : null}
+        onDismiss={(id) =>
+          setSeenCoachMarks((seen) =>
+            markCoachMarkSeen(coachStorage, seen, id),
+          )
+        }
+      />
+    )
+  }
 
   const writeSurface = (
     <div className="studio-write-surface">
