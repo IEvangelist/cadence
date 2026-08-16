@@ -88,6 +88,7 @@ export function ProjectToolbar({
   const {
     project,
     setProjectName,
+    stopHistoryCapture,
     saveProject,
     exportMidi,
     exportWav,

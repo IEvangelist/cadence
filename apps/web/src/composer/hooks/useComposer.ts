@@ -702,13 +702,6 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   const [engine] = useState<AudioEngine>(() => (options.createEngine ?? createAudioEngine)())
   const audioReady = useMemo(() => engine.constructor.name !== 'SilentAudioEngine', [engine])
 
-  // Keep a ref to the latest project so event handlers read fresh data without
-  // widening their dependency lists. The ref is written in an effect (not during
-  // render) to satisfy the React Compiler ref rules.
-  const projectRef = useRef(state.project)
-  useEffect(() => {
-    projectRef.current = state.project
-  }, [state.project])
   const announce = useCallback((text: string, tone: ProjectActionMessage['tone'] = 'info') => {
     setStatus(text)
     actionSequenceRef.current += 1
@@ -1346,6 +1339,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     },
     [
       announce,
+      dispatch,
       endPersistenceTransition,
       refreshList,
       resetPersistenceForProject,
