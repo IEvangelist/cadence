@@ -103,4 +103,3 @@ describe('note gesture state machine', () => {
     expect(usesDirectGridAdd('pen')).toBe(false)
   })
 })
-

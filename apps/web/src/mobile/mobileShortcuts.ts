@@ -9,4 +9,3 @@ export const ATTACHED_KEYBOARD_SHORTCUTS: readonly MobileShortcut[] = [
   { keys: 'Shift + Left/Right', action: 'Resize the selected note' },
   { keys: 'Delete', action: 'Delete the selected note' },
 ] as const
-

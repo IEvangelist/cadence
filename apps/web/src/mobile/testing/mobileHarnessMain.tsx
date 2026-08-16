@@ -12,4 +12,3 @@ createRoot(document.getElementById('root')!).render(
     <MobileNotesHarness />
   </StrictMode>,
 )
-

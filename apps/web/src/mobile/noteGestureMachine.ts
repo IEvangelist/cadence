@@ -198,4 +198,3 @@ export function cancelNoteGesture(
 export function usesDirectGridAdd(pointerType: string): boolean {
   return pointerType === 'mouse'
 }
-

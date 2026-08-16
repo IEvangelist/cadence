@@ -115,4 +115,3 @@ export function nextCoachMark(
 ): CoachMarkDefinition | null {
   return COACH_MARKS.find((mark) => mark.task === task && !seen.has(mark.id)) ?? null
 }
-
