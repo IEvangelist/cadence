@@ -292,6 +292,31 @@
   grid-template-rows: minmax(0, 1fr) auto;
 }
 
+@media (max-width: 40rem), (pointer: coarse) {
+  .composer-editor-stack {
+    flex: 0 0 auto;
+    min-height: max(100%, 46rem);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .mobile-note-header {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: grid;
+    gap: var(--space-2);
+    min-width: 0;
+    padding-bottom: var(--space-2);
+    background: var(--color-bg);
+  }
+
+  .mobile-studio .studio-write-surface {
+    height: auto;
+    min-height: 100%;
+  }
+
+}
+
 .editor-detail-lane__status {
   margin: 0;
   color: var(--color-text-muted);

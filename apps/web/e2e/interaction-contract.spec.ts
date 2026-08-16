@@ -568,6 +568,41 @@ test.describe('production interaction contract', () => {
     await assertInteractionContract(authenticatedPage, 'stems pro results', observed)
     await authenticatedContext.close()
 
+    const mobileContext = await browser.newContext({
+      baseURL: origin,
+      storageState: returningStorage,
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+      deviceScaleFactor: 1,
+      reducedMotion: 'reduce',
+    })
+    const mobilePage = await mobileContext.newPage()
+    await mobilePage.addInitScript(() => {
+      ;(window as unknown as { __CADENCE_AI_MOCK__: boolean }).__CADENCE_AI_MOCK__ = true
+    })
+    await mobilePage.route('**/api/**', (route) => mockApi(route, true))
+    await mobilePage.goto('/')
+    await expect(mobilePage.locator('[data-mobile-studio]')).toBeVisible()
+    await assertInteractionContract(mobilePage, 'mobile Studio', observed)
+
+    const mobileNote = mobilePage.locator('[data-interaction="studio.piano-roll.note"]').first()
+    await mobileNote.click()
+    await mobilePage.getByRole('button', { name: 'Edit selected note' }).click()
+    await expect(mobilePage.getByTestId('selected-note-sheet')).toBeVisible()
+    await assertInteractionContract(mobilePage, 'mobile selected note', observed)
+    await mobilePage.getByRole('button', { name: 'Close Selected note' }).click()
+
+    await mobilePage.getByRole('button', { name: /Help and keyboard shortcuts/ }).click()
+    await expect(mobilePage.getByTestId('mobile-help-sheet')).toBeVisible()
+    await assertInteractionContract(mobilePage, 'mobile help', observed)
+    await mobilePage.getByRole('button', { name: 'Close Help' }).click()
+
+    await mobilePage.getByRole('button', { name: /^Project:/ }).click()
+    await expect(mobilePage.getByTestId('mobile-project-sheet')).toBeVisible()
+    await assertInteractionContract(mobilePage, 'mobile project task', observed)
+    await mobileContext.close()
+
     for (const retryCase of [
       { path: '/pricing', failedApi: '/api/entitlements', state: 'pricing load error' },
       { path: '/profile', failedApi: '/api/profile', state: 'profile load error' },
@@ -626,6 +661,7 @@ test.describe('production interaction contract', () => {
       storageState: { cookies: [], origins: [] },
     })
     const firstRunPage = await firstRunContext.newPage()
+    await firstRunPage.addInitScript(() => localStorage.clear())
     await firstRunPage.route('**/api/**', (route) => mockApi(route, false))
     await firstRunPage.goto('/')
     await expect(firstRunPage.getByRole('heading', { name: 'Start a project' })).toBeVisible()

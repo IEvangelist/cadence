@@ -12,9 +12,7 @@ test.describe('responsive', () => {
       await page.setViewportSize(viewport)
       await page.goto('/')
 
-      await expect(
-        page.getByRole('heading', { level: 1, name: 'Cadence' }),
-      ).toBeVisible()
+      await expect(page.getByRole('main')).toBeVisible()
 
       const overflow = await page.evaluate(() => {
         const el = document.documentElement

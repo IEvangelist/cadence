@@ -1,4 +1,12 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react'
 import { appName, tagline } from '../appInfo'
 import { type UseComposerOptions, useComposer } from './hooks/useComposer'
 import type { ComposerController } from './hooks/useComposer'
@@ -34,6 +42,25 @@ import { CollaborationStatusContext } from './contract/collaborationContext'
 import { selectCollaborationStatus } from './contract/collaborationSelector'
 import { StudioNavigationGuard } from '../app/StudioNavigationGuard'
 import { OnboardingTour } from '../onboarding/OnboardingTour'
+import { ContextualCoachMark } from '../mobile/ContextualCoachMark'
+import { MobileHelpSheet } from '../mobile/MobileHelpSheet'
+import { MobileNoteControls } from '../mobile/MobileNoteControls'
+import { MobileTaskNavigator } from '../mobile/MobileTaskNavigator'
+import { MobileTaskSheets } from '../mobile/MobileTaskSheets'
+import { SelectedNoteEditorSheet } from '../mobile/SelectedNoteEditorSheet'
+import {
+  createDefaultCoachMarkStorage,
+  markCoachMarkSeen,
+  nextCoachMark,
+  readSeenCoachMarks,
+  type CoachMarkId,
+} from '../mobile/coachMarks'
+import {
+  initialMobileTaskState,
+  mobileTaskReducer,
+  type MobileTaskId,
+} from '../mobile/mobileTaskModel'
+import { useMobileStudioLayout } from '../mobile/useMobileStudioLayout'
 import {
   StudioCommandProvider,
   StudioFrame,
@@ -187,6 +214,15 @@ function ComposerWorkspace({
   const shortcutsTriggerRef = useRef<HTMLButtonElement>(null)
   const shortcutsReturnFocusRef = useRef<HTMLElement | null>(null)
   const [detailLane, setDetailLane] = useState('velocity')
+  const mobileLayout = useMobileStudioLayout()
+  const [mobileState, dispatchMobile] = useReducer(
+    mobileTaskReducer,
+    initialMobileTaskState,
+  )
+  const coachStorage = useMemo(() => createDefaultCoachMarkStorage(), [])
+  const [seenCoachMarks, setSeenCoachMarks] = useState<Set<CoachMarkId>>(() =>
+    readSeenCoachMarks(coachStorage),
+  )
   const openShortcuts = useCallback((): void => {
     const activeElement =
       document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -297,6 +333,19 @@ function ComposerWorkspace({
     role: collab?.role ?? 'owner',
     canShare,
   })
+  const collaborationControls = (
+    <>
+      {collaboration.active && (
+        <PresenceBar
+          presence={collaboration.presence}
+          connected={collaboration.connected}
+          canWrite={collaboration.canWrite}
+          resolveTrackName={(id) => project.tracks.find((t) => t.id === id)?.name}
+        />
+      )}
+      {canShare && <ShareProjectButton projectId={project.id} />}
+    </>
+  )
 
   const inspectorPanels = [
     {
@@ -344,6 +393,23 @@ function ComposerWorkspace({
     />
   )
 
+  const mobileCoach = (task: MobileTaskId) => {
+    const visible =
+      task === 'notes'
+        ? mobileState.activeTask === 'notes' && mobileState.openSheet === null
+        : mobileState.openSheet === task
+    return (
+      <ContextualCoachMark
+        mark={mobileLayout && visible ? nextCoachMark(task, seenCoachMarks) : null}
+        onDismiss={(id) =>
+          setSeenCoachMarks((seen) =>
+            markCoachMarkSeen(coachStorage, seen, id),
+          )
+        }
+      />
+    )
+  }
+
   const writeSurface = (
     <div className="studio-write-surface">
       {isEmpty && (
@@ -364,7 +430,26 @@ function ComposerWorkspace({
       )}
       <div className="composer-editor-commandbar">{editControls}</div>
       <div className="composer-editor-stack">
-        <PianoRoll controller={controller} previewNotes={assistant.previewNotes} />
+        {mobileLayout ? (
+          <div className="mobile-note-header">
+            <MobileNoteControls
+              mode={mobileState.noteMode}
+              hasSelection={Boolean(selectedNote)}
+              onModeChange={(mode) => dispatchMobile({ type: 'set-note-mode', mode })}
+              onEditSelection={() => {
+                if (!selectedNote) return
+                dispatchMobile({ type: 'select-note', noteId: selectedNote.id })
+                dispatchMobile({ type: 'open-selected-note' })
+              }}
+            />
+            {mobileCoach('notes')}
+          </div>
+        ) : null}
+        <PianoRoll
+          controller={controller}
+          previewNotes={assistant.previewNotes}
+          mobileNoteMode={mobileLayout ? mobileState.noteMode : undefined}
+        />
         <EditorDetailLane
           activeId={detailLane}
           onChange={setDetailLane}
@@ -398,6 +483,160 @@ function ComposerWorkspace({
     </div>
   )
 
+  const mobileProject = (
+    <div className="mobile-studio__stack">
+      {mobileCoach('project')}
+      <ProjectToolbar
+        controller={controller}
+        onNewProject={() => setProjectBrowserOpen(true)}
+        onOpenProject={() => setProjectBrowserOpen(true)}
+      />
+      {collaborationControls}
+    </div>
+  )
+  const mobileTracks = (
+    <div className="mobile-studio__stack">
+      {mobileCoach('tracks')}
+      {compactRail}
+      <TrackInspector controller={controller} />
+    </div>
+  )
+  const mobileTools = (
+    <div className="mobile-studio__stack">
+      {mobileCoach('tools')}
+      <div className="mobile-studio__view-switch" role="group" aria-label="Workspace view">
+        <button
+          type="button"
+          className="mobile-secondary-button"
+          data-interaction="studio.view.write"
+          aria-pressed={view === 'write'}
+          onClick={() => setView('write')}
+        >
+          Write
+        </button>
+        <button
+          type="button"
+          className="mobile-secondary-button"
+          data-interaction="studio.view.mix"
+          aria-pressed={view === 'mix'}
+          onClick={() => setView('mix')}
+        >
+          Mix
+        </button>
+      </div>
+      <AiInspector assistant={assistant} studio={aiStudio} />
+      <MidiControls controller={controller} />
+      <PluginsPanel plugins={plugins} />
+      <PluginToolHost panels={plugins.visiblePanels} context={plugins.panelContext} />
+      {utilityControls ? (
+        <div className="mobile-studio__utilities">{utilityControls}</div>
+      ) : null}
+    </div>
+  )
+
+  const openMobileTask = (task: MobileTaskId) => {
+    if (task === 'notes') {
+      setView('write')
+      dispatchMobile({ type: 'open-task', task })
+      dispatchMobile({ type: 'close-sheet' })
+      return
+    }
+    dispatchMobile({ type: 'open-task', task })
+  }
+
+  const workspace = mobileLayout ? (
+    <section
+      className="mobile-studio"
+      id="composer-main"
+      aria-label="Composer"
+      tabIndex={-1}
+      data-mobile-studio
+    >
+      <header className="mobile-studio__transport" aria-label="Persistent transport">
+        <TransportBar controller={controller} />
+      </header>
+      <div className="mobile-studio__workspace">
+        {view === 'mix' ? <MixWorkspace mixer={mixer} /> : writeSurface}
+      </div>
+      <MobileTaskNavigator
+        state={mobileState}
+        onOpenTask={openMobileTask}
+        onOpenHelp={() => dispatchMobile({ type: 'open-help' })}
+      />
+      <MobileTaskSheets
+        openSheet={mobileState.openSheet}
+        onClose={() => dispatchMobile({ type: 'close-sheet' })}
+        content={{
+          project: mobileProject,
+          tracks: mobileTracks,
+          notes: writeSurface,
+          tools: mobileTools,
+        }}
+      />
+      <SelectedNoteEditorSheet
+        open={mobileState.openSheet === 'selected-note'}
+        note={selectedNote ?? null}
+        onClose={() => dispatchMobile({ type: 'close-sheet' })}
+        onChange={(changes) => {
+          if (selectedNote) {
+            controller.updateNote(
+              controller.selectedTrackId,
+              selectedNote.id,
+              changes,
+            )
+          }
+        }}
+        onDelete={() => {
+          if (selectedNote) {
+            controller.removeNote(controller.selectedTrackId, selectedNote.id)
+            dispatchMobile({ type: 'clear-note-selection' })
+          }
+        }}
+      />
+      <MobileHelpSheet
+        open={mobileState.openSheet === 'help'}
+        onClose={() => dispatchMobile({ type: 'close-sheet' })}
+      />
+    </section>
+  ) : (
+    <StudioFrame
+      projectControls={
+        <div className="studio-project-cluster">
+          <StudioIdentity compact />
+          <ProjectToolbar
+            controller={controller}
+            onNewProject={() => setProjectBrowserOpen(true)}
+            onOpenProject={() => setProjectBrowserOpen(true)}
+          />
+        </div>
+      }
+      transportControls={
+        <div className="studio-persistent-transport">
+          <TransportBar controller={controller} />
+          <MidiControls controller={controller} />
+        </div>
+      }
+      rail={compactRail}
+      editor={writeSurface}
+      mix={<MixWorkspace mixer={mixer} />}
+      inspector={
+        <StudioInspectorPanels
+          panels={inspectorPanels}
+          activePanel={activeInspector}
+          onPanelChange={setActiveInspector}
+        />
+      }
+      collaborationControls={collaborationControls}
+      utilityControls={utilityControls}
+      view={view}
+      onViewChange={setView}
+      railOpen={!panels.railCollapsed}
+      onRailToggle={panels.toggleRail}
+      inspectorOpen={inspectorOpen}
+      onInspectorToggle={() => setInspectorOpen((open) => !open)}
+    />
+  )
+
   return (
     <CollaborationStatusContext.Provider value={collaborationStatus}>
     {guardNavigation ? <StudioNavigationGuard controller={controller} /> : null}
@@ -405,54 +644,7 @@ function ComposerWorkspace({
       isPlaying={controller.transportState === 'playing'}
       togglePlay={controller.togglePlay}
     >
-      <StudioFrame
-        projectControls={
-          <div className="studio-project-cluster">
-            <StudioIdentity compact />
-            <ProjectToolbar
-              controller={controller}
-              onNewProject={() => setProjectBrowserOpen(true)}
-              onOpenProject={() => setProjectBrowserOpen(true)}
-            />
-          </div>
-        }
-        transportControls={
-          <div className="studio-persistent-transport">
-            <TransportBar controller={controller} />
-            <MidiControls controller={controller} />
-          </div>
-        }
-        rail={compactRail}
-        editor={writeSurface}
-        mix={<MixWorkspace mixer={mixer} />}
-        inspector={
-          <StudioInspectorPanels
-            panels={inspectorPanels}
-            activePanel={activeInspector}
-            onPanelChange={setActiveInspector}
-          />
-        }
-        collaborationControls={
-          <>
-            {collaboration.active && (
-              <PresenceBar
-                presence={collaboration.presence}
-                connected={collaboration.connected}
-                canWrite={collaboration.canWrite}
-                resolveTrackName={(id) => project.tracks.find((t) => t.id === id)?.name}
-              />
-            )}
-            {canShare && <ShareProjectButton projectId={project.id} />}
-          </>
-        }
-        utilityControls={utilityControls}
-        view={view}
-        onViewChange={setView}
-        railOpen={!panels.railCollapsed}
-        onRailToggle={panels.toggleRail}
-        inspectorOpen={inspectorOpen}
-        onInspectorToggle={() => setInspectorOpen((open) => !open)}
-      />
+      {workspace}
       <ShortcutHelpDialog
         open={shortcutsOpen}
         registry={commands}
@@ -469,7 +661,7 @@ function ComposerWorkspace({
       controller={controller}
       onReplaced={() => setProjectBrowserOpen(false)}
     />
-    <OnboardingTour />
+    {!mobileLayout ? <OnboardingTour /> : null}
     </CollaborationStatusContext.Provider>
   )
 }
