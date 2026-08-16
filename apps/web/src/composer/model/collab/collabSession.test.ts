@@ -303,6 +303,11 @@ describe('createCollabSession — collaborative undo/redo (#156)', () => {
     expect(a.project.tracks[0].notes.find((note) => note.id === 'n1')?.velocity).toBe(0.8)
     expect(idsOf(a)).toContain('remote')
     expect(idsOf(b)).toContain('remote')
+
+    a.session.redo()
+    expect(a.project.tracks[0].notes.find((note) => note.id === 'n1')?.velocity).toBe(0.2)
+    expect(idsOf(a)).toContain('remote')
+    expect(idsOf(b)).toContain('remote')
   })
 
   it("remote-only edits never populate a local client's undo stack", () => {

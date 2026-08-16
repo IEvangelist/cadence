@@ -196,6 +196,7 @@ function ComposerWorkspace({
       applyRemoteProject: controller.applyRemoteProject,
       historyCaptureGroup: controller.historyCaptureGroup,
       historyCaptureBoundary: controller.historyCaptureBoundary,
+      subscribeProjectTransitions: controller.subscribeProjectTransitions,
     },
     collab,
     collabProviderFactory,
