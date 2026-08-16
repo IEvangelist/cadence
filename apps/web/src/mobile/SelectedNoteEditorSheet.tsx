@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import type { Note } from '../composer/model/project'
 import { FullScreenSheet } from './FullScreenSheet'
 import './mobile.css'
@@ -31,11 +32,12 @@ function NoteField({
   step,
   onChange,
 }: NoteFieldProps) {
+  const inputId = useId()
   const commit = (value: number) => onChange(clamp(value, min, max))
 
   return (
-    <label className="mobile-note-field">
-      <span>{label}</span>
+    <div className="mobile-note-field">
+      <label htmlFor={inputId}>{label}</label>
       <div className="mobile-note-field__controls">
         <button
           type="button"
@@ -46,6 +48,7 @@ function NoteField({
           -
         </button>
         <input
+          id={inputId}
           type="number"
           data-interaction="mobile.note-field.value"
           aria-label={label}
@@ -67,7 +70,7 @@ function NoteField({
           +
         </button>
       </div>
-    </label>
+    </div>
   )
 }
 

@@ -133,6 +133,11 @@ describe('mobile components', () => {
       />,
     )
 
+    const pitchInput = screen.getByRole('spinbutton', { name: 'Pitch' })
+    await user.click(screen.getByText('Pitch'))
+    expect(pitchInput).toHaveFocus()
+    expect(onChange).not.toHaveBeenCalled()
+
     await user.click(screen.getByRole('button', { name: 'Increase Pitch' }))
     await user.click(screen.getByRole('button', { name: 'Increase Start' }))
     await user.click(screen.getByRole('button', { name: 'Increase Duration' }))
