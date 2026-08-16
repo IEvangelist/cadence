@@ -53,9 +53,9 @@ test.describe('composer', () => {
     await page.keyboard.press('Tab')
     await expect(search).toBeFocused()
     await expect(page.locator('body')).toHaveCSS('pointer-events', 'none')
-    const addTrack = page.locator('[data-interaction="studio.track.add"]')
+    const backgroundAddTrack = page.locator('[data-interaction="studio.track.add"]')
     expect(
-      await addTrack.evaluate((control) => {
+      await backgroundAddTrack.evaluate((control) => {
         const rect = control.getBoundingClientRect()
         const hit = document.elementFromPoint(
           rect.left + rect.width / 2,
@@ -74,6 +74,13 @@ test.describe('composer', () => {
     await expect(closeButton).toBeVisible()
     await closeButton.click()
     await expect(trigger).toBeFocused()
+
+    const keyboardInvoker = page.locator('[data-interaction="studio.track.add"]')
+    await keyboardInvoker.focus()
+    await page.keyboard.press('?')
+    await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(keyboardInvoker).toBeFocused()
   })
 
   test('create a note, play, export MIDI, and persist across reload', async ({ page }) => {

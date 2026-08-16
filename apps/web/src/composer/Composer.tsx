@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { appName, tagline } from '../appInfo'
 import { type UseComposerOptions, useComposer } from './hooks/useComposer'
 import type { ComposerController } from './hooks/useComposer'
@@ -185,7 +185,15 @@ function ComposerWorkspace({
   const panels = usePanelLayout()
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const shortcutsTriggerRef = useRef<HTMLButtonElement>(null)
+  const shortcutsReturnFocusRef = useRef<HTMLElement | null>(null)
   const [detailLane, setDetailLane] = useState('velocity')
+  const openShortcuts = useCallback((): void => {
+    shortcutsReturnFocusRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : shortcutsTriggerRef.current
+    setShortcutsOpen(true)
+  }, [])
   const { project, audioReady, loadDemo } = controller
   const isEmpty = project.tracks.every((track) => track.notes.length === 0)
 
@@ -215,7 +223,7 @@ function ComposerWorkspace({
       canRedo: history.canRedo,
       undo: history.undo,
       redo: history.redo,
-      openHelp: () => setShortcutsOpen(true),
+      openHelp: openShortcuts,
     }),
     [
       controller.togglePlay,
@@ -224,6 +232,7 @@ function ComposerWorkspace({
       history.canUndo,
       history.redo,
       history.undo,
+      openShortcuts,
     ],
   )
   const commands = useStudioCommandDispatcher(commandActions, plugins)
@@ -259,7 +268,7 @@ function ComposerWorkspace({
         className="btn btn-sm"
         data-interaction="studio.shortcuts.open"
         aria-keyshortcuts="?"
-        onClick={() => setShortcutsOpen(true)}
+        onClick={openShortcuts}
         aria-label="Shortcuts"
         title="Keyboard shortcuts"
       >
@@ -426,7 +435,7 @@ function ComposerWorkspace({
         open={shortcutsOpen}
         registry={commands}
         onClose={() => setShortcutsOpen(false)}
-        returnFocusRef={shortcutsTriggerRef}
+        returnFocusRef={shortcutsReturnFocusRef}
       />
     </StudioCommandProvider>
     <ProjectBrowser

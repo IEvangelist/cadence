@@ -51,6 +51,14 @@ const allowlistedInteractions: readonly AllowlistedInteraction[] = [
     reason: 'The identified credentials submit button owns this non-focusable form submission.',
   },
   {
+    key: 'composer/components/ProjectBrowser.tsx::DialogSurface::project-dialog__content',
+    reason: 'The project browser dialog is represented by its identified close and project-flow controls.',
+  },
+  {
+    key: 'composer/components/ProjectReplacementDialog.tsx::DialogSurface::replacement-dialog__content',
+    reason: 'The replacement alert dialog is represented by its identified retry, cancel, and discard controls.',
+  },
+  {
     key: 'auth/AuthBar.tsx::form::auth-form auth-magic',
     reason: 'The identified magic-link submit button owns this non-focusable form submission.',
   },
@@ -162,7 +170,11 @@ function allowlistKey(
   file: string,
   node: JsxOpeningElement,
 ): string {
-  return `${file}::${node.name.name}::${stringAttribute(node, 'className') ?? ''}`
+  return `${file}::${node.name.name}::${
+    stringAttribute(node, 'className') ??
+    stringAttribute(node, 'contentClassName') ??
+    ''
+  }`
 }
 
 function scanSource() {
@@ -190,8 +202,7 @@ function scanSource() {
       const isContractSurface =
         isOpeningElement(value) &&
         (isIntrinsic(value.name.name) ||
-          (value.name.name === 'DialogSurface' &&
-            stringAttribute(value, 'data-interaction') !== undefined))
+          value.name.name === 'DialogSurface')
       if (
         isContractSurface &&
         isOpeningElement(value) &&
