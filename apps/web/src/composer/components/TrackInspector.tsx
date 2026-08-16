@@ -48,6 +48,7 @@ export function TrackInspector({
         data-interaction="studio.track.name"
         value={track.name}
         onChange={(event) => controller.renameTrack(track.id, event.target.value)}
+        onBlur={controller.stopHistoryCapture}
       />
 
       <div className="track-inspector__instrument">
@@ -79,4 +80,3 @@ export function TrackInspector({
     </section>
   )
 }
-

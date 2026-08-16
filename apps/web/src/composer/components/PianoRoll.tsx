@@ -97,6 +97,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
     transportState,
     revealRequest,
     visibleTrackIds,
+    stopHistoryCapture,
   } = controller
 
   const track =
@@ -185,9 +186,9 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
   // Keep live values reachable from the (mount-installed) window pointer
   // handlers without re-installing them on every render. The ref is written in
   // an effect, never during render, to satisfy the React Compiler rules.
-  const latest = useRef({ track, snap: snapStep, updateNote, layout })
+  const latest = useRef({ track, snap: snapStep, updateNote, layout, stopHistoryCapture })
   useEffect(() => {
-    latest.current = { track, snap: snapStep, updateNote, layout }
+    latest.current = { track, snap: snapStep, updateNote, layout, stopHistoryCapture }
   })
 
   useEffect(() => {
@@ -231,6 +232,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
       }
     }
     const handleUp = () => {
+      if (gestureRef.current) latest.current.stopHistoryCapture()
       gestureRef.current = null
     }
     window.addEventListener('pointermove', handleMove)
@@ -303,6 +305,7 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
   }, [revealRequest.token])
 
   const beginGesture = (gesture: Gesture): void => {
+    stopHistoryCapture()
     gestureRef.current = gesture
   }
 
@@ -477,7 +480,6 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
         setCaret((c) => ({ ...c, beat: Math.max(0, c.beat - snapStep) }))
         break
       case 'Enter':
-      case ' ':
         event.preventDefault()
         addNoteAt(track.id, caret.pitch, caret.beat, Math.max(snapStep, 1))
         previewNote(caret.pitch)

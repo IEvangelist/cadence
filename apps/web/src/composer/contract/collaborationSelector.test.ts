@@ -45,6 +45,7 @@ describe('collaboration selector (post-#9 binding)', () => {
       canRedo: false,
       undo: () => {},
       redo: () => {},
+      stopCapturing: () => {},
       presence: [
         { clientId: 1, user: { id: 'u1', name: 'Ripley', color: '#f00' }, cursor: null, isSelf: true },
         { clientId: 2, user: { id: 'u2', name: 'Newt', color: '#0f0' }, cursor: null, isSelf: false },
@@ -70,6 +71,7 @@ describe('collaboration selector (post-#9 binding)', () => {
       canRedo: false,
       undo: () => {},
       redo: () => {},
+      stopCapturing: () => {},
       presence: [],
     }
 

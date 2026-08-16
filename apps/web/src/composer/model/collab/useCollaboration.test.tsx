@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as Y from 'yjs'
 import { Awareness } from 'y-protocols/awareness'
 import { createEmptyProject, createNote, createTrack, type Project } from './../project'
-import { reconcileDoc } from './crdt'
+import { readProject, reconcileDoc } from './crdt'
 import {
   type CollabBinding,
   type CollabConfig,
@@ -351,5 +351,75 @@ describe('useCollaboration — collaborative undo/redo (#156)', () => {
     )
     expect(result.current.canUndo).toBe(false)
     expect(result.current.canRedo).toBe(false)
+  })
+
+  it('coalesces one gesture while keeping adjacent discrete commands separate', () => {
+    const project = seedProject()
+    const binding = makeBinding(project)
+    const { result, rerender } = renderHook(
+      (props: CollabBinding) => useCollaboration(props, config, factory),
+      {
+        initialProps: {
+          ...binding,
+          historyCaptureGroup: null,
+          historyCaptureBoundary: 0,
+        } as CollabBinding,
+      },
+    )
+
+    const added = structuredClone(project)
+    added.tracks[0].notes.push(createNote({ pitch: 64, start: 0 }, 'drag'))
+    act(() =>
+      rerender({
+        ...binding,
+        project: added,
+        historyCaptureGroup: null,
+        historyCaptureBoundary: 0,
+      }),
+    )
+
+    let dragged = added
+    for (const start of [0.1, 0.2, 0.3]) {
+      dragged = structuredClone(dragged)
+      dragged.tracks[0].notes.find((note) => note.id === 'drag')!.start = start
+      act(() =>
+        rerender({
+          ...binding,
+          project: dragged,
+          historyCaptureGroup: 'update-note:track_a:drag',
+          historyCaptureBoundary: 0,
+        }),
+      )
+    }
+    act(() =>
+      rerender({
+        ...binding,
+        project: dragged,
+        historyCaptureGroup: null,
+        historyCaptureBoundary: 1,
+      }),
+    )
+
+    const discrete = structuredClone(dragged)
+    discrete.tracks[0].notes.push(createNote({ pitch: 67, start: 2 }, 'after'))
+    act(() =>
+      rerender({
+        ...binding,
+        project: discrete,
+        historyCaptureGroup: null,
+        historyCaptureBoundary: 1,
+      }),
+    )
+
+    act(() => result.current.undo())
+    expect(readProject(providers[0].doc).tracks[0].notes.map((note) => note.id))
+      .not.toContain('after')
+    act(() => result.current.undo())
+    expect(
+      readProject(providers[0].doc).tracks[0].notes.find((note) => note.id === 'drag')?.start,
+    ).toBe(0)
+    act(() => result.current.undo())
+    expect(readProject(providers[0].doc).tracks[0].notes.map((note) => note.id))
+      .not.toContain('drag')
   })
 })

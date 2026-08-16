@@ -210,6 +210,12 @@ export interface ComposerController {
    * {@link ComposerPublicApi}.
    */
   setHistoryEnabled: (enabled: boolean) => void
+  /** Group of the latest document mutation for collaborative capture coalescing. */
+  historyCaptureGroup: string | null
+  /** Monotonic explicit capture boundary (pointer-up/field commit/project switch). */
+  historyCaptureBoundary: number
+  /** Finish the current local/collaborative gesture capture group. */
+  stopHistoryCapture: () => void
 
   play: () => void
   pause: () => void
@@ -388,6 +394,10 @@ function historyGroupKey(action: ComposerAction): string | undefined {
       return 'set-tempo'
     case 'set-loop':
       return 'set-loop'
+    case 'rename-track':
+      return `rename-track:${action.trackId}`
+    case 'set-project-name':
+      return 'set-project-name'
     default:
       return undefined
   }
@@ -483,6 +493,10 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   // two flags instead of the render body computing them itself.
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
+  const [historyCapture, setHistoryCapture] = useState<{
+    group: string | null
+    boundary: number
+  }>({ group: null, boundary: 0 })
   const syncHistoryFlags = useCallback(() => {
     setCanUndo(historyRef.current!.canUndo())
     setCanRedo(historyRef.current!.canRedo())
@@ -494,12 +508,21 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     } else if (HISTORY_RESET_ACTIONS.has(action.type)) {
       historyRef.current!.clear()
       pendingHistoryRef.current = null
+      setHistoryCapture((current) => ({
+        group: null,
+        boundary: current.boundary + 1,
+      }))
       syncHistoryFlags()
     } else if (!HISTORY_IGNORED_ACTIONS.has(action.type)) {
+      const groupKey = historyGroupKey(action)
       pendingHistoryRef.current = {
         before: projectRef.current,
-        groupKey: historyGroupKey(action),
+        groupKey,
       }
+      setHistoryCapture((current) => ({
+        ...current,
+        group: groupKey ?? null,
+      }))
     }
     rawDispatch(action)
   }, [syncHistoryFlags])
@@ -536,6 +559,13 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     },
     [syncHistoryFlags],
   )
+  const stopHistoryCapture = useCallback(() => {
+    historyRef.current!.stopCapturing()
+    setHistoryCapture((current) => ({
+      group: null,
+      boundary: current.boundary + 1,
+    }))
+  }, [])
   const [snap, setSnap] = useState(0.25)
   const [transportState, setTransportState] = useState<TransportState>('stopped')
   const [positionBeats, setPositionBeats] = useState(0)
@@ -1666,6 +1696,9 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     undo,
     redo,
     setHistoryEnabled,
+    historyCaptureGroup: historyCapture.group,
+    historyCaptureBoundary: historyCapture.boundary,
+    stopHistoryCapture,
     play,
     pause,
     stop,
