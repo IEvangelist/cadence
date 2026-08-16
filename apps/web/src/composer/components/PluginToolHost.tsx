@@ -26,13 +26,22 @@ export function PluginToolHost({ panels, context }: PluginToolHostProps) {
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const activePanel =
     panels.find((panel) => panel.id === requestedPanelId) ?? panels[0] ?? null
+  const previousActivePanelId = useRef<string | null>(activePanel?.id ?? null)
 
   useEffect(() => {
-    if (!requestedPanelId || panels.some((panel) => panel.id === requestedPanelId)) return
+    const previousPanelId = previousActivePanelId.current
     const fallbackPanel = panels[0]
-    if (!fallbackPanel) return
-    tabRefs.current[fallbackPanel.id]?.focus()
-  }, [panels, requestedPanelId])
+    if (
+      previousPanelId &&
+      previousPanelId !== activePanel?.id &&
+      !panels.some((panel) => panel.id === previousPanelId) &&
+      fallbackPanel
+    ) {
+      setRequestedPanelId(fallbackPanel.id)
+      tabRefs.current[fallbackPanel.id]?.focus()
+    }
+    previousActivePanelId.current = activePanel?.id ?? null
+  }, [activePanel?.id, panels])
 
   if (!activePanel) return null
 

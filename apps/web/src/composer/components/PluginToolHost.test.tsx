@@ -74,4 +74,33 @@ describe('<PluginToolHost />', () => {
     )
     expect(container).toBeEmptyDOMElement()
   })
+
+  it('restores focus when the default first panel is removed', async () => {
+    const panels: PanelContribution[] = [
+      { id: 'first', title: 'First tool', render: () => <p>First</p> },
+      { id: 'second', title: 'Second tool', render: () => <p>Second</p> },
+    ]
+    const { rerender } = render(
+      <PluginToolHost
+        panels={panels}
+        context={{ project: createEmptyProject('p'), runCommand: vi.fn() }}
+      />,
+    )
+    const firstTab = screen.getByRole('tab', { name: 'First tool' })
+    firstTab.focus()
+    expect(firstTab).toHaveFocus()
+
+    rerender(
+      <PluginToolHost
+        panels={[panels[1]]}
+        context={{ project: createEmptyProject('p'), runCommand: vi.fn() }}
+      />,
+    )
+
+    const secondTab = screen.getByRole('tab', { name: 'Second tool' })
+    await waitFor(() => expect(secondTab).toHaveFocus())
+    expect(secondTab).toHaveAttribute('aria-selected', 'true')
+    expect(secondTab).toHaveAttribute('tabindex', '0')
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', secondTab.id)
+  })
 })
