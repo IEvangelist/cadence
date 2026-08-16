@@ -26,9 +26,26 @@ export function AppFrame() {
   const authenticated = auth.status === 'authenticated'
   const entitlements = useEntitlements(authenticated)
   const studio = location.pathname === '/'
+  const signOut = async () => {
+    setSigningOut(true)
+    try {
+      await auth.signOut()
+    } catch (error) {
+      console.warn('The server sign-out request failed after local sign-out.', error)
+    } finally {
+      clearAuthReturnTarget()
+      if (location.pathname === '/profile') {
+        authDialog.closeAuth()
+        void navigate(destination('/', location), { replace: true })
+      }
+      setSigningOut(false)
+    }
+  }
   const routeContext: AppRouteContext = {
     authenticated,
     signingOut,
+    openSignIn: () => authDialog.openAuth(),
+    signOut,
     entitlements,
     watermarkExports: watermarkExportsFor(entitlements),
   }
@@ -65,21 +82,7 @@ export function AppFrame() {
               onShowProfile={() => void navigate(destination('/profile', location))}
               profileActive={location.pathname === '/profile'}
               signingOut={signingOut}
-              onSignOut={async () => {
-                setSigningOut(true)
-                try {
-                  await auth.signOut()
-                } catch (error) {
-                  console.warn('The server sign-out request failed after local sign-out.', error)
-                } finally {
-                  clearAuthReturnTarget()
-                  if (location.pathname === '/profile') {
-                    authDialog.closeAuth()
-                    void navigate(destination('/', location), { replace: true })
-                  }
-                  setSigningOut(false)
-                }
-              }}
+              onSignOut={signOut}
             />
             <nav className="app-nav" aria-label="Primary">
               <button

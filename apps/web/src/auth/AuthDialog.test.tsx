@@ -160,7 +160,7 @@ describe('AuthDialogProvider', () => {
     await user.click(screen.getByRole('button', { name: 'Close' }))
     resolveSignIn()
 
-    await waitFor(() => expect(document.querySelector('dialog')).not.toHaveAttribute('open'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(screen.getByTestId('location')).toHaveTextContent('/')
   })
 })

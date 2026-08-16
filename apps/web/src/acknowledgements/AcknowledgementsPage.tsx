@@ -268,8 +268,8 @@ export function AcknowledgementsPage({ onClose }: AcknowledgementsPageProps) {
           </table>
         </div>
         <p>
-          Radix Dialog provides Cadence&rsquo;s accessible project, replacement, and
-          authentication dialogs.
+          Radix Dialog provides Cadence&rsquo;s accessible project/replacement dialogs
+          and authentication dialog.
         </p>
       </div>
 

@@ -17,19 +17,23 @@
 }
 
 .auth-dialog {
+  top: 50%;
+  left: 50%;
   width: min(24rem, calc(100vw - 2 * var(--space-4)));
   max-height: min(44rem, calc(100dvh - 2 * var(--space-4)));
-  margin: auto;
-  padding: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  text-align: left;
   color: var(--color-text);
-  background: transparent;
-  border: 0;
-  overflow: visible;
-}
-
-.auth-dialog::backdrop {
-  background: color-mix(in srgb, var(--color-neutral-950) 64%, transparent);
-  backdrop-filter: blur(3px);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow-y: auto;
+  transform: translate(-50%, -50%);
 }
 
 .authbar-greeting {
@@ -37,32 +41,17 @@
   color: var(--color-text-muted);
 }
 
-.auth-panel {
-  width: 100%;
-  max-height: min(44rem, calc(100dvh - 2 * var(--space-4)));
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-5);
-  text-align: left;
-  background: var(--color-surface-raised);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  overflow-y: auto;
-}
-
-.auth-dialog__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
+.auth-dialog__close {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
 }
 
 .auth-panel-title {
   font-family: var(--font-display);
   font-size: var(--font-size-lg);
   margin: 0;
+  padding-right: 4rem;
   color: var(--color-text);
 }
 
@@ -194,25 +183,16 @@
 
 @media (max-width: 40rem) {
   .auth-dialog {
+    top: auto;
+    bottom: 0;
+    left: 0;
     width: 100%;
     max-width: none;
     max-height: calc(100dvh - var(--space-4));
-    margin: auto 0 0;
-  }
-
-  .auth-panel {
-    max-height: calc(100dvh - var(--space-4));
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    transform: none;
   }
 
   .auth-callback-notice {
     align-items: flex-start;
-  }
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .auth-dialog::backdrop {
-    background: var(--color-neutral-950);
-    backdrop-filter: none;
   }
 }

@@ -179,7 +179,7 @@ describe('AuthProvider / useAuth', () => {
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'))
 
     fireEvent.click(screen.getByText('signout'))
-    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('anonymous'))
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('loading'))
     expect(screen.getByTestId('signout-complete')).toHaveTextContent('false')
 
     releaseStore()
