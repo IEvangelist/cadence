@@ -1,0 +1,6 @@
+{
+  "sourceCommit": "ce511e3",
+  "initialAppGzipBytes": 222450,
+  "allowedGrowthPercent": 10,
+  "initialAppGzipCeilingBytes": 244695
+}
