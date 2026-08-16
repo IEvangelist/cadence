@@ -119,6 +119,7 @@ export interface ProjectTransition {
   project: Project
   group: string | null
   boundary: number
+  kind: 'mutation' | 'replacement'
 }
 
 /**
@@ -528,6 +529,20 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         boundary: historyCaptureBoundaryRef.current,
       }))
       syncHistoryFlags()
+      if (
+        action.type === 'load-project' &&
+        nextState.project !== beforeState.project
+      ) {
+        const transition: ProjectTransition = {
+          project: nextState.project,
+          group: null,
+          boundary: historyCaptureBoundaryRef.current,
+          kind: 'replacement',
+        }
+        for (const listener of projectTransitionListenersRef.current) {
+          listener(transition)
+        }
+      }
     } else if (!HISTORY_IGNORED_ACTIONS.has(action.type)) {
       const groupKey = historyGroupKey(action)
       setHistoryCapture((current) => ({
@@ -546,6 +561,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
           project: nextState.project,
           group: groupKey ?? null,
           boundary: historyCaptureBoundaryRef.current,
+          kind: 'mutation',
         }
         for (const listener of projectTransitionListenersRef.current) {
           listener(transition)

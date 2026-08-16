@@ -7,6 +7,7 @@ import { createEmptyProject, createNote, createTrack, type Project } from './../
 import { SilentAudioEngine } from '../../audio/engine'
 import { useComposer } from '../../hooks/useComposer'
 import { LocalStorageProjectStore, MemoryStorage } from '../storage'
+import { projectToFile } from '../../formats/projectFile'
 import { readProject, reconcileDoc } from './crdt'
 import {
   type CollabBinding,
@@ -87,6 +88,36 @@ const config: CollabConfig = {
   role: 'editor',
   url: 'ws://test/api/collab',
   user: { id: 'u1', name: 'Ada', color: '#f0f' },
+}
+
+function useIntegratedComposerCollaboration(
+  initialProject: Project,
+  store: LocalStorageProjectStore,
+) {
+  const controller = useComposer({
+    createEngine: () => new SilentAudioEngine(),
+    store,
+    initialProject,
+    autosaveDelay: 0,
+  })
+  const collaboration = useCollaboration(
+    {
+      project: controller.project,
+      selectedTrackId: controller.selectedTrackId,
+      selectedNoteIds: controller.state.selectedNoteIds,
+      applyRemoteProject: controller.applyRemoteProject,
+      historyCaptureGroup: controller.historyCaptureGroup,
+      historyCaptureBoundary: controller.historyCaptureBoundary,
+      subscribeProjectTransitions: controller.subscribeProjectTransitions,
+    },
+    config,
+    factory,
+  )
+  const setHistoryEnabled = controller.setHistoryEnabled
+  useEffect(() => {
+    setHistoryEnabled(!collaboration.active)
+  }, [collaboration.active, setHistoryEnabled])
+  return { collaboration, controller }
 }
 
 describe('useCollaboration', () => {
@@ -537,32 +568,9 @@ describe('useCollaboration — collaborative undo/redo (#156)', () => {
     const initialProject = seedProject()
     const store = new LocalStorageProjectStore(new MemoryStorage())
 
-    const { result } = renderHook(() => {
-      const controller = useComposer({
-        createEngine: () => new SilentAudioEngine(),
-        store,
-        initialProject,
-        autosaveDelay: 0,
-      })
-      const collaboration = useCollaboration(
-        {
-          project: controller.project,
-          selectedTrackId: controller.selectedTrackId,
-          selectedNoteIds: controller.state.selectedNoteIds,
-          applyRemoteProject: controller.applyRemoteProject,
-          historyCaptureGroup: controller.historyCaptureGroup,
-          historyCaptureBoundary: controller.historyCaptureBoundary,
-          subscribeProjectTransitions: controller.subscribeProjectTransitions,
-        },
-        config,
-        factory,
-      )
-      const setHistoryEnabled = controller.setHistoryEnabled
-      useEffect(() => {
-        setHistoryEnabled(!collaboration.active)
-      }, [collaboration.active, setHistoryEnabled])
-      return { collaboration, controller }
-    })
+    const { result } = renderHook(() =>
+      useIntegratedComposerCollaboration(initialProject, store),
+    )
 
     const trackId = result.current.controller.selectedTrackId
     act(() => {
@@ -584,5 +592,70 @@ describe('useCollaboration — collaborative undo/redo (#156)', () => {
     notes = readProject(providers[0].doc).tracks[0].notes
     expect(notes).toHaveLength(2)
     expect(notes.map((note) => note.id)).toContain('remote-batch')
+  })
+
+  it('publishes every local whole-project replacement and suppresses sync-remote echo', async () => {
+    const initialProject = seedProject()
+    const store = new LocalStorageProjectStore(new MemoryStorage())
+    const opened = createEmptyProject('opened')
+    opened.name = 'Stored open'
+    await store.save(opened)
+    const { result } = renderHook(() =>
+      useIntegratedComposerCollaboration(initialProject, store),
+    )
+
+    act(() => result.current.controller.newProject())
+    expect(readProject(providers[0].doc).id).toBe(result.current.controller.project.id)
+    expect(result.current.collaboration.canUndo).toBe(false)
+
+    act(() => result.current.controller.loadDemo())
+    expect(readProject(providers[0].doc).name).toBe('Demo — Every idea, resolved')
+    expect(result.current.collaboration.canUndo).toBe(false)
+
+    const quickStart = createEmptyProject('quick-source')
+    quickStart.name = 'Quick start'
+    act(() => result.current.controller.loadProjectSnapshot(quickStart))
+    expect(readProject(providers[0].doc).name).toBe('Quick start')
+    expect(result.current.collaboration.canUndo).toBe(false)
+
+    await act(async () => result.current.controller.loadProject('opened'))
+    expect(readProject(providers[0].doc).id).toBe('opened')
+    expect(readProject(providers[0].doc).name).toBe('Stored open')
+    expect(result.current.collaboration.canUndo).toBe(false)
+
+    const imported = createEmptyProject('import-source')
+    imported.name = 'Imported file'
+    act(() =>
+      result.current.controller.importProjectFile(projectToFile(imported)),
+    )
+    expect(readProject(providers[0].doc).name).toBe('Imported file')
+    expect(result.current.collaboration.canUndo).toBe(false)
+
+    const beforeRemoteOnly = readProject(providers[0].doc)
+    const remoteOnly = createEmptyProject('remote-only')
+    remoteOnly.name = 'Remote only'
+    act(() => result.current.controller.applyRemoteProject(remoteOnly))
+    expect(readProject(providers[0].doc)).toEqual(beforeRemoteOnly)
+
+    const remoteAfterReplacement = readProject(providers[0].doc)
+    remoteAfterReplacement.tracks[0].notes.push(
+      createNote({ pitch: 72, start: 4 }, 'remote-after-replacement'),
+    )
+    act(() =>
+      reconcileDoc(providers[0].doc, remoteAfterReplacement, 'remote-peer'),
+    )
+    const replacementId = readProject(providers[0].doc).id
+    const trackId = result.current.controller.selectedTrackId
+    act(() => result.current.controller.addNoteAt(trackId, 64, 1))
+    expect(result.current.collaboration.canUndo).toBe(true)
+    expect(readProject(providers[0].doc).tracks[0].notes).toHaveLength(2)
+
+    act(() => result.current.collaboration.undo())
+    const afterUndo = readProject(providers[0].doc)
+    expect(afterUndo.id).toBe(replacementId)
+    expect(afterUndo.tracks[0].notes.map((note) => note.id)).toEqual([
+      'remote-after-replacement',
+    ])
+    expect(result.current.collaboration.canUndo).toBe(false)
   })
 })
