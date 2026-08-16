@@ -17,7 +17,8 @@ export interface CoachMarkStorage {
   setItem(key: string, value: string): void
 }
 
-export const COACH_MARKS_STORAGE_KEY = 'cadence.v1.coach-marks'
+// Public localStorage namespace, not a credential.
+export const COACH_MARKS_STORAGE_KEY = 'cadence.v1.coach-marks' // gitleaks:allow
 
 export const COACH_MARKS: readonly CoachMarkDefinition[] = [
   {
