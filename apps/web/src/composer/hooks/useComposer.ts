@@ -59,7 +59,7 @@ import {
 } from '../model/projectLifecycle'
 import type { SongTemplate } from '../templates'
 import {
-  clearProjectRecoveryLineage,
+  clearProjectRecoveryChain,
   defaultRecoveryStorage,
   newRecoveryLineageId,
   readProjectRecovery,
@@ -361,7 +361,6 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   const persistenceGenerationRef = useRef(0)
   const failedRevisionRef = useRef<number | null>(null)
   const recoveryTokenRef = useRef<string | null>(null)
-  const recoveryOrderRef = useRef(0)
   const recoveryTokensRef = useRef(new Set<string>())
   const recoveryLineageRef = useRef(newRecoveryLineageId())
   const skipNextProjectRevisionRef = useRef(false)
@@ -393,7 +392,6 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     savedRevisionRef.current = 0
     failedRevisionRef.current = null
     recoveryTokenRef.current = null
-    recoveryOrderRef.current = 0
     recoveryTokensRef.current.clear()
     recoveryLineageRef.current = lineageId
     flushPromiseRef.current = null
@@ -569,7 +567,6 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
           if (!isCurrent()) return
           resetPersistenceForProject(false, recovery.lineageId)
           recoveryTokenRef.current = recovery.token
-          recoveryOrderRef.current = recovery.order
           recoveryTokensRef.current.add(recovery.token)
           dispatch({ type: 'load-project', project: recovery.project })
           setHydration({ status: 'ready-with-project', source: 'recovery' })
@@ -657,7 +654,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
           attemptedRevision = revisionRef.current
           const project = projectRef.current
           const recoveryTokens = [...recoveryTokensRef.current]
-          const recoveryOrder = recoveryOrderRef.current
+          const recoveryHeadToken = recoveryTokenRef.current
           await persist(project)
           if (!isCurrent()) return
           savedRevisionRef.current = Math.max(savedRevisionRef.current, attemptedRevision)
@@ -668,12 +665,11 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
             failedRevisionRef.current = null
           }
           if (options.recoveryScope) {
-            clearProjectRecoveryLineage(
+            clearProjectRecoveryChain(
               recoveryStorage,
               options.recoveryScope,
               project.id,
-              recoveryLineageRef.current,
-              recoveryOrder,
+              recoveryHeadToken,
             )
             for (const token of recoveryTokens) recoveryTokensRef.current.delete(token)
             if (
@@ -797,7 +793,6 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
       )
       if (write) {
         recoveryTokenRef.current = write.token
-        recoveryOrderRef.current = write.order
         recoveryTokensRef.current.add(write.token)
       }
     }
@@ -1140,11 +1135,11 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     beginPersistenceTransition()
     await settleActivePersistence()
     if (options.recoveryScope) {
-      clearProjectRecoveryLineage(
+      clearProjectRecoveryChain(
         recoveryStorage,
         options.recoveryScope,
         projectRef.current.id,
-        recoveryLineageRef.current,
+        recoveryTokenRef.current,
       )
       recoveryTokensRef.current.clear()
       recoveryTokenRef.current = null
@@ -1180,11 +1175,11 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
 
   const discardAutosaveRecovery = useCallback(() => {
     if (!options.recoveryScope) return
-    clearProjectRecoveryLineage(
+    clearProjectRecoveryChain(
       recoveryStorage,
       options.recoveryScope,
       projectRef.current.id,
-      recoveryLineageRef.current,
+      recoveryTokenRef.current,
     )
     recoveryTokensRef.current.clear()
     recoveryTokenRef.current = null

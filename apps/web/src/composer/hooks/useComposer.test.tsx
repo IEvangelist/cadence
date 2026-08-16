@@ -1396,19 +1396,20 @@ describe('useComposer — project hydration and replacement', () => {
     await store.persist(authoritative)
     const recoveryStorage = new MemoryStorage()
     const lineage = newRecoveryLineageId()
-    writeProjectRecovery(
+    const ancestor = writeProjectRecovery(
       recoveryStorage,
       'local:anonymous',
       { ...authoritative, name: 'Recovered A' },
       1,
       lineage,
-    )
+    )!
     writeProjectRecovery(
       recoveryStorage,
       'local:anonymous',
       { ...authoritative, name: 'Recovered B' },
       2,
       lineage,
+      ancestor.token,
     )
     const first = renderHook(() =>
       useComposer({

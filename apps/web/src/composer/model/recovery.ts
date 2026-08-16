@@ -18,6 +18,7 @@ interface ProjectRecoveryEnvelope {
   version: 1
   scope: string
   token: string
+  parentToken: string | null
   lineageId: string
   revision: number
   updatedAt: number
@@ -59,6 +60,36 @@ export function clearProjectRecoveryLineage(
   }
 }
 
+export function clearProjectRecoveryChain(
+    storage: SyncStorage | null,
+    scope: string,
+    projectId: string,
+    headToken: string | null,
+  ): void {
+    if (!storage || !headToken) return
+    const removedTokens = new Set<string>()
+    let token: string | null = headToken
+    for (let depth = 0; token && depth < 1_000; depth += 1) {
+      if (removedTokens.has(token)) break
+      const record = readRecord(storage, scope, projectId, token)
+      if (!record) break
+      removedTokens.add(token)
+      storage.removeItem(projectRecoveryKey(scope, projectId, token))
+      token = record.parentToken
+    }
+    const pointer = readPointer(storage, scope)
+    if (
+      pointer?.projectId === projectId &&
+      removedTokens.has(pointer.token)
+    ) {
+      storage.removeItem(recoveryIndexKey(scope))
+      const remaining = discoverNewestRecord(storage, scope)
+      if (remaining) {
+        writePointer(storage, scope, remaining.project.id, remaining.token)
+    }
+  }
+}
+
 interface ProjectRecoveryPointer {
   version: 1
   projectId: string
@@ -71,6 +102,7 @@ export function newRecoveryLineageId(): string {
 
 export interface ProjectRecovery {
   token: string
+  parentToken: string | null
   lineageId: string
   revision: number
   updatedAt: number
@@ -124,6 +156,7 @@ export function writeProjectRecovery(
     version: 1,
     scope,
     token,
+    parentToken: previousToken ?? null,
     lineageId,
     revision,
     updatedAt: Date.now(),
@@ -141,11 +174,8 @@ export function writeProjectRecovery(
   }
   try {
     writePointer(storage, scope, project.id, token)
-    if (previousToken && previousToken !== token) {
-      storage.removeItem(projectRecoveryKey(scope, project.id, previousToken))
-    }
   } catch {
-    // The durable record remains discoverable even if pointer/pruning updates fail.
+    // The durable record remains discoverable even if the pointer update fails.
   }
   return { token, order: envelope.order }
 }
@@ -191,6 +221,7 @@ function parseEnvelope(
       envelope.version !== 1 ||
       envelope.scope !== scope ||
       typeof envelope.token !== 'string' ||
+      (envelope.parentToken !== null && typeof envelope.parentToken !== 'string') ||
       typeof envelope.lineageId !== 'string' ||
       typeof envelope.revision !== 'number' ||
       typeof envelope.updatedAt !== 'number' ||
@@ -206,6 +237,7 @@ function parseEnvelope(
     if (project.id !== envelope.projectId) return null
     return {
       token: envelope.token,
+      parentToken: envelope.parentToken ?? null,
       lineageId: envelope.lineageId,
       revision: envelope.revision,
       updatedAt: envelope.updatedAt,

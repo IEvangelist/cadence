@@ -5,6 +5,7 @@ import {
   projectRecoveryKey,
   recoveryIndexKey,
   clearProjectRecovery,
+  clearProjectRecoveryChain,
   clearProjectRecoveryLineage,
   newRecoveryLineageId,
   readProjectRecovery,
@@ -206,5 +207,58 @@ describe('project recovery', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('clears only one causal branch while preserving a same-lineage sibling', () => {
+    const storage = new MemoryStorage()
+    const lineage = newRecoveryLineageId()
+    const project = createEmptyProject('branched-project')
+    const parent = writeProjectRecovery(storage, scope, { ...project, name: 'Parent P' }, 1, lineage)!
+    const childA = writeProjectRecovery(
+      storage,
+      scope,
+      { ...project, name: 'Child A1' },
+      2,
+      lineage,
+      parent.token,
+    )!
+    const childB = writeProjectRecovery(
+      storage,
+      scope,
+      { ...project, name: 'Child B1' },
+      2,
+      lineage,
+      parent.token,
+    )!
+
+    clearProjectRecoveryChain(storage, scope, project.id, childA.token)
+
+    expect(readProjectRecovery(storage, scope, project.id)?.token).toBe(childB.token)
+    expect(
+      storage.getItem(projectRecoveryKey(scope, project.id, parent.token)),
+    ).toBeNull()
+
+    clearProjectRecoveryChain(storage, scope, project.id, childB.token)
+    expect(readProjectRecovery(storage, scope, project.id)).toBeNull()
+  })
+
+  it('fails safe on missing and cyclic parent tokens', () => {
+    const storage = new MemoryStorage()
+    const lineage = newRecoveryLineageId()
+    const project = createEmptyProject('cycle-project')
+    const record = writeProjectRecovery(storage, scope, project, 1, lineage)!
+    const key = projectRecoveryKey(scope, project.id, record.token)
+    const envelope = JSON.parse(storage.getItem(key)!) as { parentToken: string | null }
+    envelope.parentToken = record.token
+    storage.setItem(key, JSON.stringify(envelope))
+
+    expect(() =>
+      clearProjectRecoveryChain(storage, scope, project.id, record.token),
+    ).not.toThrow()
+    expect(readProjectRecovery(storage, scope, project.id)).toBeNull()
+
+    expect(() =>
+      clearProjectRecoveryChain(storage, scope, project.id, 'missing-token'),
+    ).not.toThrow()
   })
 })
