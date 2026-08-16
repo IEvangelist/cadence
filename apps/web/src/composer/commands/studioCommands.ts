@@ -172,6 +172,14 @@ function closestElement(target: EventTarget | null): Element | null {
   return target instanceof Element ? target : null
 }
 
+function isActivationTarget(target: EventTarget | null): boolean {
+  return Boolean(
+    closestElement(target)?.closest(
+      'button, a[href], summary, [role="button"], [role="tab"], [role="option"]',
+    ),
+  )
+}
+
 export function isStudioShortcutScopeSuppressed(target: EventTarget | null): boolean {
   const element = closestElement(target)
   if (!element) return false
@@ -195,6 +203,7 @@ export function dispatchStudioCommand(
   if (isStudioShortcutScopeSuppressed(event.target)) return false
   const binding = eventToKeybinding(event)
   if (!binding) return false
+  if (binding === 'space' && isActivationTarget(event.target)) return false
   const command = registry.commands.find(
     (candidate) => candidate.binding === binding && candidate.enabled,
   )

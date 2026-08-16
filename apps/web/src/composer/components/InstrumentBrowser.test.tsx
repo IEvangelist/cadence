@@ -96,7 +96,7 @@ describe('<InstrumentBrowser />', () => {
 
     fireEvent.keyDown(search, { key: 'ArrowDown' })
     fireEvent.keyDown(search, { key: 'Enter' })
-    expect(onSelect).toHaveBeenCalledWith('drums')
+    expect(onSelect).toHaveBeenCalledWith('sampled')
     expect(onClose).toHaveBeenCalledOnce()
 
     await user.type(search, 'not in registry')
@@ -134,7 +134,7 @@ describe('<InstrumentBrowser />', () => {
       />,
     )
     expect(screen.queryByRole('option', { name: /Sampled Keys/ })).not.toBeInTheDocument()
-    expect(search).toHaveAttribute('aria-activedescendant', expect.stringContaining('piano'))
+    expect(search).toHaveAttribute('aria-activedescendant', expect.stringContaining('drums'))
   })
 
   it('does not load sampled chunks or fetch remote packs while opening and searching', async () => {

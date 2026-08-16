@@ -1092,6 +1092,13 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'Opens grouped and searchable keyboard shortcut help.',
   ),
   trackRail(
+    'studio.track.delete.dialog',
+    'studio',
+    'alertdialog',
+    '/Delete .+/',
+    'Owns focus while confirming destructive removal of a populated track.',
+  ),
+  trackRail(
     'studio.track.delete.confirm',
     'studio',
     'button',

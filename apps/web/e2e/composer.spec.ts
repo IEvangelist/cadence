@@ -18,6 +18,23 @@ async function openExportMenu(page: import('@playwright/test').Page): Promise<vo
 // (localStorage autosave/restore). Exercises the audio engine, piano roll,
 // MIDI export, and persistence end to end.
 test.describe('composer', () => {
+  test('Space activates a focused Studio control instead of toggling transport', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    const rail = page.getByRole('complementary', { name: 'Track rail' })
+    const addTrack = rail.getByRole('button', { name: 'Add track' })
+    await addTrack.focus()
+    const before = await rail.locator('.track-rail__row').count()
+    await page.keyboard.press('Space')
+
+    await expect(rail.locator('.track-rail__row')).toHaveCount(before + 1)
+    await expect(page.locator('button.transport-play')).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+  })
+
   test('create a note, play, export MIDI, and persist across reload', async ({ page }) => {
     await page.goto('/')
 

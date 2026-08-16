@@ -79,8 +79,6 @@ export function createSamplerVoice(
         pending.push([pitch, duration, time, velocity])
       }
 
-      registerLazyInstrument('sampled-grand-piano')
-      registerLazyInstrument('sampled-electric-piano')
     },
     dispose: () => {
       disposed = true
@@ -90,6 +88,9 @@ export function createSamplerVoice(
     },
   }
 }
+
+registerLazyInstrument('sampled-grand-piano')
+registerLazyInstrument('sampled-electric-piano')
 
 /**
  * The sampled instruments contributed by the core plugin. Each `createVoice`

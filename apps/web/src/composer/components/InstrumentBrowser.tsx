@@ -61,11 +61,15 @@ export function InstrumentBrowser({
     [group, instruments, kind, query],
   )
   const grouped = useMemo(() => groupInstrumentsForBrowser(filtered), [filtered])
+  const navigationInstruments = useMemo(
+    () => grouped.flatMap((instrumentGroup) => instrumentGroup.instruments),
+    [grouped],
+  )
   const groups = useMemo(() => listInstrumentGroups(instruments), [instruments])
   const [activeId, setActiveId] = useState(selectedId)
-  const resolvedActiveId = filtered.some((instrument) => instrument.id === activeId)
+  const resolvedActiveId = navigationInstruments.some((instrument) => instrument.id === activeId)
     ? activeId
-    : (filtered[0]?.id ?? '')
+    : (navigationInstruments[0]?.id ?? '')
 
   useEffect(() => subscribe(() => setInstruments(getInstruments())), [getInstruments, subscribe])
   useEffect(
@@ -87,10 +91,15 @@ export function InstrumentBrowser({
   }
 
   const moveActive = (offset: number): void => {
-    if (filtered.length === 0) return
-    const index = filtered.findIndex((instrument) => instrument.id === resolvedActiveId)
-    const next = Math.min(filtered.length - 1, Math.max(0, (index < 0 ? 0 : index) + offset))
-    setActiveId(filtered[next].id)
+    if (navigationInstruments.length === 0) return
+    const index = navigationInstruments.findIndex(
+      (instrument) => instrument.id === resolvedActiveId,
+    )
+    const next = Math.min(
+      navigationInstruments.length - 1,
+      Math.max(0, (index < 0 ? 0 : index) + offset),
+    )
+    setActiveId(navigationInstruments[next].id)
   }
 
   const handleKeyDown = (event: KeyboardEvent): void => {
@@ -102,10 +111,10 @@ export function InstrumentBrowser({
       moveActive(-1)
     } else if (event.key === 'Home') {
       event.preventDefault()
-      setActiveId(filtered[0]?.id ?? '')
+      setActiveId(navigationInstruments[0]?.id ?? '')
     } else if (event.key === 'End') {
       event.preventDefault()
-      setActiveId(filtered.at(-1)?.id ?? '')
+      setActiveId(navigationInstruments.at(-1)?.id ?? '')
     } else if (event.key === 'Enter') {
       event.preventDefault()
       selectActive()

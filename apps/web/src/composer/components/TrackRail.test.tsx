@@ -76,6 +76,7 @@ describe('<TrackRail />', () => {
   it('deletes an empty track immediately but confirms destructive track data', async () => {
     coversInteractions(
       'studio.track.delete',
+      'studio.track.delete.dialog',
       'studio.track.delete.confirm',
       'studio.track.delete.cancel',
     )
@@ -92,9 +93,17 @@ describe('<TrackRail />', () => {
       'This removes its notes, automation, and mix settings.',
     )
     expect(value.removeTrack).not.toHaveBeenCalledWith('written')
+    expect(screen.getByRole('alertdialog')).toContainElement(
+      document.activeElement as HTMLElement,
+    )
 
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete Written' })).toHaveFocus()
+    await user.click(screen.getByRole('button', { name: 'Delete Written' }))
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete Written' })).toHaveFocus()
     await user.click(screen.getByRole('button', { name: 'Delete Written' }))
     await user.click(screen.getByRole('button', { name: 'Delete track' }))
     expect(value.removeTrack).toHaveBeenCalledWith('written')

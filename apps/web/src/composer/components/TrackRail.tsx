@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import type { ComposerController } from '../hooks/useComposer'
 import type { Track } from '../model/project'
 import { getInstrument } from '../instruments/registry'
@@ -26,12 +26,23 @@ export function TrackRail({
     setAllTracksVisible,
   } = controller
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const deleteTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const cancelRef = useRef<HTMLButtonElement | null>(null)
   const visible = new Set(visibleTrackIds)
   const allVisible = project.tracks.every((track) => visible.has(track.id))
   const pendingTrack = project.tracks.find((track) => track.id === pendingDeleteId)
+  useEffect(() => {
+    if (pendingTrack) cancelRef.current?.focus()
+  }, [pendingTrack])
 
-  const requestDelete = (track: Track): void => {
+  const cancelDelete = (): void => {
+    setPendingDeleteId(null)
+    queueMicrotask(() => deleteTriggerRef.current?.focus())
+  }
+
+  const requestDelete = (track: Track, trigger: HTMLButtonElement): void => {
     if (trackRequiresDeleteConfirmation(controller, track)) {
+      deleteTriggerRef.current = trigger
       setPendingDeleteId(track.id)
       return
     }
@@ -121,7 +132,7 @@ export function TrackRail({
                   data-interaction="studio.track.delete"
                   disabled={project.tracks.length <= 1}
                   aria-label={`Delete ${track.name}`}
-                  onClick={() => requestDelete(track)}
+                  onClick={(event) => requestDelete(track, event.currentTarget)}
                 >
                   Delete
                 </button>
@@ -132,11 +143,24 @@ export function TrackRail({
       </ol>
 
       {pendingTrack ? (
-        <div className="track-delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="track-delete-title">
+        <div
+          className="track-delete-dialog"
+          role="alertdialog"
+          data-interaction="studio.track.delete.dialog"
+          aria-modal="true"
+          aria-labelledby="track-delete-title"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault()
+              cancelDelete()
+            }
+          }}
+        >
           <h2 id="track-delete-title">Delete {pendingTrack.name}?</h2>
           <p>This removes its notes, automation, and mix settings.</p>
           <div>
             <button
+              ref={cancelRef}
               type="button"
               className="btn btn-danger"
               data-interaction="studio.track.delete.confirm"
@@ -151,7 +175,7 @@ export function TrackRail({
               type="button"
               className="btn"
               data-interaction="studio.track.delete.cancel"
-              onClick={() => setPendingDeleteId(null)}
+              onClick={cancelDelete}
             >
               Cancel
             </button>

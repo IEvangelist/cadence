@@ -162,6 +162,8 @@ describe('createSamplerVoice', () => {
 
 describe('SAMPLER_VOICE_INSTRUMENTS', () => {
   it('contributes the two flagship sampled keys with valid metadata', () => {
+    expect(getInstrumentLoadState('sampled-grand-piano')).toBe('idle')
+    expect(getInstrumentLoadState('sampled-electric-piano')).toBe('idle')
     expect(SAMPLER_VOICE_INSTRUMENTS.map((i) => i.id)).toEqual([
       'sampled-grand-piano',
       'sampled-electric-piano',

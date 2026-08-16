@@ -120,6 +120,34 @@ describe('dispatchStudioCommand', () => {
     expect(dispatchStudioCommand(registry, event)).toBe(false)
     expect(event.preventDefault).not.toHaveBeenCalled()
   })
+
+  it('lets bare Space activate focused controls instead of toggling transport', () => {
+    const run = vi.fn()
+    const registry = composeStudioCommands(core(run), [], {})
+    for (const target of [
+      document.createElement('button'),
+      Object.assign(document.createElement('div'), { role: 'tab' }),
+      document.createElement('a'),
+    ]) {
+      if (target instanceof HTMLAnchorElement) target.href = '#target'
+      if (!(target instanceof HTMLButtonElement) && !(target instanceof HTMLAnchorElement)) {
+        target.setAttribute('role', 'tab')
+      }
+      const event = {
+        key: ' ',
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+        target,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+      }
+      expect(dispatchStudioCommand(registry, event)).toBe(false)
+      expect(event.preventDefault).not.toHaveBeenCalled()
+    }
+    expect(run).not.toHaveBeenCalled()
+  })
 })
 
 describe('isStudioShortcutScopeSuppressed', () => {

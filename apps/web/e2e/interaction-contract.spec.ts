@@ -426,6 +426,17 @@ test.describe('production interaction contract', () => {
       authenticatedPage.getByRole('alertdialog', { name: /Delete Synth/ }),
     ).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'track delete confirmation', observed)
+    await expect(
+      authenticatedPage.getByRole('alertdialog', { name: /Delete Synth/ }).locator(':focus'),
+    ).toHaveCount(1)
+    await authenticatedPage.keyboard.press('Escape')
+    await expect(
+      authenticatedPage.getByRole('alertdialog', { name: /Delete Synth/ }),
+    ).toHaveCount(0)
+    await expect(
+      authenticatedPage.getByRole('button', { name: 'Delete Synth' }),
+    ).toBeFocused()
+    await authenticatedPage.getByRole('button', { name: 'Delete Synth' }).click()
     await authenticatedPage.getByRole('button', { name: 'Cancel' }).click()
 
     const shareToggle = authenticatedPage.locator('[data-interaction="studio.share.toggle"]')
