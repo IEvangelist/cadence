@@ -1110,7 +1110,7 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'studio.autosave.discard',
     'studio',
     'button',
-    'Discard changes',
+    '/Discard changes|Discarding changes\\.\\.\\./',
     'Explicitly abandons a failed route-exit autosave and continues navigation.',
   ),
   examplePlugin(

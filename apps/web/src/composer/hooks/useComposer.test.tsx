@@ -1213,6 +1213,79 @@ describe('useComposer — project hydration and replacement', () => {
     expect(hook.result.current.saveState.status).not.toBe('error')
   })
 
+  it('blocks A autosave during async B load and resumes once when B load fails', async () => {
+    const destination = deferred<Project | null>()
+    const save = vi.fn<ProjectStore['save']>(async (project) => ({
+      id: project.id,
+      name: project.name,
+      updatedAt: Date.now(),
+    }))
+    const load = vi.fn<ProjectStore['load']>(() => destination.promise)
+    const store = storeWith({ save, load })
+    const hook = renderHook(() =>
+      useComposer({
+        createEngine: () => new FakeEngine(),
+        store,
+        initialProject: createEmptyProject('project-a'),
+        autosaveDelay: 20,
+      }),
+    )
+    await waitFor(() => expect(hook.result.current.isDirty).toBe(false))
+    const savesBeforeTransition = save.mock.calls.length
+
+    const opening = hook.result.current.openStoredProject('project-b')
+    await waitFor(() => expect(load).toHaveBeenCalledWith('project-b'))
+    act(() => hook.result.current.setProjectName('A edit during B load'))
+    await new Promise((resolve) => setTimeout(resolve, 75))
+    expect(save).toHaveBeenCalledTimes(savesBeforeTransition)
+
+    destination.reject(new Error('B unavailable'))
+    await expect(opening).resolves.toBe('failed')
+    await waitFor(
+      () => expect(save).toHaveBeenCalledTimes(savesBeforeTransition + 1),
+      { timeout: 1_500 },
+    )
+    expect(save.mock.calls.at(-1)?.[0]).toMatchObject({
+      id: 'project-a',
+      name: 'A edit during B load',
+    })
+  })
+
+  it('blocks A autosave throughout async B load and leaves B as final persisted project', async () => {
+    const destination = deferred<Project | null>()
+    const save = vi.fn<ProjectStore['save']>(async (project) => ({
+      id: project.id,
+      name: project.name,
+      updatedAt: Date.now(),
+    }))
+    const load = vi.fn<ProjectStore['load']>(() => destination.promise)
+    const store = storeWith({ save, load })
+    const hook = renderHook(() =>
+      useComposer({
+        createEngine: () => new FakeEngine(),
+        store,
+        initialProject: createEmptyProject('project-a'),
+        autosaveDelay: 20,
+      }),
+    )
+    await waitFor(() => expect(hook.result.current.isDirty).toBe(false))
+    const savesBeforeTransition = save.mock.calls.length
+
+    const opening = hook.result.current.openStoredProject('project-b')
+    await waitFor(() => expect(load).toHaveBeenCalledWith('project-b'))
+    act(() => hook.result.current.setProjectName('A must not persist'))
+    await new Promise((resolve) => setTimeout(resolve, 75))
+    expect(save).toHaveBeenCalledTimes(savesBeforeTransition)
+
+    const projectB = createEmptyProject('project-b')
+    projectB.name = 'Project B'
+    destination.resolve(projectB)
+    await expect(opening).resolves.toBe('replaced')
+    await waitFor(() => expect(hook.result.current.project.id).toBe('project-b'))
+    expect(save).toHaveBeenCalledTimes(savesBeforeTransition)
+    expect(store.setLast).toHaveBeenLastCalledWith('project-b')
+  })
+
   it('clears discarded recovery so the abandoned edit cannot return on hydration', async () => {
     const recoveryStorage = new MemoryStorage()
     const stored = createEmptyProject('stored')
@@ -1261,6 +1334,54 @@ describe('useComposer — project hydration and replacement', () => {
     await waitFor(() =>
       expect(second.result.current.project.name).not.toBe('Discard me'),
     )
+  })
+
+  it('retains ownership of an earlier token when a later stage write fails', async () => {
+    const memory = new MemoryStorage()
+    let failRecordWrite = false
+    const recoveryStorage = {
+      get length() {
+        return memory.length
+      },
+      getItem: (key: string) => memory.getItem(key),
+      key: (index: number) => memory.key(index),
+      setItem: (key: string, value: string) => {
+        if (failRecordWrite && !key.endsWith('.active')) {
+          throw new Error('quota exceeded')
+        }
+        memory.setItem(key, value)
+      },
+      removeItem: (key: string) => memory.removeItem(key),
+    }
+    const stored = createEmptyProject('owned-token')
+    const store = storeWith({ loadLast: vi.fn(async () => stored) })
+    const hook = renderHook(() =>
+      useComposer({
+        createEngine: () => new FakeEngine(),
+        store,
+        recoveryStorage,
+        recoveryScope: 'local:anonymous',
+        autosaveDelay: 60_000,
+      }),
+    )
+    await waitFor(() => expect(hook.result.current.project.id).toBe('owned-token'))
+    act(() => hook.result.current.setProjectName('Token A'))
+    await waitFor(() =>
+      expect(
+        readProjectRecovery(recoveryStorage, 'local:anonymous')?.project.name,
+      ).toBe('Token A'),
+    )
+
+    failRecordWrite = true
+    act(() => hook.result.current.setProjectName('Token B failed to stage'))
+    await waitFor(() =>
+      expect(hook.result.current.project.name).toBe('Token B failed to stage'),
+    )
+    failRecordWrite = false
+    await act(() => hook.result.current.flushAutosave())
+
+    expect(readProjectRecovery(recoveryStorage, 'local:anonymous')).toBeNull()
+    expect(hook.result.current.saveState.status).toBe('saved')
   })
 
   it('keeps a durable save clean when refreshing recents fails', async () => {

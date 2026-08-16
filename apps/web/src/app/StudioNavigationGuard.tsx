@@ -5,12 +5,24 @@ import type { ComposerController } from '../composer/hooks/useComposer'
 interface StudioNavigationGuardProps {
   controller: Pick<
     ComposerController,
-    'isDirty' | 'isFlushing' | 'flushAutosave' | 'discardAutosaveRecovery'
+    | 'isDirty'
+    | 'isFlushing'
+    | 'flushAutosave'
+    | 'beginPersistenceTransition'
+    | 'settleActivePersistence'
+    | 'discardAutosaveRecovery'
   >
 }
 
 export function StudioNavigationGuard({ controller }: StudioNavigationGuardProps) {
-  const { isDirty, isFlushing, flushAutosave, discardAutosaveRecovery } = controller
+  const {
+    isDirty,
+    isFlushing,
+    flushAutosave,
+    beginPersistenceTransition,
+    settleActivePersistence,
+    discardAutosaveRecovery,
+  } = controller
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
       isDirty &&
@@ -18,6 +30,7 @@ export function StudioNavigationGuard({ controller }: StudioNavigationGuardProps
       nextLocation.pathname !== currentLocation.pathname,
   )
   const [error, setError] = useState<string | null>(null)
+  const [isDiscarding, setIsDiscarding] = useState(false)
   const retryRef = useRef<HTMLButtonElement>(null)
   const attemptedKeyRef = useRef<string | null>(null)
   const generationRef = useRef(0)
@@ -125,13 +138,18 @@ export function StudioNavigationGuard({ controller }: StudioNavigationGuardProps
           type="button"
           className="btn"
           data-interaction="studio.autosave.discard"
+          disabled={isDiscarding}
           onClick={() => {
             generationRef.current += 1
-            discardAutosaveRecovery()
-            blocker.proceed()
+            setIsDiscarding(true)
+            beginPersistenceTransition()
+            void settleActivePersistence().then(() => {
+              discardAutosaveRecovery()
+              if (blocker.state === 'blocked') blocker.proceed()
+            })
           }}
         >
-          Discard changes
+          {isDiscarding ? 'Discarding changes...' : 'Discard changes'}
         </button>
       </div>
     </section>

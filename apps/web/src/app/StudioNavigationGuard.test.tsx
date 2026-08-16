@@ -11,11 +11,15 @@ import { StudioNavigationGuard } from './StudioNavigationGuard'
 
 function Studio({
   flushAutosave,
+  settleActivePersistence = vi.fn(async () => undefined),
+  beginPersistenceTransition = vi.fn(),
   discardAutosaveRecovery = vi.fn(),
   dirty = true,
   isFlushing = false,
 }: {
   flushAutosave: () => Promise<void>
+  settleActivePersistence?: () => Promise<void>
+  beginPersistenceTransition?: () => void
   discardAutosaveRecovery?: () => void
   dirty?: boolean
   isFlushing?: boolean
@@ -28,6 +32,8 @@ function Studio({
           isDirty: dirty,
           isFlushing,
           flushAutosave,
+          settleActivePersistence,
+          beginPersistenceTransition,
           discardAutosaveRecovery,
         }}
       />
@@ -44,6 +50,8 @@ function Studio({
 function renderGuard(
   flushAutosave: () => Promise<void>,
   discardAutosaveRecovery = vi.fn(),
+  settleActivePersistence = vi.fn(async () => undefined),
+  beginPersistenceTransition = vi.fn(),
 ) {
   const router = createMemoryRouter(
     [
@@ -52,6 +60,8 @@ function renderGuard(
         element: (
           <Studio
             flushAutosave={flushAutosave}
+            settleActivePersistence={settleActivePersistence}
+            beginPersistenceTransition={beginPersistenceTransition}
             discardAutosaveRecovery={discardAutosaveRecovery}
           />
         ),
@@ -97,6 +107,46 @@ describe('<StudioNavigationGuard />', () => {
     expect(await screen.findByRole('heading', { name: 'Pricing' })).toBeInTheDocument()
     expect(discardRecovery).toHaveBeenCalledOnce()
   })
+
+  it.each(['resolve', 'reject'] as const)(
+    'waits for an active persistence transaction to %s before route discard proceeds',
+    async (outcome) => {
+      coversInteractions('studio.autosave.discard')
+      const user = userEvent.setup()
+      let settle!: () => void
+      let fail!: (error: Error) => void
+      const active = new Promise<void>((resolve, reject) => {
+        settle = resolve
+        fail = reject
+      })
+      const discardRecovery = vi.fn()
+      const beginTransition = vi.fn()
+      renderGuard(
+        vi.fn(async () => Promise.reject(new Error('offline'))),
+        discardRecovery,
+        vi.fn(async () => {
+          try {
+            await active
+          } catch {
+            // Mirrors the controller settlement primitive.
+          }
+        }),
+        beginTransition,
+      )
+
+      await user.click(screen.getByRole('button', { name: 'Pricing' }))
+      await user.click(await screen.findByRole('button', { name: 'Discard changes' }))
+      expect(screen.queryByRole('heading', { name: 'Pricing' })).not.toBeInTheDocument()
+      expect(discardRecovery).not.toHaveBeenCalled()
+      expect(beginTransition).toHaveBeenCalledOnce()
+
+      if (outcome === 'resolve') settle()
+      else fail(new Error('active transaction failed'))
+
+      expect(await screen.findByRole('heading', { name: 'Pricing' })).toBeInTheDocument()
+      expect(discardRecovery).toHaveBeenCalledOnce()
+    },
+  )
 
   it('registers beforeunload only while dirty or flushing', () => {
     const add = vi.spyOn(window, 'addEventListener')

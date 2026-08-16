@@ -154,6 +154,8 @@ export interface ComposerController {
   isDirty: boolean
   isFlushing: boolean
   flushAutosave: () => Promise<void>
+  settleActivePersistence: () => Promise<void>
+  beginPersistenceTransition: () => void
   retryHydration: () => void
   continueToStartCenter: () => void
   retrySave: () => Promise<void>
@@ -347,6 +349,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   const [saveState, setSaveState] = useState<ProjectSaveState>(() => initialSaveState())
   const [replacement, setReplacement] = useState<ProjectReplacementState>({ status: 'idle' })
   const [isFlushing, setIsFlushing] = useState(false)
+  const [persistenceBarrier, setPersistenceBarrier] = useState(false)
   const [joinedFailure, setJoinedFailure] = useState(0)
   const mountedRef = useRef(true)
   const actionSequenceRef = useRef(0)
@@ -357,9 +360,23 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   const persistenceGenerationRef = useRef(0)
   const failedRevisionRef = useRef<number | null>(null)
   const recoveryTokenRef = useRef<string | null>(null)
+  const recoveryTokensRef = useRef(new Set<string>())
   const skipNextProjectRevisionRef = useRef(false)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const flushPromiseRef = useRef<Promise<void> | null>(null)
+  const persistenceBarrierRef = useRef(false)
+  const beginPersistenceTransition = useCallback(() => {
+    persistenceBarrierRef.current = true
+    if (autosaveTimerRef.current !== null) {
+      clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
+    }
+    setPersistenceBarrier(true)
+  }, [])
+  const endPersistenceTransition = useCallback(() => {
+    persistenceBarrierRef.current = false
+    setPersistenceBarrier(false)
+  }, [])
   const resetPersistenceForProject = useCallback((persisted: boolean) => {
     persistenceGenerationRef.current += 1
     if (autosaveTimerRef.current !== null) {
@@ -370,6 +387,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     savedRevisionRef.current = 0
     failedRevisionRef.current = null
     recoveryTokenRef.current = null
+    recoveryTokensRef.current.clear()
     flushPromiseRef.current = null
     skipNextProjectRevisionRef.current = persisted
     setJoinedFailure(0)
@@ -543,6 +561,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
           if (!isCurrent()) return
           resetPersistenceForProject(false)
           recoveryTokenRef.current = recovery.token
+          recoveryTokensRef.current.add(recovery.token)
           dispatch({ type: 'load-project', project: recovery.project })
           setHydration({ status: 'ready-with-project', source: 'recovery' })
           announce('Recovered unsaved changes', 'success')
@@ -605,6 +624,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
       autosaveTimerRef.current = null
     }
     if (flushPromiseRef.current) return flushPromiseRef.current
+    if (persistenceBarrierRef.current) return Promise.resolve()
     if (hydration.status !== 'ready-with-project') return Promise.resolve()
     const generation = persistenceGenerationRef.current
     const isCurrent = () => persistenceGenerationRef.current === generation
@@ -627,7 +647,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         while (isCurrent() && savedRevisionRef.current < revisionRef.current) {
           attemptedRevision = revisionRef.current
           const project = projectRef.current
-          const recoveryToken = recoveryTokenRef.current
+          const recoveryTokens = [...recoveryTokensRef.current]
           await persist(project)
           if (!isCurrent()) return
           savedRevisionRef.current = Math.max(savedRevisionRef.current, attemptedRevision)
@@ -638,13 +658,19 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
             failedRevisionRef.current = null
           }
           if (options.recoveryScope) {
-            clearProjectRecovery(
-              recoveryStorage,
-              options.recoveryScope,
-              project.id,
-              recoveryToken,
-            )
-            if (recoveryTokenRef.current === recoveryToken) {
+            for (const token of recoveryTokens) {
+              clearProjectRecovery(
+                recoveryStorage,
+                options.recoveryScope,
+                project.id,
+                token,
+              )
+              recoveryTokensRef.current.delete(token)
+            }
+            if (
+              recoveryTokenRef.current &&
+              recoveryTokens.includes(recoveryTokenRef.current)
+            ) {
               recoveryTokenRef.current = null
             }
           }
@@ -698,12 +724,23 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     options.recoveryScope,
   ])
 
+  const settleActivePersistence = useCallback(async () => {
+    const active = flushPromiseRef.current
+    if (!active) return
+    try {
+      await active
+    } catch {
+      // Explicit discard callers need the transaction settled, not successful.
+    }
+  }, [])
+
   // A failed in-flight save may have been joined by a newer revision's debounce.
   // Once that attempt settles, queue one normal-delay retry for any still-dirty
   // revision. Repeated failures remain spaced by the debounce (never a hot loop).
   useEffect(() => {
     if (
       joinedFailure === 0 ||
+      persistenceBarrier ||
       savedRevisionRef.current >= revisionRef.current ||
       autosaveTimerRef.current !== null
     ) {
@@ -721,11 +758,12 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         autosaveTimerRef.current = null
       }
     }
-  }, [autosaveDelay, flushAutosave, joinedFailure])
+  }, [autosaveDelay, flushAutosave, joinedFailure, persistenceBarrier])
 
   // Debounced autosave on any project change. Explicit route-exit flushes cancel
   // this timer and await the same serialized persistence path.
   useEffect(() => {
+    if (persistenceBarrier) return
     if (hydration.status !== 'ready-with-project') return
     if (skipNextProjectRevisionRef.current) {
       skipNextProjectRevisionRef.current = false
@@ -739,13 +777,18 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
       failedRevisionRef.current = null
     }
     if (options.recoveryScope) {
-      recoveryTokenRef.current = writeProjectRecovery(
+      const previousToken = recoveryTokenRef.current
+      const token = writeProjectRecovery(
         recoveryStorage,
         options.recoveryScope,
         state.project,
         revisionRef.current,
-        recoveryTokenRef.current,
+        previousToken,
       )
+      if (token) {
+        recoveryTokenRef.current = token
+        recoveryTokensRef.current.add(token)
+      }
     }
     setSaveState((current) => ({
       ...current,
@@ -778,6 +821,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     hydration.status,
     recoveryStorage,
     options.recoveryScope,
+    persistenceBarrier,
   ])
 
   const play = useCallback(() => {
@@ -1002,6 +1046,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         request.project ?? (request.loadId ? await store.load(request.loadId) : null)
       if (!project) throw new Error('Project not found')
       if (request.persisted) await store.setLast(project.id)
+      endPersistenceTransition()
       resetPersistenceForProject(request.persisted)
       dispatch({ type: 'load-project', project })
       setHydration({ status: 'ready-with-project', source: 'created' })
@@ -1020,7 +1065,13 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
       )
       await refreshList()
     },
-    [announce, refreshList, resetPersistenceForProject, store],
+    [
+      announce,
+      endPersistenceTransition,
+      refreshList,
+      resetPersistenceForProject,
+      store,
+    ],
   )
 
   const requestProjectReplacement = useCallback(
@@ -1042,10 +1093,12 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         }
       }
 
+      beginPersistenceTransition()
       try {
         await installReplacement(request)
         return 'replaced'
       } catch {
+        endPersistenceTransition()
         setReplacement({ status: 'idle' })
         announce(
           request.source === 'open'
@@ -1056,7 +1109,14 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         return 'failed'
       }
     },
-    [announce, flushAutosave, hydration.status, installReplacement],
+    [
+      announce,
+      beginPersistenceTransition,
+      endPersistenceTransition,
+      flushAutosave,
+      hydration.status,
+      installReplacement,
+    ],
   )
 
   const retryProjectReplacement = useCallback(async (): Promise<ProjectReplacementResult> => {
@@ -1066,26 +1126,25 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
 
   const discardProjectReplacement = useCallback(async (): Promise<ProjectReplacementResult> => {
     if (replacement.status !== 'blocked') return 'failed'
-    const activePersistence = flushPromiseRef.current
-    if (activePersistence) {
-      try {
-        await activePersistence
-      } catch {
-        // Explicit discard may proceed after the active attempt has fully settled.
-      }
-    }
+    beginPersistenceTransition()
+    await settleActivePersistence()
     if (options.recoveryScope) {
-      clearProjectRecovery(
-        recoveryStorage,
-        options.recoveryScope,
-        projectRef.current.id,
-        recoveryTokenRef.current,
-      )
+      for (const token of recoveryTokensRef.current) {
+        clearProjectRecovery(
+          recoveryStorage,
+          options.recoveryScope,
+          projectRef.current.id,
+          token,
+        )
+      }
+      recoveryTokensRef.current.clear()
+      recoveryTokenRef.current = null
     }
     try {
       await installReplacement(replacement.request)
       return 'replaced'
     } catch {
+      endPersistenceTransition()
       setReplacement({ status: 'idle' })
       announce(
         replacement.request.source === 'open'
@@ -1097,10 +1156,13 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     }
   }, [
     announce,
+    beginPersistenceTransition,
+    endPersistenceTransition,
     installReplacement,
     options.recoveryScope,
     recoveryStorage,
     replacement,
+    settleActivePersistence,
   ])
 
   const cancelProjectReplacement = useCallback(() => {
@@ -1109,12 +1171,15 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
 
   const discardAutosaveRecovery = useCallback(() => {
     if (!options.recoveryScope) return
-    clearProjectRecovery(
-      recoveryStorage,
-      options.recoveryScope,
-      projectRef.current.id,
-      recoveryTokenRef.current,
-    )
+    for (const token of recoveryTokensRef.current) {
+      clearProjectRecovery(
+        recoveryStorage,
+        options.recoveryScope,
+        projectRef.current.id,
+        token,
+      )
+    }
+    recoveryTokensRef.current.clear()
     recoveryTokenRef.current = null
   }, [options.recoveryScope, recoveryStorage])
 
@@ -1378,6 +1443,8 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     isDirty: saveState.revision > saveState.persistedRevision,
     isFlushing,
     flushAutosave,
+    settleActivePersistence,
+    beginPersistenceTransition,
     retryHydration,
     continueToStartCenter,
     retrySave,

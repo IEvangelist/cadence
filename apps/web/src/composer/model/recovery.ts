@@ -20,6 +20,7 @@ interface ProjectRecoveryEnvelope {
   token: string
   revision: number
   updatedAt: number
+  order: number
   projectId: string
   project: string
 }
@@ -34,6 +35,7 @@ export interface ProjectRecovery {
   token: string
   revision: number
   updatedAt: number
+  order: number
   project: Project
 }
 
@@ -59,10 +61,7 @@ export function readProjectRecovery(
       ? readRecord(storage, scope, pointer.projectId, pointer.token)
       : null
   const discovered = discoverNewestRecord(storage, scope, projectId)
-  const selected =
-    active && discovered && active.updatedAt === discovered.updatedAt
-      ? active
-      : newerRecovery(active, discovered)
+  const selected = newerRecovery(active, discovered)
   if (
     selected &&
     (pointer?.projectId !== selected.project.id || pointer.token !== selected.token)
@@ -81,28 +80,33 @@ export function writeProjectRecovery(
 ): string | null {
   if (!storage) return null
   const token = newRecoveryToken()
+  const envelope: ProjectRecoveryEnvelope = {
+    version: 1,
+    scope,
+    token,
+    revision,
+    updatedAt: Date.now(),
+    order: newRecoveryOrder(),
+    projectId: project.id,
+    project: serializeProject(project),
+  }
   try {
-    const envelope: ProjectRecoveryEnvelope = {
-      version: 1,
-      scope,
-      token,
-      revision,
-      updatedAt: Date.now(),
-      projectId: project.id,
-      project: serializeProject(project),
-    }
     storage.setItem(
       projectRecoveryKey(scope, project.id, token),
       JSON.stringify(envelope),
     )
+  } catch {
+    return null
+  }
+  try {
     writePointer(storage, scope, project.id, token)
     if (previousToken && previousToken !== token) {
       storage.removeItem(projectRecoveryKey(scope, project.id, previousToken))
     }
-    return token
   } catch {
-    return null
+    // The durable record remains discoverable even if pointer/pruning updates fail.
   }
+  return token
 }
 
 export function clearProjectRecovery(
@@ -148,6 +152,7 @@ function parseEnvelope(
       typeof envelope.token !== 'string' ||
       typeof envelope.revision !== 'number' ||
       typeof envelope.updatedAt !== 'number' ||
+      typeof envelope.order !== 'number' ||
       typeof envelope.projectId !== 'string' ||
       typeof envelope.project !== 'string' ||
       (projectId && envelope.projectId !== projectId) ||
@@ -161,6 +166,7 @@ function parseEnvelope(
       token: envelope.token,
       revision: envelope.revision,
       updatedAt: envelope.updatedAt,
+      order: envelope.order,
       project,
     }
   } catch {
@@ -197,6 +203,9 @@ function newerRecovery(
   if (second.updatedAt !== first.updatedAt) {
     return second.updatedAt > first.updatedAt ? second : first
   }
+  if (second.order !== first.order) {
+    return second.order > first.order ? second : first
+  }
   return second.token > first.token ? second : first
 }
 
@@ -230,4 +239,15 @@ function newRecoveryToken(): string {
   return cryptoApi && typeof cryptoApi.randomUUID === 'function'
     ? cryptoApi.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+let lastRecoveryOrder = 0
+
+function newRecoveryOrder(): number {
+  const highResolutionNow =
+    typeof performance !== 'undefined'
+      ? Math.floor((performance.timeOrigin + performance.now()) * 1_000)
+      : Date.now() * 1_000
+  lastRecoveryOrder = Math.max(lastRecoveryOrder + 1, highResolutionNow)
+  return lastRecoveryOrder
 }
