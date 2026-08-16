@@ -276,6 +276,35 @@ describe('createCollabSession — collaborative undo/redo (#156)', () => {
     expect(idsOf(b).sort()).toEqual(['aNote', 'bNote', 'n1'])
   })
 
+  it("undoes A's full velocity gesture while preserving B's later note", () => {
+    const a = makePeer('A', seedProject())
+    const b = makePeer('B', undefined)
+    connect(a, b)
+    a.session.pushLocalProject(a.project)
+    Y.applyUpdate(b.doc, Y.encodeStateAsUpdate(a.doc), a.doc)
+    a.session.enableUndo()
+    b.session.enableUndo()
+
+    for (const velocity of [0.6, 0.4, 0.2]) {
+      const edit = structuredClone(a.project)
+      edit.tracks[0].notes[0].velocity = velocity
+      a.project = edit
+      a.session.pushLocalProject(edit)
+    }
+    a.session.stopCapturing()
+
+    const remote = structuredClone(b.project)
+    remote.tracks[0].notes.push(createNote({ pitch: 72, start: 4 }, 'remote'))
+    b.project = remote
+    b.session.pushLocalProject(remote)
+    expect(idsOf(a)).toContain('remote')
+
+    a.session.undo()
+    expect(a.project.tracks[0].notes.find((note) => note.id === 'n1')?.velocity).toBe(0.8)
+    expect(idsOf(a)).toContain('remote')
+    expect(idsOf(b)).toContain('remote')
+  })
+
   it("remote-only edits never populate a local client's undo stack", () => {
     const a = makePeer('A', seedProject())
     const b = makePeer('B', undefined)

@@ -20,6 +20,28 @@ function Harness() {
   return <PianoRoll controller={controller} />
 }
 
+function HistoryHarness() {
+  const controller = useComposer({
+    createEngine: () => new SilentAudioEngine(),
+    store: new LocalStorageProjectStore(new MemoryStorage()),
+    initialProject: createEmptyProject('p'),
+    autosaveDelay: 0,
+  })
+  const track = controller.project.tracks[0]
+  const note = track.notes[0]
+  return (
+    <>
+      <PianoRoll controller={controller} />
+      <button type="button" onClick={controller.undo} disabled={!controller.canUndo}>
+        Undo history
+      </button>
+      <output aria-label="Note state">
+        {note ? `${note.start}:${note.pitch}:${note.velocity}` : 'none'}
+      </output>
+    </>
+  )
+}
+
 // The grid reads clientX/Y relative to its bounding box; jsdom returns zeros, so
 // pin the box to the origin and drive pointer coordinates directly.
 function mockGridRect() {
@@ -128,6 +150,78 @@ describe('<PianoRoll />', () => {
       clientY: 80,
     })
     expect(note.style.left).toBe(cancelledLeft)
+  })
+
+  it('finalizes resize and velocity gestures on pointercancel', () => {
+    mockGridRect()
+    render(<Harness />)
+    const grid = screen.getByRole('application')
+    fireEvent.pointerDown(grid, { clientX: 0, clientY: 80 })
+    const note = screen.getAllByRole('button').find((button) =>
+      button.className.includes('pr-note'),
+    )!
+
+    const resize = note.querySelector('.pr-note-resize-end') as HTMLElement
+    fireEvent.pointerDown(resize, {
+      clientX: DEFAULT_LAYOUT.beatWidth,
+      clientY: 80,
+    })
+    fireEvent.pointerMove(window, {
+      clientX: DEFAULT_LAYOUT.beatWidth * 3,
+      clientY: 80,
+    })
+    fireEvent.pointerCancel(window)
+    const cancelledWidth = note.style.width
+    fireEvent.pointerMove(window, {
+      clientX: DEFAULT_LAYOUT.beatWidth * 5,
+      clientY: 80,
+    })
+    expect(note.style.width).toBe(cancelledWidth)
+
+    const velocity = screen.getByRole('button', { name: /Velocity for/ })
+    fireEvent.pointerDown(velocity, { clientY: 500 })
+    fireEvent.pointerMove(window, { clientY: 700 })
+    fireEvent.pointerCancel(window)
+    const cancelledLabel = velocity.getAttribute('aria-label')
+    fireEvent.pointerMove(window, { clientY: 900 })
+    expect(velocity.getAttribute('aria-label')).toBe(cancelledLabel)
+  })
+
+  it('undoes one complete velocity gesture and separates the next edit', () => {
+    mockGridRect()
+    render(<HistoryHarness />)
+    fireEvent.pointerDown(screen.getByRole('application'), {
+      clientX: 0,
+      clientY: 80,
+    })
+    const initialPitch = Number(
+      screen.getByRole('status', { name: 'Note state' }).textContent!.split(':')[1],
+    )
+    const velocity = screen.getByRole('button', { name: /Velocity for/ })
+
+    fireEvent.pointerDown(velocity, { clientY: 400 })
+    fireEvent.pointerMove(window, { clientY: 600 })
+    fireEvent.pointerUp(window)
+    expect(screen.getByRole('status', { name: 'Note state' })).toHaveTextContent(
+      `0:${initialPitch}:0.4`,
+    )
+
+    const note = screen.getAllByRole('button').find((button) =>
+      button.className.includes('pr-note'),
+    )!
+    fireEvent.keyDown(note, { key: 'ArrowUp' })
+    expect(screen.getByRole('status', { name: 'Note state' })).toHaveTextContent(
+      `0:${initialPitch + 1}:0.4`,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo history' }))
+    expect(screen.getByRole('status', { name: 'Note state' })).toHaveTextContent(
+      `0:${initialPitch}:0.4`,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Undo history' }))
+    expect(screen.getByRole('status', { name: 'Note state' })).toHaveTextContent(
+      `0:${initialPitch}:0.8`,
+    )
   })
 
   it('resizes a note by dragging its right (end) edge', () => {
