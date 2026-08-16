@@ -152,6 +152,27 @@ describe('automation persistence', () => {
       }
     })
 
+    it('treats absent and malformed schema versions as legacy and ignores colliding mix data', () => {
+      for (const schemaVersion of [undefined, '3', Number.NaN]) {
+        const project = migrateProject({
+          schemaVersion,
+          tracks: [{ id: 't1', instrumentId: 'poly-synth', notes: [] }],
+          mix: {
+            tracks: {
+              t1: { gainDb: -12, pan: 1, solo: true, inserts: [] },
+            },
+            master: { gainDb: -3, limiterEnabled: true, limiterThresholdDb: -4 },
+          },
+        })
+        expect(project.mix).toEqual({
+          tracks: {
+            t1: { gainDb: 0, pan: 0, solo: false, inserts: [] },
+          },
+          master: { gainDb: 0, limiterEnabled: false, limiterThresholdDb: -1 },
+        })
+      }
+    })
+
     it('clamps malformed values, removes orphans, and retains unavailable inserts', () => {
       const project = migrateProject({
         schemaVersion: 3,
@@ -229,6 +250,34 @@ describe('automation persistence', () => {
         },
       })
       expect(parseProject(serializeProject(project))).toEqual(project)
+    })
+
+    it('sanitizes the known mix subset from future schema versions', () => {
+      const project = migrateProject({
+        schemaVersion: 99,
+        tracks: [{ id: 't1', instrumentId: 'poly-synth', notes: [] }],
+        mix: {
+          tracks: {
+            t1: { gainDb: -7, pan: 4, solo: true, inserts: [] },
+            removed: { gainDb: -2, pan: 0, solo: false, inserts: [] },
+          },
+          master: {
+            gainDb: -2,
+            limiterEnabled: true,
+            limiterThresholdDb: -3,
+            futureField: 'ignored',
+          },
+          futureField: { unsafe: true },
+        },
+      })
+
+      expect(project.schemaVersion).toBe(SCHEMA_VERSION)
+      expect(project.mix).toEqual({
+        tracks: {
+          t1: { gainDb: -7, pan: 1, solo: true, inserts: [] },
+        },
+        master: { gainDb: -2, limiterEnabled: true, limiterThresholdDb: -3 },
+      })
     })
   })
 
