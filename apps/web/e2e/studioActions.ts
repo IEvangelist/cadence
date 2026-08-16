@@ -14,8 +14,11 @@ export async function openInspectorPanel(
 ): Promise<Locator> {
   const inspector = page.getByRole('button', { name: 'Inspector' })
   if ((await inspector.getAttribute('aria-expanded')) !== 'true') await inspector.click()
-  await page.getByRole('tab', { name: tabName, exact: true }).click()
-  const panel = page.getByRole('tabpanel')
+  const tab = page.getByRole('tab', { name: tabName, exact: true })
+  await tab.click()
+  const panelId = await tab.getAttribute('aria-controls')
+  if (!panelId) throw new Error(`${tabName} tab does not identify its panel`)
+  const panel = page.locator(`[id="${panelId}"]`)
   await expect(panel).toBeVisible()
   return panel
 }

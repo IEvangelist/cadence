@@ -235,8 +235,10 @@ function ComposerWorkspace({
         aria-keyshortcuts="Control+Z Meta+Z"
         disabled={!history.canUndo}
         onClick={history.undo}
+        aria-label="Undo"
+        title="Undo"
       >
-        Undo
+        ↶
       </button>
       <button
         type="button"
@@ -245,8 +247,10 @@ function ComposerWorkspace({
         aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z"
         disabled={!history.canRedo}
         onClick={history.redo}
+        aria-label="Redo"
+        title="Redo"
       >
-        Redo
+        ↷
       </button>
       <button
         type="button"
@@ -254,8 +258,10 @@ function ComposerWorkspace({
         data-interaction="studio.shortcuts.open"
         aria-keyshortcuts="?"
         onClick={() => setShortcutsOpen(true)}
+        aria-label="Shortcuts"
+        title="Keyboard shortcuts"
       >
-        Shortcuts
+        ?
       </button>
     </div>
   )
@@ -323,6 +329,7 @@ function ComposerWorkspace({
           </button>
         </div>
       )}
+      <div className="composer-editor-commandbar">{editControls}</div>
       <div className="composer-editor-stack">
         <PianoRoll controller={controller} previewNotes={assistant.previewNotes} />
         <EditorDetailLane
@@ -374,7 +381,6 @@ function ComposerWorkspace({
               onNewProject={() => setProjectBrowserOpen(true)}
               onOpenProject={() => setProjectBrowserOpen(true)}
             />
-            {editControls}
           </div>
         }
         transportControls={

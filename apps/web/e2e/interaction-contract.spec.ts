@@ -391,7 +391,8 @@ test.describe('production interaction contract', () => {
     await expect(authenticatedPage.locator('#composer-main')).toBeFocused()
     await assertInteractionContract(authenticatedPage, 'authenticated studio', observed)
 
-    await authenticatedPage
+    const instrumentInspector = await openInspectorPanel(authenticatedPage, 'Track')
+    await instrumentInspector
       .getByRole('button', { name: /Choose instrument for/ })
       .click()
     await expect(
@@ -449,7 +450,9 @@ test.describe('production interaction contract', () => {
     await authenticatedPage.keyboard.press('Escape')
 
     const trackInspector = await openInspectorPanel(authenticatedPage, 'Track')
-    await expect(trackInspector.getByRole('region', { name: 'Tracks' })).toBeVisible()
+    await expect(
+      trackInspector.getByRole('region', { name: 'Track inspector' }),
+    ).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'track inspector', observed)
 
     const aiStudioHost = await openInspectorPanel(authenticatedPage, 'AI Studio')

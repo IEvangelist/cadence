@@ -38,7 +38,7 @@ test.describe('plugins / extensions', () => {
     // Select a track to receive the chord, then run the command.
     await page
       .getByRole('complementary', { name: 'Track rail' })
-      .getByRole('button', { name: /Selected: Synth|Select Synth/ })
+      .getByRole('button', { name: /Selected Synth|Select Synth/ })
       .first()
       .click()
 

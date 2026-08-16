@@ -83,6 +83,25 @@
   gap: var(--space-1);
 }
 
+.composer-edit-actions {
+  display: inline-flex;
+  gap: var(--space-1);
+}
+
+.composer-edit-actions .btn {
+  width: 1.75rem;
+  min-width: 1.75rem;
+  padding-inline: 0;
+}
+
+.composer-editor-commandbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
 .track-rail__list {
   min-height: 0;
   margin: 0;
