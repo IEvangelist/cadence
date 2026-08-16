@@ -8,16 +8,38 @@ const viewports = [
 ] as const
 
 const themes = ['light', 'dark'] as const
+const updatingSnapshots = process.argv.some((argument) =>
+  argument.startsWith('--update-snapshots'),
+)
+
+if (updatingSnapshots && process.platform !== 'linux') {
+  throw new Error(
+    'Authoritative visual baselines must be generated on Linux Chromium.',
+  )
+}
 
 export default defineConfig({
   ...finalGateConfig,
+  outputDir: 'test-results/visual',
+  reporter: process.env.CI
+    ? [
+        ['github'],
+        ['html', { open: 'never', outputFolder: 'playwright-report-visual' }],
+      ]
+    : [
+        ['list'],
+        ['html', { open: 'never', outputFolder: 'playwright-report-visual' }],
+      ],
   testMatch: 'final-gate/visual.spec.ts',
   snapshotPathTemplate:
     '{testDir}/final-gate/__screenshots__/{projectName}/{arg}{ext}',
   projects: viewports.flatMap((viewport) =>
     themes.map((theme) => ({
       name: `chromium-${viewport.name}-${theme}`,
-      metadata: { cadenceTheme: theme },
+      metadata: {
+        cadenceTheme: theme,
+        cadenceViewport: viewport.name,
+      },
       use: {
         browserName: 'chromium' as const,
         colorScheme: theme,

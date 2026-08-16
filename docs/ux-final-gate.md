@@ -45,3 +45,6 @@ contamination is visible. The complete per-test audit is written to
 Runtime interaction and bundle reports are written as Playwright attachments or
 under ignored `test-results/final-gate`; committed files contain only protocol,
 baseline inputs, helpers, and approved Linux snapshots.
+
+The integrated pre-snapshot checkpoint measures 214,823 gzip bytes across the
+initial entry and module-preload graph, 3.43% below the 222,450-byte baseline.

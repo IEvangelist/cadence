@@ -6,6 +6,7 @@ export type FinalGateAccount = 'anonymous' | 'free' | 'pro'
 
 export interface FinalGateFixtureOptions {
   account?: FinalGateAccount
+  openLast?: boolean
   project?: Project | null
   theme?: FinalGateTheme
 }
@@ -310,13 +311,14 @@ export async function installFinalGateFixture(
   const account = options.account ?? 'pro'
   const project =
     options.project === undefined ? buildDeterministicProject() : options.project
+  const openLast = options.openLast ?? true
   const theme = options.theme ?? 'light'
   const state: FinalGateMockState = {
     projects: new Map(project ? [[project.id, toRemoteProject(project)]] : []),
   }
 
   await page.addInitScript(
-    ({ selectedTheme, localProject, updatedAt }) => {
+    ({ selectedTheme, localProject, shouldOpenLast, updatedAt }) => {
       localStorage.clear()
       sessionStorage.clear()
       localStorage.setItem('cadence.v1.onboarding.seen', '1')
@@ -336,7 +338,9 @@ export async function installFinalGateFixture(
             },
           ]),
         )
-        localStorage.setItem('cadence.v1.last', localProject.id)
+        if (shouldOpenLast) {
+          localStorage.setItem('cadence.v1.last', localProject.id)
+        }
       }
       ;(
         window as unknown as {
@@ -347,6 +351,7 @@ export async function installFinalGateFixture(
     {
       selectedTheme: theme,
       localProject: account === 'anonymous' ? project : null,
+      shouldOpenLast: openLast,
       updatedAt: FIXED_UPDATED_AT,
     },
   )
@@ -358,20 +363,16 @@ export async function installFinalGateFixture(
 
 export async function openDeterministicProject(page: Page): Promise<void> {
   const projectName = page.getByLabel('Project name')
-  if (
-    (await projectName.isVisible().catch(() => false)) &&
-    (await projectName.inputValue()) === 'Final Gate Fixture'
-  ) {
-    return
-  }
+  const studioReady = await projectName
+    .waitFor({ state: 'visible', timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false)
+  if (studioReady && (await projectName.inputValue()) === 'Final Gate Fixture') return
 
   const recentProject = page.getByRole('button', {
     name: /Final Gate Fixture/,
   })
-  if ((await recentProject.count()) > 0) {
-    await recentProject.click()
-  } else {
-    await page.getByLabel('Open project').selectOption('final-gate-project')
-  }
+  await recentProject.waitFor({ state: 'visible', timeout: 10_000 })
+  await recentProject.click()
   await projectName.waitFor({ state: 'visible' })
 }

@@ -24,6 +24,13 @@ export const finalGateAxeMatrix: readonly FinalGateScenario[] = [
     viewports: ['phone', 'tablet', 'desktop'],
   },
   {
+    id: 'start-recent',
+    route: '/',
+    account: 'anonymous',
+    state: 'Start Center with a deterministic recent project',
+    viewports: ['phone', 'tablet', 'desktop'],
+  },
+  {
     id: 'studio-write-default',
     route: '/',
     account: 'pro',

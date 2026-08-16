@@ -16,6 +16,7 @@
     "e2e:final-gate": "playwright test --config playwright.final-gate.config.ts",
     "e2e:install": "playwright install chromium",
     "e2e:visual": "playwright test --config playwright.visual.config.ts",
+    "test:visual-baselines": "node scripts/check-visual-baselines.mjs",
     "test:bundle-size": "node scripts/check-bundle-size.mjs"
   },
   "dependencies": {

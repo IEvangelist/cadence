@@ -29,7 +29,8 @@ class FinalGateAuditReporter implements Reporter {
     workingTreeDirty: true,
   }
 
-  private results: AuditTestResult[] = []
+  private attempts: AuditTestResult[] = []
+  private finalResults = new Map<string, AuditTestResult>()
   private totalTests = 0
 
   onBegin(config: FullConfig, suite: Suite): void {
@@ -43,13 +44,15 @@ class FinalGateAuditReporter implements Reporter {
   }
 
   onTestEnd(test: TestCase, result: TestResult): void {
-    this.results.push({
+    const auditResult = {
       ...this.identity,
       durationMs: result.duration,
       retry: result.retry,
       status: result.status,
       title: test.titlePath().join(' › '),
-    })
+    }
+    this.attempts.push(auditResult)
+    this.finalResults.set(test.id, auditResult)
   }
 
   onEnd(result: FullResult): void {
@@ -65,9 +68,10 @@ class FinalGateAuditReporter implements Reporter {
       `${JSON.stringify(
         {
           ...this.identity,
-          completedTests: this.results.length,
+          attempts: this.attempts,
+          completedTests: this.finalResults.size,
           overallStatus: result.status,
-          results: this.results,
+          results: [...this.finalResults.values()],
           totalTests: this.totalTests,
         },
         null,

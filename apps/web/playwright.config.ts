@@ -42,7 +42,10 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testIgnore: 'mobile-contract.spec.ts',
+      testIgnore: [
+        'mobile-contract.spec.ts',
+        'final-gate/**/*.spec.ts',
+      ],
       use: { ...devices['Desktop Chrome'] },
     },
     {

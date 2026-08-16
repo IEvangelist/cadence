@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
+import { returningProjectStorage } from './e2e/projectFixtures'
 
 const PORT = 4260
 const RELAY_PORT = 4360
@@ -46,6 +47,7 @@ export default defineConfig({
           origin: baseURL,
           localStorage: [
             { name: 'cadence.v1.onboarding.seen', value: '1' },
+            ...returningProjectStorage,
           ],
         },
       ],
@@ -54,7 +56,20 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium-final-gate',
+      testIgnore: ['mobile-contract.spec.ts', 'final-gate/visual.spec.ts'],
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'mobile-chromium-final-gate',
+      testMatch: 'mobile-contract.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        isMobile: true,
+        hasTouch: true,
+        deviceScaleFactor: 1,
+        reducedMotion: 'reduce',
+      },
     },
   ],
   webServer: [

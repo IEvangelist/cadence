@@ -14,6 +14,10 @@ import {
   openMixWorkspace,
   openStudioDestination,
 } from './studioActions'
+import {
+  buildInteractionCoverageReport,
+  writeInteractionCoverageReport,
+} from './final-gate/interaction-report'
 
 const interactiveSelector = [
   'button',
@@ -275,7 +279,7 @@ test.describe('production interaction contract', () => {
     page,
     browser,
     baseURL,
-  }) => {
+  }, testInfo) => {
     const observed = new Set<string>()
     await page.addInitScript(() => {
       const inputs = [
@@ -741,5 +745,9 @@ test.describe('production interaction contract', () => {
       .filter((id) => !observed.has(id))
       .sort()
     expect(missing, 'manifest interactions not observed in a rendered production state').toEqual([])
+    await writeInteractionCoverageReport(
+      buildInteractionCoverageReport(observed),
+      testInfo,
+    )
   })
 })
