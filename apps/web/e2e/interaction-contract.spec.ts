@@ -7,6 +7,11 @@ import {
   defaultProjectDetailDto,
   defaultProjectSummaryDto,
 } from './projectFixtures'
+import {
+  openInspectorPanel,
+  openMixWorkspace,
+  openStudioDestination,
+} from './studioActions'
 
 const interactiveSelector = [
   'button',
@@ -256,14 +261,6 @@ async function assertInteractionContract(
   expect(failures).toEqual([])
 }
 
-async function openPanel(page: Page, name: string): Promise<Locator> {
-  const toggle = page.getByRole('button', { name, exact: true })
-  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
-  const panel = page.getByRole('region', { name, exact: true })
-  await expect(panel).toBeVisible()
-  return panel
-}
-
 test.describe('production interaction contract', () => {
   test.describe.configure({ timeout: 600_000 })
 
@@ -289,15 +286,17 @@ test.describe('production interaction contract', () => {
     await assertInteractionContract(page, 'auth registration', observed)
     await page.getByRole('button', { name: 'Close', exact: true }).click()
 
-    await page.getByRole('button', { name: 'Pricing' }).click()
+    await openStudioDestination(page, 'Pricing')
     await expect(page.getByRole('heading', { name: 'Plans & pricing' })).toBeVisible()
     await assertInteractionContract(page, 'pricing', observed)
 
-    await page.getByRole('button', { name: 'Stems' }).click()
+    await page.getByRole('button', { name: 'Back to composer' }).click()
+    await openStudioDestination(page, 'Stems')
     await expect(page.getByRole('heading', { name: 'Stem separation' })).toBeVisible()
     await assertInteractionContract(page, 'stems free tier', observed)
 
-    await page.getByRole('button', { name: 'Third-party licenses' }).click()
+    await page.getByRole('button', { name: 'Back to composer' }).click()
+    await openStudioDestination(page, 'Third-party licenses')
     await expect(
       page.getByRole('heading', { name: /Acknowledgements & third-party licenses/i }),
     ).toBeVisible()
@@ -326,7 +325,7 @@ test.describe('production interaction contract', () => {
     await freeUserPage.route('**/api/**', (route) => mockApi(route, true, false))
     await freeUserPage.goto('/')
     await expect(freeUserPage.getByRole('button', { name: 'Profile' })).toBeVisible()
-    await freeUserPage.getByRole('button', { name: 'Stems' }).click()
+    await openStudioDestination(freeUserPage, 'Stems')
     await expect(freeUserPage.getByRole('button', { name: 'See Pro plans' })).toBeVisible()
     await assertInteractionContract(freeUserPage, 'authenticated free stems', observed)
     await freeUserContext.close()
@@ -377,7 +376,8 @@ test.describe('production interaction contract', () => {
     await assertInteractionContract(authenticatedPage, 'export and share menu open', observed)
     await authenticatedPage.keyboard.press('Escape')
 
-    const aiStudio = await openPanel(authenticatedPage, 'AI Studio')
+    const aiStudioHost = await openInspectorPanel(authenticatedPage, 'AI Studio')
+    const aiStudio = aiStudioHost.getByRole('region', { name: 'AI Studio' })
     await expect(aiStudio.getByText('Pro · on-device')).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'AI Studio text to motif', observed)
     await aiStudio.getByRole('radio', { name: /Style transfer/ }).check()
@@ -387,7 +387,7 @@ test.describe('production interaction contract', () => {
     await aiStudio.getByRole('radio', { name: /Auto-master/ }).check()
     await assertInteractionContract(authenticatedPage, 'AI Studio auto-master', observed)
 
-    const mixer = await openPanel(authenticatedPage, 'Mixer')
+    const mixer = await openMixWorkspace(authenticatedPage)
     const firstStrip = mixer.locator('fieldset').first()
     await firstStrip.getByRole('button', { name: 'Add', exact: true }).click()
     const volumeAutomation = firstStrip.getByRole('group', { name: 'Volume automation' })
@@ -398,7 +398,8 @@ test.describe('production interaction contract', () => {
     ).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'mixer with insert and automation', observed)
 
-    const extensions = await openPanel(authenticatedPage, 'Extensions')
+    const extensionHost = await openInspectorPanel(authenticatedPage, 'Extensions')
+    const extensions = extensionHost.getByRole('region', { name: 'Extensions' })
     await extensions.getByRole('checkbox', { name: /Hello Cadence \(example\)/ }).check()
     await expect(authenticatedPage.getByRole('region', { name: 'Example plugin' })).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'extensions enabled', observed)
@@ -409,13 +410,14 @@ test.describe('production interaction contract', () => {
     await expect(authenticatedPage.getByText('Your canvas is empty.')).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'empty project', observed)
 
-    const assistant = await openPanel(authenticatedPage, 'AI Assistant')
+    const assistantHost = await openInspectorPanel(authenticatedPage, 'Assistant')
+    const assistant = assistantHost.getByRole('region', { name: 'AI Assistant' })
     await assistant.getByRole('radio', { name: /Generate melody/ }).check()
     await assistant.getByRole('button', { name: 'Generate' }).click()
     await expect(assistant.getByRole('button', { name: 'Accept' })).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'assistant suggestion', observed)
 
-    await authenticatedPage.getByRole('button', { name: 'Pricing' }).click()
+    await openStudioDestination(authenticatedPage, 'Pricing')
     await expect(authenticatedPage.getByRole('button', { name: 'Manage billing' })).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'pricing pro tier', observed)
 
@@ -423,7 +425,8 @@ test.describe('production interaction contract', () => {
     await expect(authenticatedPage.getByRole('heading', { name: 'Your profile' })).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'profile', observed)
 
-    await authenticatedPage.getByRole('button', { name: 'Stems' }).click()
+    await authenticatedPage.getByRole('button', { name: 'Back to composer' }).click()
+    await openStudioDestination(authenticatedPage, 'Stems')
     await expect(authenticatedPage.getByLabel('bass stem preview')).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'stems pro results', observed)
     await authenticatedContext.close()
@@ -445,7 +448,7 @@ test.describe('production interaction contract', () => {
     })
     await failingSavePage.goto('/')
     await failingSavePage.getByLabel('Project name').fill('Unsaved route exit')
-    await failingSavePage.getByRole('button', { name: 'Pricing' }).click()
+    await openStudioDestination(failingSavePage, 'Pricing')
     await expect(
       failingSavePage.locator('[data-interaction="studio.autosave.retry"]'),
     ).toBeVisible()

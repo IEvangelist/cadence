@@ -24,9 +24,11 @@ test.describe('acknowledgements', () => {
     await page.route('**/api/**', mockApi)
     await page.goto('/')
 
-    // Drive the entry point with the keyboard only: focus the footer control and
-    // activate it. This asserts the surface is keyboard-reachable from the shell.
-    const entry = page.getByRole('button', { name: 'Third-party licenses' })
+    // Drive the Studio Help entry point with the keyboard only.
+    const help = page.getByRole('button', { name: 'Help' })
+    await help.focus()
+    await page.keyboard.press('Enter')
+    const entry = page.getByRole('menuitem', { name: 'Third-party licenses' })
     await entry.focus()
     await expect(entry).toBeFocused()
     await page.keyboard.press('Enter')

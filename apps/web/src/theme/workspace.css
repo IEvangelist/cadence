@@ -7,6 +7,11 @@
 
 .app--composer {
   max-width: none;
+  width: 100%;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
 }
 
 .skip-link {

@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { test, expect } from '@playwright/test'
 import { createBlankProject } from './projectActions'
+import { openInspectorPanel } from './studioActions'
 
 // The AI assistant is exercised against the production build with the model
 // MOCKED: `window.__CADENCE_AI_MOCK__` makes the provider factory return the
@@ -21,8 +22,8 @@ test.describe('AI assistant', () => {
     await createBlankProject(page)
     await expect(page.getByText('Your canvas is empty.')).toBeVisible()
 
-    const panel = page.getByRole('region', { name: 'AI Assistant' })
-    await expect(panel).toBeVisible()
+    const inspector = await openInspectorPanel(page, 'Assistant')
+    const panel = inspector.getByRole('region', { name: 'AI Assistant' })
 
     // "Generate melody" can start from an empty region.
     await panel.getByRole('radio', { name: /Generate melody/ }).check()
@@ -60,7 +61,8 @@ test.describe('AI assistant', () => {
     await page.goto('/')
     await createBlankProject(page)
 
-    const panel = page.getByRole('region', { name: 'AI Assistant' })
+    const inspector = await openInspectorPanel(page, 'Assistant')
+    const panel = inspector.getByRole('region', { name: 'AI Assistant' })
     const generateAction = panel.getByRole('radio', { name: /Generate melody/ })
 
     await generateAction.focus()
@@ -79,6 +81,7 @@ test.describe('AI assistant', () => {
   }) => {
     await page.goto('/')
     await createBlankProject(page)
+    const inspector = await openInspectorPanel(page, 'Assistant')
 
     const scan = () =>
       new AxeBuilder({ page })
@@ -90,7 +93,7 @@ test.describe('AI assistant', () => {
     expect((await scan()).violations).toEqual([])
 
     // With a pending suggestion (preview/accept/discard visible).
-    const panel = page.getByRole('region', { name: 'AI Assistant' })
+    const panel = inspector.getByRole('region', { name: 'AI Assistant' })
     await panel.getByRole('radio', { name: /Generate melody/ }).check()
     await panel.getByRole('button', { name: 'Generate' }).click()
     await expect(panel.getByRole('button', { name: 'Accept' })).toBeVisible()

@@ -1120,6 +1120,13 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'Switches the primary workspace to the mixer without resetting transport state.',
   ),
   studioFrame(
+    'studio.rail.toggle',
+    'studio',
+    'button',
+    'Tracks',
+    'Collapses or restores the persistent track rail and reallocates editor space.',
+  ),
+  studioFrame(
     'studio.inspector.toggle',
     'studio',
     'button',
@@ -1130,7 +1137,7 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'studio.inspector.panel',
     'studio',
     'tab',
-    '/Assistant|AI Studio|Extensions/',
+    '/Track|Assistant|AI Studio|Extensions/',
     'Switches the inspector to one mounted contextual panel.',
     'repeated',
   ),

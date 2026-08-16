@@ -154,6 +154,38 @@ describe('usePlugins', () => {
     expect(run).toHaveBeenCalledTimes(2)
   })
 
+  it('suppresses project-mutating shortcuts inside dialogs', () => {
+    const host = createPluginHost()
+    const run = vi.fn()
+    host.register(commandPlugin(run))
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'alertdialog')
+    const button = document.createElement('button')
+    dialog.append(button)
+    document.body.append(dialog)
+
+    renderHook(() =>
+      usePlugins(stubController(), {
+        host,
+        preferencesStore: enabledStore('acme.cmd'),
+      }),
+    )
+
+    act(() => {
+      button.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'h',
+          ctrlKey: true,
+          shiftKey: true,
+          bubbles: true,
+        }),
+      )
+    })
+
+    expect(run).not.toHaveBeenCalled()
+    dialog.remove()
+  })
+
   it('tracks panel visibility with a persisted default of visible', () => {
     const host = createPluginHost()
     host.register({

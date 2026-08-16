@@ -15,6 +15,7 @@ export interface StudioFrameProps {
   view: StudioView
   onViewChange(view: StudioView): void
   railOpen?: boolean
+  onRailToggle?(): void
   inspectorOpen?: boolean
   onInspectorToggle?(): void
   inspectorLabel?: string
@@ -36,6 +37,7 @@ export function StudioFrame({
   view,
   onViewChange,
   railOpen = true,
+  onRailToggle,
   inspectorOpen = false,
   onInspectorToggle,
   inspectorLabel = 'Inspector',
@@ -54,7 +56,9 @@ export function StudioFrame({
   return (
     <section
       className={className}
-      aria-label="Studio workbench"
+      id="composer-main"
+      aria-label="Composer"
+      tabIndex={-1}
       data-studio-workbench
       data-studio-view={view}
     >
@@ -104,6 +108,18 @@ export function StudioFrame({
             Mix
           </button>
         </div>
+
+        {onRailToggle ? (
+          <button
+            type="button"
+            className="studio-frame__utility-button"
+            data-interaction="studio.rail.toggle"
+            aria-expanded={railOpen}
+            onClick={onRailToggle}
+          >
+            Tracks
+          </button>
+        ) : null}
 
         {inspector && onInspectorToggle ? (
           <button

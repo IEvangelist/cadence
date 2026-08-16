@@ -16,6 +16,7 @@ function FrameHarness({
 }) {
   const [view, setView] = useState<StudioView>('write')
   const [inspectorOpen, setInspectorOpen] = useState(false)
+  const [visibleRail, setVisibleRail] = useState(railOpen)
 
   return (
     <StudioFrame
@@ -29,7 +30,8 @@ function FrameHarness({
       utilityControls={<button type="button">Help</button>}
       view={view}
       onViewChange={setView}
-      railOpen={railOpen}
+      railOpen={visibleRail}
+      onRailToggle={() => setVisibleRail((open) => !open)}
       inspectorOpen={inspectorOpen}
       onInspectorToggle={() => setInspectorOpen((open) => !open)}
     />
@@ -90,7 +92,7 @@ describe('<StudioFrame />', () => {
   it('removes closed auxiliary surfaces from the accessibility tree', async () => {
     coversInteractions('studio.inspector.toggle')
     const user = userEvent.setup()
-    const { rerender } = render(<FrameHarness />)
+    render(<FrameHarness />)
 
     expect(screen.queryByRole('complementary', { name: 'Inspector' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Inspector' })).not.toHaveAttribute('aria-controls')
@@ -98,7 +100,7 @@ describe('<StudioFrame />', () => {
     expect(screen.getByRole('complementary', { name: 'Inspector' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Inspector' })).toHaveAttribute('aria-controls')
 
-    rerender(<FrameHarness railOpen={false} />)
+    await user.click(screen.getByRole('button', { name: 'Tracks' }))
     expect(screen.queryByRole('complementary', { name: 'Track rail' })).not.toBeInTheDocument()
   })
 
@@ -113,6 +115,7 @@ describe('<StudioFrame />', () => {
       'Piano roll',
       'Write',
       'Mix',
+      'Tracks',
       'Inspector',
       'Share',
       'Help',
@@ -137,6 +140,20 @@ describe('<StudioFrame />', () => {
 
     await user.click(screen.getByRole('button', { name: 'Mix' }))
     expect(screen.getByRole('button', { name: 'Play 1' })).toBeInTheDocument()
+  })
+
+  it('reallocates the rail column while keeping a visible restore control', async () => {
+    coversInteractions('studio.rail.toggle')
+    const user = userEvent.setup()
+    render(<FrameHarness />)
+
+    await user.click(screen.getByRole('button', { name: 'Tracks' }))
+
+    expect(screen.queryByRole('complementary', { name: 'Track rail' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tracks' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
   })
 })
 

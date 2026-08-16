@@ -1,10 +1,17 @@
 import { useCallback, useMemo } from 'react'
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom'
 import { useAuth } from '../../auth/authContext'
+import { AuthBar } from '../../auth/AuthBar'
 import { Composer } from '../../composer/Composer'
 import { buildCollabConfig } from '../../composer/model/collab/collabConfig'
+import { StudioHelpMenu } from '../../studio'
+import { ThemeMenu } from '../../theme/ThemeMenu'
 import { useProjectStore } from '../projectStoreContext'
 import type { AppRouteContext } from '../routeContext'
+
+function destination(pathname: string, location: ReturnType<typeof useLocation>) {
+  return { pathname, search: location.search, hash: location.hash }
+}
 
 export function StudioRoute() {
   const auth = useAuth()
@@ -62,6 +69,18 @@ export function StudioRoute() {
         collab={collab}
         canShare={authenticated}
         guardNavigation
+        utilityControls={
+          <>
+            <StudioHelpMenu
+              onNavigate={(pathname) => void navigate(destination(pathname, location))}
+            />
+            <ThemeMenu />
+            <AuthBar
+              onShowProfile={() => void navigate(destination('/profile', location))}
+              profileActive={false}
+            />
+          </>
+        }
       />
     </>
   )

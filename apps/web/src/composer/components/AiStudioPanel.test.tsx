@@ -53,12 +53,11 @@ function renderStudio(opts: { entitlements?: Entitlements | null; project?: Proj
 }
 
 function studioRanelRegion() {
-  // AI Studio is a collapsed-by-default rail panel (#98); expand its disclosure
-  // before reaching into the panel. Idempotent so it survives persisted state.
-  const toggle = screen.getByRole('button', { name: 'AI Studio' })
-  if (toggle.getAttribute('aria-expanded') === 'false') {
-    fireEvent.click(toggle)
+  const inspector = screen.getByRole('button', { name: 'Inspector' })
+  if (inspector.getAttribute('aria-expanded') === 'false') {
+    fireEvent.click(inspector)
   }
+  fireEvent.click(screen.getByRole('tab', { name: 'AI Studio' }))
   return screen.getByRole('region', { name: 'AI Studio' })
 }
 

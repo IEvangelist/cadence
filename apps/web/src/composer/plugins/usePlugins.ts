@@ -76,6 +76,10 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable === true
 }
 
+function isDialogTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('[role="dialog"], [role="alertdialog"]') !== null
+}
+
 export function usePlugins(
   controller: ComposerController,
   options: UsePluginsOptions = {},
@@ -189,7 +193,7 @@ export function usePlugins(
     const map = resolveKeybindingMap(commands, prefs.keybindings)
     if (map.size === 0) return
     const onKeyDown = (event: KeyboardEvent) => {
-      if (isEditableTarget(event.target)) return
+      if (isEditableTarget(event.target) || isDialogTarget(event.target)) return
       const binding = eventToKeybinding(event)
       if (!binding) return
       const commandId = map.get(binding)

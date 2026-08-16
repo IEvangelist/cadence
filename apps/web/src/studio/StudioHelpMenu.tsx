@@ -30,7 +30,7 @@ export function StudioHelpMenu({ onNavigate }: StudioHelpMenuProps) {
               onClick={() => onNavigate('/stems')}
             >
               <Icon icon={Scissors} size={16} />
-              <span>Stem separation</span>
+              <span>Stems</span>
             </button>
           </DropdownMenu.Item>
           <DropdownMenu.Item asChild>
@@ -41,7 +41,7 @@ export function StudioHelpMenu({ onNavigate }: StudioHelpMenuProps) {
               onClick={() => onNavigate('/pricing')}
             >
               <Icon icon={WalletCards} size={16} />
-              <span>Plans and pricing</span>
+              <span>Pricing</span>
             </button>
           </DropdownMenu.Item>
           <DropdownMenu.Item asChild>

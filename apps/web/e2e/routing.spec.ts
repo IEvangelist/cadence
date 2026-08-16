@@ -1,5 +1,6 @@
 import { expect, test, type Page, type Route } from '@playwright/test'
 import { chooseExport, createBlankProject } from './projectActions'
+import { openStudioDestination } from './studioActions'
 
 interface MockProjectState {
   saved?: Record<string, unknown>
@@ -97,7 +98,7 @@ test.describe('browser-history routes', () => {
     const main = page.getByRole('main')
     await expect(main).not.toBeFocused()
 
-    await page.getByRole('button', { name: 'Pricing' }).click()
+    await openStudioDestination(page, 'Pricing')
     await expect(page).toHaveURL(/\/pricing\?collab=room&role=viewer&share=token#project=invalid$/)
     await expect(page).toHaveTitle('Pricing | Cadence')
     await expect(main).toBeFocused()
@@ -156,7 +157,7 @@ test.describe('browser-history routes', () => {
     await page.goto('/')
     await startBlankWhenNeeded(page)
     await page.getByLabel('Project name').fill('Saved before route exit')
-    await page.getByRole('button', { name: 'Pricing' }).click()
+    await openStudioDestination(page, 'Pricing')
 
     await expect(page).toHaveURL(/\/$/)
     await expect(page.getByText('Saving changes…')).toBeVisible()
@@ -183,7 +184,7 @@ test.describe('browser-history routes', () => {
     await expect(page.locator('.toolbar-save-state')).toContainText(/All changes saved|Saved/)
     failSave = true
     await page.getByLabel('Project name').fill('Retry this save')
-    await page.getByRole('button', { name: 'Pricing' }).click()
+    await openStudioDestination(page, 'Pricing')
 
     await expect(page).toHaveURL(/\/$/)
     const routeRetry = page.locator('[data-interaction="studio.autosave.retry"]')
@@ -218,8 +219,8 @@ test.describe('browser-history routes', () => {
     await startBlankWhenNeeded(page)
     await page.getByLabel('Project name').fill('Latest destination')
 
-    await page.getByRole('button', { name: 'Pricing' }).click()
-    await page.getByRole('button', { name: 'Stems' }).click()
+    await openStudioDestination(page, 'Pricing')
+    await openStudioDestination(page, 'Stems')
 
     await expect(page).toHaveURL(/\/stems$/, { timeout: 5_000 })
     expect(pageErrors).toEqual([])
