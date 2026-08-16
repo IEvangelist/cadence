@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { InstrumentVoiceContext } from '../types'
 import type { SampledInstrument } from './samplePacks/renderSample'
+import {
+  getInstrumentLoadState,
+  setInstrumentLoadState,
+} from '../../instruments/instrumentLoadState'
 
 // Mock the lazily-imported pack module so the contributions' `createVoice` never
 // pulls Tone/Web Audio into the jsdom run — the pack build is browser-only and is
@@ -134,6 +138,25 @@ describe('createSamplerVoice', () => {
     voice.trigger(60, 0.5, 0, 0.8)
     await tick()
     expect(() => voice.dispose()).not.toThrow()
+  })
+
+  it('reports sampled loading, ready, and error states to the browser', async () => {
+    const ready = harness()
+    setInstrumentLoadState('sample-state', 'idle')
+    createSamplerVoice(context(), ready.load, 'sample-state')
+    expect(getInstrumentLoadState('sample-state')).toBe('loading')
+    ready.resolve(ready.instrument)
+    await tick()
+    expect(getInstrumentLoadState('sample-state')).toBe('ready')
+
+    setInstrumentLoadState('sample-state', 'idle')
+    createSamplerVoice(
+      context(),
+      () => Promise.reject(new Error('network unavailable')),
+      'sample-state',
+    )
+    await tick()
+    expect(getInstrumentLoadState('sample-state')).toBe('error')
   })
 })
 

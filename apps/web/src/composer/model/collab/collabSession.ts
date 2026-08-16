@@ -9,7 +9,14 @@
 import * as Y from 'yjs'
 import type { Awareness } from 'y-protocols/awareness'
 import type { Project } from './../project'
-import { LOCAL_ORIGIN, isProjectDocEmpty, readProject, reconcileDoc, seedProjectDoc } from './crdt'
+import {
+  LOCAL_ORIGIN,
+  getProjectMap,
+  isProjectDocEmpty,
+  readProject,
+  reconcileDoc,
+  seedProjectDoc,
+} from './crdt'
 
 /** A collaborator identity surfaced in the presence UI. */
 export interface CollabUser {
@@ -69,7 +76,46 @@ export interface CollabSession {
   presence: () => CollabPresence[]
   /** Subscribe to roster changes. Returns an unsubscribe. */
   onPresenceChange: (listener: (present: CollabPresence[]) => void) => () => void
-  /** Tear down observers and clear local awareness. */
+
+  /**
+   * Create the collaborative undo/redo stack (#156): a `Y.UndoManager` scoped
+   * to this doc's project root, tracking only `LOCAL_ORIGIN` transactions (so
+   * remote peers' edits are never undone by this client). Callers MUST invoke
+   * this only AFTER the initial seed/adoption has happened — content written
+   * to the scope before the manager exists is not tracked, which is exactly
+   * how "seeding/adopting the shared project must not itself be undoable" is
+   * satisfied, with no extra guard logic required. No-op for viewers (who
+   * never write, so there is nothing of theirs to undo) and idempotent if
+   * already enabled.
+   */
+  enableUndo: () => void
+  /**
+   * Undo this client's most recent tracked local edit. No-op for viewers or
+   * before {@link enableUndo} has been called (or once its stack is empty).
+   */
+  undo: () => void
+  /** Redo the most recently undone local edit. Same no-op conditions as {@link undo}. */
+  redo: () => void
+  /** Whether there is a local edit available to undo. Always `false` for viewers. */
+  canUndo: () => boolean
+  /** Whether there is an undone local edit available to redo. Always `false` for viewers. */
+  canRedo: () => boolean
+  /**
+   * Force the NEXT local edit to start a fresh undo entry rather than merging
+   * with whatever was just captured — the collaborative counterpart of
+   * `history.ts`'s `stopCapturing`, for callers that want an explicit boundary
+   * between a continuous gesture (pointer drag / slider) and the discrete
+   * command that follows it, instead of relying solely on the undo manager's
+   * own capture-timeout window. No-op before {@link enableUndo} or for viewers.
+   */
+  stopCapturing: () => void
+  /**
+   * Subscribe to undo/redo stack changes (used to mirror `canUndo`/`canRedo`
+   * into React state). Invoked once immediately with the current snapshot,
+   * like {@link onPresenceChange}. Returns an unsubscribe.
+   */
+  onUndoStackChange: (listener: () => void) => () => void
+  /** Tear down observers, the undo manager, and clear local awareness. */
   destroy: () => void
 }
 
@@ -92,6 +138,11 @@ export function createCollabSession(options: CollabSessionOptions): CollabSessio
   const { doc, awareness, user, canWrite, onRemoteProject, initialProject } = options
 
   const presenceListeners = new Set<(present: CollabPresence[]) => void>()
+  const undoStackListeners = new Set<() => void>()
+  // Created lazily by `enableUndo` — never automatically, so seeding/adopting
+  // the shared project ahead of it is never itself undoable (see the
+  // `enableUndo` doc comment on the interface above).
+  let undoManager: Y.UndoManager | undefined
 
   // Seed only when we may write and the doc is empty; a late viewer/editor that
   // joins an existing doc must not clobber it.
@@ -101,6 +152,10 @@ export function createCollabSession(options: CollabSessionOptions): CollabSessio
 
   const handleDocUpdate = (_update: Uint8Array, origin: unknown) => {
     // Ignore our own writes; everything else is a converged remote change.
+    // This also covers this client's OWN undo/redo transactions: `Y.UndoManager`
+    // stamps those with itself (not `LOCAL_ORIGIN`) as the origin, so an undo
+    // naturally falls through to `onRemoteProject` — the same path a genuine
+    // remote peer's edit takes — with no extra wiring required.
     if (origin === LOCAL_ORIGIN) return
     onRemoteProject(readProject(doc))
   }
@@ -114,6 +169,8 @@ export function createCollabSession(options: CollabSessionOptions): CollabSessio
   awareness.on('change', handleAwareness)
 
   awareness.setLocalStateField('user', user)
+
+  const notifyUndoStack = () => undoStackListeners.forEach((listener) => listener())
 
   return {
     localOrigin: LOCAL_ORIGIN,
@@ -140,10 +197,43 @@ export function createCollabSession(options: CollabSessionOptions): CollabSessio
       listener(readPresence(awareness))
       return () => presenceListeners.delete(listener)
     },
+    enableUndo() {
+      if (!canWrite || undoManager) return
+      undoManager = new Y.UndoManager(getProjectMap(doc), {
+        trackedOrigins: new Set([LOCAL_ORIGIN]),
+      })
+      undoManager.on('stack-item-added', notifyUndoStack)
+      undoManager.on('stack-item-popped', notifyUndoStack)
+      undoManager.on('stack-cleared', notifyUndoStack)
+      notifyUndoStack()
+    },
+    undo() {
+      undoManager?.undo()
+    },
+    redo() {
+      undoManager?.redo()
+    },
+    canUndo() {
+      return undoManager?.canUndo() ?? false
+    },
+    canRedo() {
+      return undoManager?.canRedo() ?? false
+    },
+    stopCapturing() {
+      undoManager?.stopCapturing()
+    },
+    onUndoStackChange(listener) {
+      undoStackListeners.add(listener)
+      listener()
+      return () => undoStackListeners.delete(listener)
+    },
     destroy() {
       doc.off('update', handleDocUpdate)
       awareness.off('change', handleAwareness)
       presenceListeners.clear()
+      undoStackListeners.clear()
+      undoManager?.destroy()
+      undoManager = undefined
       // Removing our awareness entry signals "left" to peers.
       awareness.setLocalState(null)
     },

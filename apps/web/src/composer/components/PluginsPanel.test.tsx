@@ -23,6 +23,8 @@ function makeController(overrides: Partial<PluginsController> = {}): PluginsCont
     runCommand: vi.fn(),
     keybindingFor: (id) => (id === 'acme.hello' ? 'mod+shift+h' : undefined),
     setKeybinding: vi.fn(),
+    keybindingOverrides: {},
+    keybindingNotice: null,
     visiblePanels: [],
     allPanels: [],
     isPanelVisible: () => true,

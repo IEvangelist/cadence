@@ -23,6 +23,10 @@
  * untouched, so the sampled voices stay velocity-sensitive like every other voice.
  */
 import type { InstrumentContribution, InstrumentVoice, InstrumentVoiceContext } from '../types'
+import {
+  registerLazyInstrument,
+  setInstrumentLoadState,
+} from '../../instruments/instrumentLoadState'
 import type { SampledInstrument } from './samplePacks/renderSample'
 
 /** Loads (and connects) the concrete sampled instrument for a voice's output. */
@@ -40,11 +44,13 @@ type SampleLoader = (context: InstrumentVoiceContext) => Promise<SampledInstrume
 export function createSamplerVoice(
   ctx: InstrumentVoiceContext,
   load: SampleLoader,
+  instrumentId?: string,
 ): InstrumentVoice {
   let instrument: SampledInstrument | null = null
   let disposed = false
   const pending: Array<[number, number, number, number]> = []
 
+  if (instrumentId) setInstrumentLoadState(instrumentId, 'loading')
   load(ctx)
     .then((loaded) => {
       // The voice was disposed while the pack was loading — throw the load away.
@@ -53,12 +59,14 @@ export function createSamplerVoice(
         return
       }
       instrument = loaded
+      if (instrumentId) setInstrumentLoadState(instrumentId, 'ready')
       for (const [pitch, duration, time, velocity] of pending) {
         instrument.trigger(pitch, duration, time, velocity)
       }
       pending.length = 0
     })
     .catch(() => {
+      if (instrumentId) setInstrumentLoadState(instrumentId, 'error')
       // Pack failed to load (e.g. no Web Audio available). The voice stays valid
       // and simply silent rather than throwing into the audio callback.
     })
@@ -70,6 +78,9 @@ export function createSamplerVoice(
       } else if (!disposed) {
         pending.push([pitch, duration, time, velocity])
       }
+
+      registerLazyInstrument('sampled-grand-piano')
+      registerLazyInstrument('sampled-electric-piano')
     },
     dispose: () => {
       disposed = true
@@ -95,10 +106,14 @@ export const SAMPLER_VOICE_INSTRUMENTS: InstrumentContribution[] = [
     polyphonic: true,
     group: 'Keys',
     createVoice: (ctx) =>
-      createSamplerVoice(ctx, async ({ output }) => {
-        const { loadGrandPiano } = await import('./samplePacks/pianoPacks')
-        return loadGrandPiano(output)
-      }),
+      createSamplerVoice(
+        ctx,
+        async ({ output }) => {
+          const { loadGrandPiano } = await import('./samplePacks/pianoPacks')
+          return loadGrandPiano(output)
+        },
+        'sampled-grand-piano',
+      ),
   },
   {
     id: 'sampled-electric-piano',
@@ -109,9 +124,13 @@ export const SAMPLER_VOICE_INSTRUMENTS: InstrumentContribution[] = [
     polyphonic: true,
     group: 'Keys',
     createVoice: (ctx) =>
-      createSamplerVoice(ctx, async ({ output }) => {
-        const { loadElectricPiano } = await import('./samplePacks/pianoPacks')
-        return loadElectricPiano(output)
-      }),
+      createSamplerVoice(
+        ctx,
+        async ({ output }) => {
+          const { loadElectricPiano } = await import('./samplePacks/pianoPacks')
+          return loadElectricPiano(output)
+        },
+        'sampled-electric-piano',
+      ),
   },
 ]
