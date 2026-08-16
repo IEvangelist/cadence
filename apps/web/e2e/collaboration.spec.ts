@@ -109,11 +109,14 @@ async function openCollaborator(
 
   await page.goto(`/?collab=${room}&role=${role}&share=${TOKENS[role]}`)
 
-  // Sign in with the mocked local credentials (opens the panel, then submits).
+  // Sign in with the mocked local credentials.
   await page.getByRole('button', { name: 'Sign in' }).click()
   await page.getByLabel('Email').fill(user.email)
   await page.getByLabel('Password').fill('correct horse battery')
-  await page.getByRole('button', { name: 'Sign in' }).click()
+  await page
+    .getByRole('dialog', { name: 'Sign in to Cadence' })
+    .getByRole('button', { name: 'Sign in' })
+    .click()
   await expect(page.getByRole('button', { name: 'Profile' })).toBeVisible()
 
   // Collaboration activates only once signed in + a share link is present.
