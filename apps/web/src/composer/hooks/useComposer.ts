@@ -356,6 +356,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   const savedRevisionRef = useRef(0)
   const persistenceGenerationRef = useRef(0)
   const failedRevisionRef = useRef<number | null>(null)
+  const recoveryTokenRef = useRef<string | null>(null)
   const skipNextProjectRevisionRef = useRef(false)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const flushPromiseRef = useRef<Promise<void> | null>(null)
@@ -368,6 +369,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     revisionRef.current = 0
     savedRevisionRef.current = 0
     failedRevisionRef.current = null
+    recoveryTokenRef.current = null
     flushPromiseRef.current = null
     skipNextProjectRevisionRef.current = persisted
     setJoinedFailure(0)
@@ -540,6 +542,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         if (recovery) {
           if (!isCurrent()) return
           resetPersistenceForProject(false)
+          recoveryTokenRef.current = recovery.token
           dispatch({ type: 'load-project', project: recovery.project })
           setHydration({ status: 'ready-with-project', source: 'recovery' })
           announce('Recovered unsaved changes', 'success')
@@ -624,6 +627,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         while (isCurrent() && savedRevisionRef.current < revisionRef.current) {
           attemptedRevision = revisionRef.current
           const project = projectRef.current
+          const recoveryToken = recoveryTokenRef.current
           await persist(project)
           if (!isCurrent()) return
           savedRevisionRef.current = Math.max(savedRevisionRef.current, attemptedRevision)
@@ -638,8 +642,11 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
               recoveryStorage,
               options.recoveryScope,
               project.id,
-              savedRevisionRef.current,
+              recoveryToken,
             )
+            if (recoveryTokenRef.current === recoveryToken) {
+              recoveryTokenRef.current = null
+            }
           }
           void refreshList()
         }
@@ -732,11 +739,12 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
       failedRevisionRef.current = null
     }
     if (options.recoveryScope) {
-      writeProjectRecovery(
+      recoveryTokenRef.current = writeProjectRecovery(
         recoveryStorage,
         options.recoveryScope,
         state.project,
         revisionRef.current,
+        recoveryTokenRef.current,
       )
     }
     setSaveState((current) => ({
@@ -1058,12 +1066,20 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
 
   const discardProjectReplacement = useCallback(async (): Promise<ProjectReplacementResult> => {
     if (replacement.status !== 'blocked') return 'failed'
+    const activePersistence = flushPromiseRef.current
+    if (activePersistence) {
+      try {
+        await activePersistence
+      } catch {
+        // Explicit discard may proceed after the active attempt has fully settled.
+      }
+    }
     if (options.recoveryScope) {
       clearProjectRecovery(
         recoveryStorage,
         options.recoveryScope,
         projectRef.current.id,
-        Number.POSITIVE_INFINITY,
+        recoveryTokenRef.current,
       )
     }
     try {
@@ -1097,8 +1113,9 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
       recoveryStorage,
       options.recoveryScope,
       projectRef.current.id,
-      Number.POSITIVE_INFINITY,
+      recoveryTokenRef.current,
     )
+    recoveryTokenRef.current = null
   }, [options.recoveryScope, recoveryStorage])
 
   const replaceWithBlank = useCallback(

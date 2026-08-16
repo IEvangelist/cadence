@@ -7,12 +7,17 @@ export const PROJECT_RECOVERY_KEY_PREFIX = 'cadence.v1.recovery'
 export const recoveryIndexKey = (scope: string): string =>
   `${PROJECT_RECOVERY_KEY_PREFIX}.${encodeURIComponent(scope)}.active`
 
-export const projectRecoveryKey = (scope: string, projectId: string): string =>
-  `${PROJECT_RECOVERY_KEY_PREFIX}.${encodeURIComponent(scope)}.${encodeURIComponent(projectId)}`
+export const projectRecoveryKey = (
+  scope: string,
+  projectId: string,
+  token: string,
+): string =>
+  `${PROJECT_RECOVERY_KEY_PREFIX}.${encodeURIComponent(scope)}.${encodeURIComponent(projectId)}.${encodeURIComponent(token)}`
 
 interface ProjectRecoveryEnvelope {
   version: 1
   scope: string
+  token: string
   revision: number
   updatedAt: number
   projectId: string
@@ -22,10 +27,13 @@ interface ProjectRecoveryEnvelope {
 interface ProjectRecoveryPointer {
   version: 1
   projectId: string
+  token: string
 }
 
 export interface ProjectRecovery {
+  token: string
   revision: number
+  updatedAt: number
   project: Project
 }
 
@@ -45,42 +53,23 @@ export function readProjectRecovery(
   projectId?: string,
 ): ProjectRecovery | null {
   if (!storage) return null
-  if (projectId) return readRecord(storage, scope, projectId)
   const pointer = readPointer(storage, scope)
-  if (pointer) {
-    const active = readRecord(storage, scope, pointer.projectId)
-    if (active) return active
+  const active =
+    pointer && (!projectId || pointer.projectId === projectId)
+      ? readRecord(storage, scope, pointer.projectId, pointer.token)
+      : null
+  const discovered = discoverNewestRecord(storage, scope, projectId)
+  const selected =
+    active && discovered && active.updatedAt === discovered.updatedAt
+      ? active
+      : newerRecovery(active, discovered)
+  if (
+    selected &&
+    (pointer?.projectId !== selected.project.id || pointer.token !== selected.token)
+  ) {
+    writePointer(storage, scope, selected.project.id, selected.token)
   }
-  const discovered = discoverNewestRecord(storage, scope)
-  if (discovered) writePointer(storage, scope, discovered.project.id)
-  return discovered
-}
-
-function readRecord(
-  storage: SyncStorage,
-  scope: string,
-  projectId: string,
-): ProjectRecovery | null {
-  const raw = storage.getItem(projectRecoveryKey(scope, projectId))
-  if (!raw) return null
-  try {
-    const envelope = JSON.parse(raw) as Partial<ProjectRecoveryEnvelope>
-    if (
-      envelope.version !== 1 ||
-      envelope.scope !== scope ||
-      typeof envelope.revision !== 'number' ||
-      typeof envelope.updatedAt !== 'number' ||
-      typeof envelope.projectId !== 'string' ||
-      typeof envelope.project !== 'string'
-    ) {
-      return null
-    }
-    const project = parseProject(envelope.project)
-    if (project.id !== envelope.projectId) return null
-    return { revision: envelope.revision, project }
-  } catch {
-    return null
-  }
+  return selected
 }
 
 export function writeProjectRecovery(
@@ -88,21 +77,31 @@ export function writeProjectRecovery(
   scope: string,
   project: Project,
   revision: number,
-): void {
-  if (!storage) return
+  previousToken?: string | null,
+): string | null {
+  if (!storage) return null
+  const token = newRecoveryToken()
   try {
     const envelope: ProjectRecoveryEnvelope = {
       version: 1,
       scope,
+      token,
       revision,
       updatedAt: Date.now(),
       projectId: project.id,
       project: serializeProject(project),
     }
-    storage.setItem(projectRecoveryKey(scope, project.id), JSON.stringify(envelope))
-    writePointer(storage, scope, project.id)
+    storage.setItem(
+      projectRecoveryKey(scope, project.id, token),
+      JSON.stringify(envelope),
+    )
+    writePointer(storage, scope, project.id, token)
+    if (previousToken && previousToken !== token) {
+      storage.removeItem(projectRecoveryKey(scope, project.id, previousToken))
+    }
+    return token
   } catch {
-    // Recovery is a best-effort crash boundary and never replaces primary persistence.
+    return null
   }
 }
 
@@ -110,23 +109,95 @@ export function clearProjectRecovery(
   storage: SyncStorage | null,
   scope: string,
   projectId: string,
-  persistedRevision: number,
+  token: string | null,
 ): void {
-  if (!storage) return
-  const recovery = readProjectRecovery(storage, scope, projectId)
-  if (
-    recovery &&
-    recovery.project.id === projectId &&
-    recovery.revision <= persistedRevision
-  ) {
-    storage.removeItem(projectRecoveryKey(scope, projectId))
-    const pointer = readPointer(storage, scope)
-    if (pointer?.projectId === projectId) {
-      storage.removeItem(recoveryIndexKey(scope))
-      const remaining = discoverNewestRecord(storage, scope)
-      if (remaining) writePointer(storage, scope, remaining.project.id)
+  if (!storage || !token) return
+  storage.removeItem(projectRecoveryKey(scope, projectId, token))
+  const pointer = readPointer(storage, scope)
+  if (pointer?.projectId === projectId && pointer.token === token) {
+    storage.removeItem(recoveryIndexKey(scope))
+    const remaining = discoverNewestRecord(storage, scope)
+    if (remaining) {
+      writePointer(storage, scope, remaining.project.id, remaining.token)
     }
   }
+}
+
+function readRecord(
+  storage: SyncStorage,
+  scope: string,
+  projectId: string,
+  token: string,
+): ProjectRecovery | null {
+  const raw = storage.getItem(projectRecoveryKey(scope, projectId, token))
+  if (!raw) return null
+  return parseEnvelope(raw, scope, projectId, token)
+}
+
+function parseEnvelope(
+  raw: string,
+  scope: string,
+  projectId?: string,
+  token?: string,
+): ProjectRecovery | null {
+  try {
+    const envelope = JSON.parse(raw) as Partial<ProjectRecoveryEnvelope>
+    if (
+      envelope.version !== 1 ||
+      envelope.scope !== scope ||
+      typeof envelope.token !== 'string' ||
+      typeof envelope.revision !== 'number' ||
+      typeof envelope.updatedAt !== 'number' ||
+      typeof envelope.projectId !== 'string' ||
+      typeof envelope.project !== 'string' ||
+      (projectId && envelope.projectId !== projectId) ||
+      (token && envelope.token !== token)
+    ) {
+      return null
+    }
+    const project = parseProject(envelope.project)
+    if (project.id !== envelope.projectId) return null
+    return {
+      token: envelope.token,
+      revision: envelope.revision,
+      updatedAt: envelope.updatedAt,
+      project,
+    }
+  } catch {
+    return null
+  }
+}
+
+function discoverNewestRecord(
+  storage: SyncStorage,
+  scope: string,
+  projectId?: string,
+): ProjectRecovery | null {
+  if (typeof storage.length !== 'number' || !storage.key) return null
+  const prefix = `${PROJECT_RECOVERY_KEY_PREFIX}.${encodeURIComponent(scope)}.`
+  let newest: ProjectRecovery | null = null
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index)
+    if (!key?.startsWith(prefix) || key === recoveryIndexKey(scope)) continue
+    const raw = storage.getItem(key)
+    if (!raw) continue
+    const recovery = parseEnvelope(raw, scope)
+    if (!recovery || (projectId && recovery.project.id !== projectId)) continue
+    newest = newerRecovery(newest, recovery)
+  }
+  return newest
+}
+
+function newerRecovery(
+  first: ProjectRecovery | null,
+  second: ProjectRecovery | null,
+): ProjectRecovery | null {
+  if (!first) return second
+  if (!second) return first
+  if (second.updatedAt !== first.updatedAt) {
+    return second.updatedAt > first.updatedAt ? second : first
+  }
+  return second.token > first.token ? second : first
 }
 
 function readPointer(storage: SyncStorage, scope: string): ProjectRecoveryPointer | null {
@@ -134,8 +205,10 @@ function readPointer(storage: SyncStorage, scope: string): ProjectRecoveryPointe
   if (!raw) return null
   try {
     const pointer = JSON.parse(raw) as Partial<ProjectRecoveryPointer>
-    return pointer.version === 1 && typeof pointer.projectId === 'string'
-      ? { version: 1, projectId: pointer.projectId }
+    return pointer.version === 1 &&
+      typeof pointer.projectId === 'string' &&
+      typeof pointer.token === 'string'
+      ? { version: 1, projectId: pointer.projectId, token: pointer.token }
       : null
   } catch {
     return null
@@ -146,44 +219,15 @@ function writePointer(
   storage: SyncStorage,
   scope: string,
   projectId: string,
+  token: string,
 ): void {
-  const pointer: ProjectRecoveryPointer = { version: 1, projectId }
+  const pointer: ProjectRecoveryPointer = { version: 1, projectId, token }
   storage.setItem(recoveryIndexKey(scope), JSON.stringify(pointer))
 }
 
-function discoverNewestRecord(
-  storage: SyncStorage,
-  scope: string,
-): ProjectRecovery | null {
-  if (typeof storage.length !== 'number' || !storage.key) return null
-  const prefix = `${PROJECT_RECOVERY_KEY_PREFIX}.${encodeURIComponent(scope)}.`
-  let newest: { recovery: ProjectRecovery; updatedAt: number; projectId: string } | null = null
-  for (let index = 0; index < storage.length; index += 1) {
-    const key = storage.key(index)
-    if (!key?.startsWith(prefix) || key === recoveryIndexKey(scope)) continue
-    const encodedProjectId = key.slice(prefix.length)
-    let projectId: string
-    try {
-      projectId = decodeURIComponent(encodedProjectId)
-    } catch {
-      continue
-    }
-    const raw = storage.getItem(key)
-    if (!raw) continue
-    try {
-      const envelope = JSON.parse(raw) as Partial<ProjectRecoveryEnvelope>
-      const recovery = readRecord(storage, scope, projectId)
-      if (!recovery || typeof envelope.updatedAt !== 'number') continue
-      if (
-        !newest ||
-        envelope.updatedAt > newest.updatedAt ||
-        (envelope.updatedAt === newest.updatedAt && projectId > newest.projectId)
-      ) {
-        newest = { recovery, updatedAt: envelope.updatedAt, projectId }
-      }
-    } catch {
-      continue
-    }
-  }
-  return newest?.recovery ?? null
+function newRecoveryToken(): string {
+  const cryptoApi = globalThis.crypto
+  return cryptoApi && typeof cryptoApi.randomUUID === 'function'
+    ? cryptoApi.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`
 }

@@ -1152,10 +1152,12 @@ describe('useComposer — project hydration and replacement', () => {
     await expect(replacement).resolves.toBe('blocked')
     await waitFor(() => expect(save).toHaveBeenCalledTimes(2), { timeout: 1_500 })
 
-    await act(() => hook.result.current.discardProjectReplacement())
+    const discard = hook.result.current.discardProjectReplacement()
+    expect(hook.result.current.project.id).toBe('project-a')
+    staleRetry.reject(new Error('stale retry failure'))
+    await act(() => discard)
     const projectB = hook.result.current.project.id
     expect(projectB).not.toBe('project-a')
-    staleRetry.reject(new Error('stale retry failure'))
     await new Promise((resolve) => setTimeout(resolve, 25))
     expect(hook.result.current.project.id).toBe(projectB)
     expect(hook.result.current.saveState.status).not.toBe('error')
@@ -1165,6 +1167,50 @@ describe('useComposer — project hydration and replacement', () => {
     await waitFor(() => expect(save).toHaveBeenCalledTimes(4), { timeout: 1_500 })
     expect(save.mock.calls[3][0]).toMatchObject({ id: projectB, name: 'B first edit' })
     await waitFor(() => expect(hook.result.current.isDirty).toBe(false))
+  })
+
+  it('waits for a successful active retry before discard installs and saves project B', async () => {
+    const first = deferred<StoredProjectMeta>()
+    const activeRetry = deferred<StoredProjectMeta>()
+    const save = vi
+      .fn<ProjectStore['save']>()
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => activeRetry.promise)
+      .mockImplementation(async (project) => ({
+        id: project.id,
+        name: project.name,
+        updatedAt: Date.now(),
+      }))
+    const store = storeWith({ save })
+    const hook = renderHook(() =>
+      useComposer({
+        createEngine: () => new FakeEngine(),
+        store,
+        initialProject: createEmptyProject('project-a'),
+        autosaveDelay: 20,
+      }),
+    )
+    act(() => hook.result.current.setProjectName('A revision one'))
+    const replacement = hook.result.current.replaceWithBlank()
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+    act(() => hook.result.current.setProjectName('A revision two'))
+    first.reject(new Error('offline'))
+    await expect(replacement).resolves.toBe('blocked')
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2), { timeout: 1_500 })
+
+    const discard = hook.result.current.discardProjectReplacement()
+    expect(hook.result.current.project.id).toBe('project-a')
+    activeRetry.resolve({ id: 'project-a', name: 'A revision two', updatedAt: 2 })
+    await act(() => discard)
+    const projectB = hook.result.current.project.id
+    expect(projectB).not.toBe('project-a')
+
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(3), { timeout: 1_500 })
+    await waitFor(() =>
+      expect(store.setLast).toHaveBeenLastCalledWith(projectB),
+    )
+    expect(save.mock.calls[2][0].id).toBe(projectB)
+    expect(hook.result.current.saveState.status).not.toBe('error')
   })
 
   it('clears discarded recovery so the abandoned edit cannot return on hydration', async () => {
