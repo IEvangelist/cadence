@@ -21,38 +21,17 @@ interface EmptyGesture {
   moved: boolean
 }
 
-interface NoteGesture {
-  kind: 'note'
-  pointerId: number
-  pointerType: string
-  noteId: string
-  origin: GesturePoint
-  last: GesturePoint
-  moved: boolean
-}
-
-export type NoteGestureState =
+export type EmptyGestureState =
   | { kind: 'idle' }
   | EmptyGesture
-  | NoteGesture
 
-export type NoteGestureEffect =
-  | { type: 'capture-pointer'; pointerId: number }
-  | { type: 'release-pointer'; pointerId: number }
+export type EmptyGestureEffect =
   | { type: 'pan-by'; dx: number; dy: number }
   | { type: 'add-note'; point: GesturePoint }
-  | { type: 'select-note'; noteId: string }
-  | {
-      type: 'move-note'
-      noteId: string
-      dx: number
-      dy: number
-    }
-  | { type: 'cancel-note-move'; noteId: string }
 
-export interface NoteGestureTransition {
-  state: NoteGestureState
-  effects: NoteGestureEffect[]
+export interface EmptyGestureTransition {
+  state: EmptyGestureState
+  effects: EmptyGestureEffect[]
 }
 
 export interface NoteGestureOptions {
@@ -61,7 +40,7 @@ export interface NoteGestureOptions {
 
 const DEFAULT_TAP_TRAVEL = 8
 
-export const idleNoteGesture: NoteGestureState = { kind: 'idle' }
+export const idleEmptyGesture: EmptyGestureState = { kind: 'idle' }
 
 function traveledBeyond(
   origin: GesturePoint,
@@ -74,7 +53,7 @@ function traveledBeyond(
 }
 
 function activePointer(
-  state: Exclude<NoteGestureState, { kind: 'idle' }>,
+  state: Exclude<EmptyGestureState, { kind: 'idle' }>,
   pointerId: number,
 ): boolean {
   return state.pointerId === pointerId
@@ -83,7 +62,7 @@ function activePointer(
 export function beginEmptyGesture(
   pointer: GesturePointer,
   mode: MobileNoteMode,
-): NoteGestureTransition {
+): EmptyGestureTransition {
   return {
     state: {
       kind: 'empty',
@@ -98,32 +77,11 @@ export function beginEmptyGesture(
   }
 }
 
-export function beginNoteGesture(
-  pointer: GesturePointer,
-  noteId: string,
-): NoteGestureTransition {
-  return {
-    state: {
-      kind: 'note',
-      pointerId: pointer.pointerId,
-      pointerType: pointer.pointerType,
-      noteId,
-      origin: pointer.point,
-      last: pointer.point,
-      moved: false,
-    },
-    effects: [
-      { type: 'select-note', noteId },
-      { type: 'capture-pointer', pointerId: pointer.pointerId },
-    ],
-  }
-}
-
-export function moveNoteGesture(
-  state: NoteGestureState,
+export function moveEmptyGesture(
+  state: EmptyGestureState,
   pointer: GesturePointer,
   options: NoteGestureOptions = {},
-): NoteGestureTransition {
+): EmptyGestureTransition {
   if (state.kind === 'idle' || !activePointer(state, pointer.pointerId)) {
     return { state, effects: [] }
   }
@@ -137,64 +95,35 @@ export function moveNoteGesture(
 
   if (!moved) return { state: next, effects: [] }
 
-  if (state.kind === 'empty') {
-    return {
-      state: next,
-      effects: [{ type: 'pan-by', dx, dy }],
-    }
-  }
-
   return {
     state: next,
-    effects: [
-      {
-        type: 'move-note',
-        noteId: state.noteId,
-        dx: pointer.point.x - state.origin.x,
-        dy: pointer.point.y - state.origin.y,
-      },
-    ],
+    effects: [{ type: 'pan-by', dx, dy }],
   }
 }
 
-export function endNoteGesture(
-  state: NoteGestureState,
+export function endEmptyGesture(
+  state: EmptyGestureState,
   pointer: GesturePointer,
-): NoteGestureTransition {
+): EmptyGestureTransition {
   if (state.kind === 'idle' || !activePointer(state, pointer.pointerId)) {
     return { state, effects: [] }
   }
 
-  const effects: NoteGestureEffect[] = []
-  if (state.kind === 'empty' && state.mode === 'draw' && !state.moved) {
+  const effects: EmptyGestureEffect[] = []
+  if (state.mode === 'draw' && !state.moved) {
     effects.push({ type: 'add-note', point: pointer.point })
   }
-  if (state.kind === 'note') {
-    effects.push({ type: 'release-pointer', pointerId: pointer.pointerId })
-  }
 
-  return { state: idleNoteGesture, effects }
+  return { state: idleEmptyGesture, effects }
 }
 
-export function cancelNoteGesture(
-  state: NoteGestureState,
+export function cancelEmptyGesture(
+  state: EmptyGestureState,
   pointerId: number,
-): NoteGestureTransition {
+): EmptyGestureTransition {
   if (state.kind === 'idle' || !activePointer(state, pointerId)) {
     return { state, effects: [] }
   }
 
-  const effects: NoteGestureEffect[] = []
-  if (state.kind === 'note') {
-    effects.push(
-      { type: 'cancel-note-move', noteId: state.noteId },
-      { type: 'release-pointer', pointerId },
-    )
-  }
-
-  return { state: idleNoteGesture, effects }
-}
-
-export function usesDirectGridAdd(pointerType: string): boolean {
-  return pointerType === 'mouse'
+  return { state: idleEmptyGesture, effects: [] }
 }

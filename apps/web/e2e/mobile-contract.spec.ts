@@ -144,6 +144,14 @@ test.describe('production mobile Studio', () => {
     await openTask(page, 'Project')
     await page.getByRole('button', { name: 'Close Project' }).click()
     await page.getByRole('button', { name: /^Notes:/ }).click()
+    const controlsBox = await page.locator('.mobile-note-header').boundingBox()
+    const pianoBox = await page.locator('.piano-roll').boundingBox()
+    expect(controlsBox).not.toBeNull()
+    expect(pianoBox).not.toBeNull()
+    expect(controlsBox!.height).toBeGreaterThan(0)
+    expect(controlsBox!.y + controlsBox!.height).toBeLessThanOrEqual(
+      pianoBox!.y + 1,
+    )
     const notesBefore = await page.locator('.pr-note:not(.is-preview)').count()
     const empty = await visibleEmptyGridPoint(page)
 

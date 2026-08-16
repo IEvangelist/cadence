@@ -295,7 +295,8 @@
 @media (max-width: 40rem), (pointer: coarse) {
   .composer-editor-stack {
     flex: 0 0 auto;
-    grid-template-rows: auto auto auto;
+    min-height: max(100%, 46rem);
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
 
   .mobile-note-header {
@@ -314,9 +315,6 @@
     min-height: 100%;
   }
 
-  .mobile-studio .piano-roll {
-    min-height: 28rem;
-  }
 }
 
 .editor-detail-lane__status {

@@ -313,13 +313,6 @@
   transform: scale(0.98);
 }
 
-.mobile-piano-scroll {
-  max-width: 100%;
-  overflow: auto;
-  touch-action: pan-x pan-y;
-  overscroll-behavior: contain;
-}
-
 .mobile-studio {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -370,10 +363,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-}
-
-.mobile-note-manipulation {
-  touch-action: none;
 }
 
 @media (pointer: coarse) {

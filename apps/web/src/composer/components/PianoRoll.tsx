@@ -13,11 +13,11 @@ import { type ComposerController } from '../hooks/useComposer'
 import type { SuggestedNote } from '../ai/types'
 import {
   beginEmptyGesture,
-  cancelNoteGesture,
-  endNoteGesture,
-  idleNoteGesture,
-  moveNoteGesture,
-  type NoteGestureState,
+  cancelEmptyGesture,
+  endEmptyGesture,
+  idleEmptyGesture,
+  moveEmptyGesture,
+  type EmptyGestureState,
 } from '../../mobile/noteGestureMachine'
 import type { MobileNoteMode } from '../../mobile/mobileTaskModel'
 import {
@@ -155,7 +155,7 @@ export function PianoRoll({
   const velLaneRef = useRef<HTMLDivElement>(null)
   const didAutoScrollRef = useRef(false)
   const gestureRef = useRef<Gesture | null>(null)
-  const emptyGestureRef = useRef<NoteGestureState>(idleNoteGesture)
+  const emptyGestureRef = useRef<EmptyGestureState>(idleEmptyGesture)
   const [caret, setCaret] = useState({ pitch: 60, beat: 0 })
   const [viewportRows, setViewportRows] = useState(0)
 
@@ -471,7 +471,7 @@ export function PianoRoll({
   }
 
   const moveEmptyTouch = (event: PointerEvent): void => {
-    emptyGestureRef.current = moveNoteGesture(emptyGestureRef.current, {
+    emptyGestureRef.current = moveEmptyGesture(emptyGestureRef.current, {
       pointerId: event.pointerId,
       pointerType: event.pointerType,
       point: pointInGrid(event),
@@ -479,7 +479,7 @@ export function PianoRoll({
   }
 
   const endEmptyTouch = (event: PointerEvent): void => {
-    const transition = endNoteGesture(emptyGestureRef.current, {
+    const transition = endEmptyGesture(emptyGestureRef.current, {
       pointerId: event.pointerId,
       pointerType: event.pointerType,
       point: pointInGrid(event),
@@ -491,7 +491,7 @@ export function PianoRoll({
   }
 
   const cancelEmptyTouch = (event: PointerEvent): void => {
-    emptyGestureRef.current = cancelNoteGesture(
+    emptyGestureRef.current = cancelEmptyGesture(
       emptyGestureRef.current,
       event.pointerId,
     ).state

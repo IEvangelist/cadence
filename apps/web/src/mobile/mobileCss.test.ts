@@ -3,6 +3,10 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const css = readFileSync(path.resolve(process.cwd(), 'src/mobile/mobile.css'), 'utf8')
+const composerCss = readFileSync(
+  path.resolve(process.cwd(), 'src/composer/Composer.css'),
+  'utf8',
+)
 
 describe('mobile CSS contract', () => {
   it('accounts for every safe-area edge', () => {
@@ -24,14 +28,19 @@ describe('mobile CSS contract', () => {
     expect(coarsePointer).toContain('min-height: 44px')
   })
 
-  it('scopes touch-action to the scroll and manipulation targets', () => {
-    expect(css).toMatch(
-      /\.mobile-piano-scroll\s*\{[\s\S]*?touch-action: pan-x pan-y;/,
+  it('scopes touch-action to the real piano-roll targets', () => {
+    expect(composerCss).toMatch(
+      /\.pr-scroll\s*\{[\s\S]*?touch-action: pan-x pan-y;/,
     )
-    expect(css).toMatch(
-      /\.mobile-note-manipulation\s*\{[\s\S]*?touch-action: none;/,
+    expect(composerCss).toMatch(
+      /\.pr-note,\s*\.pr-vel-bar\s*\{[\s\S]*?touch-action: none;/,
     )
-    expect(css).not.toMatch(/(?:html|body|\*)\s*\{[^}]*touch-action:/)
+    expect(composerCss).toMatch(
+      /\.pr-note::before\s*\{[\s\S]*?width: max\(44px, 100%\);[\s\S]*?height: 44px;/,
+    )
+    expect(`${css}\n${composerCss}`).not.toMatch(
+      /(?:html|body|\*)\s*\{[^}]*touch-action:/,
+    )
   })
 
   it('honors reduced motion without suppressing root overflow', () => {
