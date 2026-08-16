@@ -61,7 +61,7 @@ export function StartCenter({
           : await controller.replaceWithMusicXml(text, baseName(file.name))
       if (result === 'replaced') onProjectReady?.()
     } catch {
-      controller.notify('Cadence could not read that file.')
+      controller.notifyError('Cadence could not read that file.')
     } finally {
       setBusy(false)
     }
@@ -77,7 +77,7 @@ export function StartCenter({
       )
       if (result === 'replaced') onProjectReady?.()
     } catch {
-      controller.notify('Cadence could not read that MIDI file.')
+      controller.notifyError('Cadence could not read that MIDI file.')
     } finally {
       setBusy(false)
     }
@@ -96,6 +96,15 @@ export function StartCenter({
         <h2 id={`start-center-title-${mode}`}>Start a project</h2>
         <p>Begin with a blank canvas, reopen recent work, or shape a ready-made idea.</p>
       </header>
+
+      {controller.actionMessage ? (
+        <p
+          className={`start-center__message start-center__message--${controller.actionMessage.tone}`}
+          role={controller.actionMessage.tone === 'error' ? 'alert' : 'status'}
+        >
+          {controller.actionMessage.text}
+        </p>
+      ) : null}
 
       {controller.hydration.status === 'restore-error' ? (
         <section className="start-center__restore-error" role="alert">

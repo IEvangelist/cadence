@@ -106,4 +106,34 @@ describe('SyncingProjectStore', () => {
   it('syncLocalToRemote() is a no-op with nothing local', async () => {
     expect(await store.syncLocalToRemote()).toBe(0)
   })
+
+  it('preserves the pre-sync remote last project after uploads', async () => {
+    await remote.save(createEmptyProject('remote-last'))
+    await remote.setLast('remote-last')
+    await local.save(createEmptyProject('local-new'))
+    const setLast = vi.spyOn(remote, 'setLast')
+
+    await store.syncLocalToRemote()
+
+    expect(setLast).toHaveBeenLastCalledWith('remote-last')
+    expect((await remote.loadLast())?.id).toBe('remote-last')
+  })
+
+  it('chooses the newest synced local project when remote has no last project', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date(1_000))
+      await local.save(createEmptyProject('older-local'))
+      vi.setSystemTime(new Date(2_000))
+      await local.save(createEmptyProject('newest-local'))
+      const setLast = vi.spyOn(remote, 'setLast')
+
+      await store.syncLocalToRemote()
+
+      expect(setLast).toHaveBeenLastCalledWith('newest-local')
+      expect((await remote.loadLast())?.id).toBe('newest-local')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

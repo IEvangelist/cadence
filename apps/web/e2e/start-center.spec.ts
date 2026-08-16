@@ -128,7 +128,9 @@ test.describe('Start Center and project lifecycle', () => {
     })
 
     await page.goto('/')
-    await expect(page.getByText('Restoring your project...')).toBeVisible()
+    await expect(
+      page.getByText(/Loading Studio|Restoring your project/),
+    ).toBeVisible()
     await page.waitForTimeout(300)
     expect(saveCalls).toBe(0)
     await expect(page.getByLabel('Project name')).toHaveValue('E2E Returning Project')

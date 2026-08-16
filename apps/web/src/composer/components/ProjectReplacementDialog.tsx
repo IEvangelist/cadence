@@ -65,8 +65,9 @@ export function ProjectReplacementDialog({
           className="btn btn-danger"
           data-interaction="studio.project-replacement.discard"
           onClick={() => {
-            controller.discardProjectReplacement()
-            onReplaced?.()
+            void controller.discardProjectReplacement().then((result) => {
+              if (result === 'replaced') onReplaced?.()
+            })
           }}
         >
           Discard changes and continue

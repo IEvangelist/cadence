@@ -66,8 +66,10 @@ export class SyncingProjectStore implements ProjectStore {
   async syncLocalToRemote(): Promise<number> {
     const [localMetas, remoteMetas] = await Promise.all([this.local.list(), this.remote.list()])
     const remoteById = new Map(remoteMetas.map((m) => [m.id, m]))
+    const remoteLast = remoteMetas.length > 0 ? await this.remote.loadLast() : null
 
     let synced = 0
+    let newestSyncedLocalId: string | null = null
     for (const meta of localMetas) {
       const remote = remoteById.get(meta.id)
       // Skip only when the server already has a copy that is at least as new.
@@ -76,7 +78,13 @@ export class SyncingProjectStore implements ProjectStore {
       if (!project) continue
       // remote.save() upserts (POST, falling back to PUT on conflict).
       await this.remote.save(project)
+      newestSyncedLocalId ??= meta.id
       synced += 1
+    }
+    if (remoteLast) {
+      await this.remote.setLast(remoteLast.id)
+    } else if (newestSyncedLocalId) {
+      await this.remote.setLast(newestSyncedLocalId)
     }
     return synced
   }

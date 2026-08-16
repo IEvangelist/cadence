@@ -98,8 +98,8 @@ export interface UseComposerOptions {
   storeRevision?: unknown
   /** Synchronous crash-recovery storage; defaults to localStorage in the app. */
   recoveryStorage?: SyncStorage | null
-  /** Signed-in remote sessions never consume anonymous/local recovery records. */
-  recoveryScope?: 'local' | 'remote'
+  /** Stable persistence identity, e.g. local anonymous or one remote user id. */
+  recoveryScope?: string | null
 }
 
 /**
@@ -161,7 +161,7 @@ export interface ComposerController {
     request: ProjectReplacementRequest,
   ) => Promise<ProjectReplacementResult>
   retryProjectReplacement: () => Promise<ProjectReplacementResult>
-  discardProjectReplacement: () => void
+  discardProjectReplacement: () => Promise<ProjectReplacementResult>
   cancelProjectReplacement: () => void
   discardAutosaveRecovery: () => void
   replaceWithBlank: () => Promise<ProjectReplacementResult>
@@ -178,6 +178,7 @@ export interface ComposerController {
   ) => Promise<ProjectReplacementResult>
   /** Show a transient status message (used by the CommandApi `notify`). */
   notify: (message: string) => void
+  notifyError: (message: string) => void
 
   play: () => void
   pause: () => void
@@ -350,6 +351,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   const mountedRef = useRef(true)
   const actionSequenceRef = useRef(0)
   const recentRequestRef = useRef(0)
+  const hydrationGenerationRef = useRef(0)
   const revisionRef = useRef(0)
   const savedRevisionRef = useRef(0)
   const failedRevisionRef = useRef<number | null>(null)
@@ -493,16 +495,20 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   useEffect(() => {
     if (options.initialProject) return
     let cancelled = false
+    hydrationGenerationRef.current += 1
+    const generation = hydrationGenerationRef.current
+    const isCurrent = () =>
+      !cancelled && hydrationGenerationRef.current === generation
     void (async () => {
       await Promise.resolve()
-      if (cancelled) return
+      if (!isCurrent()) return
       setHydration({ status: 'hydrating' })
       const shared =
         typeof window !== 'undefined'
           ? decodeProjectFromFragment(options.sharedProjectHash ?? window.location.hash)
           : null
       if (shared) {
-        if (cancelled) return
+        if (!isCurrent()) return
         revisionRef.current = 0
         savedRevisionRef.current = 0
         dispatch({ type: 'load-project', project: { ...shared, id: newId('project') } })
@@ -513,8 +519,20 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
       }
 
       try {
+        const recovery = options.recoveryScope
+          ? readProjectRecovery(recoveryStorage, options.recoveryScope)
+          : null
+        if (recovery) {
+          if (!isCurrent()) return
+          revisionRef.current = 0
+          savedRevisionRef.current = 0
+          dispatch({ type: 'load-project', project: recovery.project })
+          setHydration({ status: 'ready-with-project', source: 'recovery' })
+          announce('Recovered unsaved changes', 'success')
+          return
+        }
         const project = await store.loadLast()
-        if (cancelled) return
+        if (!isCurrent()) return
         if (project) {
           revisionRef.current = 0
           savedRevisionRef.current = 0
@@ -524,19 +542,9 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
           setHydration({ status: 'ready-with-project', source: 'last' })
           return
         }
-        const recovery =
-          options.recoveryScope === 'remote' ? null : readProjectRecovery(recoveryStorage)
-        if (recovery) {
-          revisionRef.current = 0
-          savedRevisionRef.current = 0
-          dispatch({ type: 'load-project', project: recovery.project })
-          setHydration({ status: 'ready-with-project', source: 'recovery' })
-          announce('Recovered unsaved changes', 'success')
-          return
-        }
         setHydration({ status: 'ready-without-project' })
       } catch {
-        if (!cancelled) {
+        if (isCurrent()) {
           setHydration({
             status: 'restore-error',
             message: 'Cadence could not restore your last project.',
@@ -547,9 +555,9 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     return () => {
       cancelled = true
     }
-    // Restore retries are explicit; router hash cleanup must not trigger a second pass.
+    // Router hash cleanup must not trigger a second pass; identity/backend changes must.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store, hydrationAttempt])
+  }, [store, hydrationAttempt, options.storeRevision, options.recoveryScope])
 
   const retryHydration = useCallback(() => {
     setHydrationAttempt((attempt) => attempt + 1)
@@ -601,7 +609,14 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
           ) {
             failedRevisionRef.current = null
           }
-          clearProjectRecovery(recoveryStorage, project.id, savedRevisionRef.current)
+          if (options.recoveryScope) {
+            clearProjectRecovery(
+              recoveryStorage,
+              options.recoveryScope,
+              project.id,
+              savedRevisionRef.current,
+            )
+          }
           void refreshList()
         }
         if (mountedRef.current) {
@@ -641,7 +656,13 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     })
     flushPromiseRef.current = pending
     return pending
-  }, [hydration.status, persist, recoveryStorage, refreshList])
+  }, [
+    hydration.status,
+    persist,
+    recoveryStorage,
+    refreshList,
+    options.recoveryScope,
+  ])
 
   // A failed in-flight save may have been joined by a newer revision's debounce.
   // Once that attempt settles, queue one normal-delay retry for any still-dirty
@@ -683,8 +704,13 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     ) {
       failedRevisionRef.current = null
     }
-    if (options.recoveryScope !== 'remote') {
-      writeProjectRecovery(recoveryStorage, state.project, revisionRef.current)
+    if (options.recoveryScope) {
+      writeProjectRecovery(
+        recoveryStorage,
+        options.recoveryScope,
+        state.project,
+        revisionRef.current,
+      )
     }
     setSaveState((current) => ({
       ...current,
@@ -851,6 +877,10 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   const toggleMidiArmed = useCallback(() => setMidiArmed((armed) => !armed), [])
 
   const notify = useCallback((message: string) => announce(message), [announce])
+  const notifyError = useCallback(
+    (message: string) => announce(message, 'error'),
+    [announce],
+  )
 
   const addTrack = useCallback(() => {
     const index = projectRef.current.tracks.length
@@ -983,22 +1013,15 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
       try {
         await installReplacement(request)
         return 'replaced'
-      } catch (error) {
-        if (
-          request.source === 'open' &&
-          error instanceof Error &&
-          error.message === 'Project not found'
-        ) {
-          setReplacement({ status: 'idle' })
-          announce('Could not open project', 'error')
-          return 'failed'
-        }
-        setReplacement({
-          status: 'blocked',
-          request,
-          message: 'Cadence could not finish switching projects.',
-        })
-        return 'blocked'
+      } catch {
+        setReplacement({ status: 'idle' })
+        announce(
+          request.source === 'open'
+            ? 'Could not open project'
+            : 'Cadence could not finish switching projects.',
+          'error',
+        )
+        return 'failed'
       }
     },
     [announce, flushAutosave, hydration.status, installReplacement],
@@ -1009,19 +1032,50 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     return requestProjectReplacement(replacement.request)
   }, [replacement, requestProjectReplacement])
 
-  const discardProjectReplacement = useCallback(() => {
-    if (replacement.status !== 'blocked') return
-    clearProjectRecovery(recoveryStorage, projectRef.current.id, Number.POSITIVE_INFINITY)
-    void installReplacement(replacement.request)
-  }, [installReplacement, recoveryStorage, replacement])
+  const discardProjectReplacement = useCallback(async (): Promise<ProjectReplacementResult> => {
+    if (replacement.status !== 'blocked') return 'failed'
+    if (options.recoveryScope) {
+      clearProjectRecovery(
+        recoveryStorage,
+        options.recoveryScope,
+        projectRef.current.id,
+        Number.POSITIVE_INFINITY,
+      )
+    }
+    try {
+      await installReplacement(replacement.request)
+      return 'replaced'
+    } catch {
+      setReplacement({ status: 'idle' })
+      announce(
+        replacement.request.source === 'open'
+          ? 'Could not open project'
+          : 'Cadence could not finish switching projects.',
+        'error',
+      )
+      return 'failed'
+    }
+  }, [
+    announce,
+    installReplacement,
+    options.recoveryScope,
+    recoveryStorage,
+    replacement,
+  ])
 
   const cancelProjectReplacement = useCallback(() => {
     setReplacement({ status: 'idle' })
   }, [])
 
   const discardAutosaveRecovery = useCallback(() => {
-    clearProjectRecovery(recoveryStorage, projectRef.current.id, Number.POSITIVE_INFINITY)
-  }, [recoveryStorage])
+    if (!options.recoveryScope) return
+    clearProjectRecovery(
+      recoveryStorage,
+      options.recoveryScope,
+      projectRef.current.id,
+      Number.POSITIVE_INFINITY,
+    )
+  }, [options.recoveryScope, recoveryStorage])
 
   const replaceWithBlank = useCallback(
     () =>
@@ -1300,6 +1354,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     replaceWithProjectFile,
     replaceWithPluginFormat,
     notify,
+    notifyError,
     play,
     pause,
     stop,

@@ -26,6 +26,7 @@ function controller(
     retryHydration: vi.fn(),
     continueToStartCenter: vi.fn(),
     notify: vi.fn(),
+    notifyError: vi.fn(),
     ...overrides,
   } as unknown as ComposerController
 }
@@ -178,5 +179,44 @@ describe('<StartCenter />', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Recent projects unavailable.')
     await user.click(screen.getByRole('button', { name: 'Retry' }))
     expect(value.refreshSavedProjects).toHaveBeenCalledOnce()
+  })
+
+  it.each(['initial', 'browser'] as const)(
+    'renders destination errors inline in %s mode',
+    (mode) => {
+      render(
+        <StartCenter
+          mode={mode}
+          controller={controller({
+            actionMessage: {
+              id: 1,
+              tone: 'error',
+              text: 'Could not open project',
+            },
+          })}
+        />,
+      )
+
+      expect(screen.getByRole('alert')).toHaveTextContent('Could not open project')
+    },
+  )
+
+  it('surfaces file read failures through the inline error channel', async () => {
+    const user = userEvent.setup()
+    const value = controller()
+    render(<StartCenter controller={value} />)
+    const unreadable = new File(['x'], 'broken.cadence.json')
+    Object.defineProperty(unreadable, 'text', {
+      value: async () => Promise.reject(new Error('read failed')),
+    })
+
+    await user.upload(
+      screen.getByLabelText('Import project or MusicXML from Start Center'),
+      unreadable,
+    )
+
+    await waitFor(() =>
+      expect(value.notifyError).toHaveBeenCalledWith('Cadence could not read that file.'),
+    )
   })
 })

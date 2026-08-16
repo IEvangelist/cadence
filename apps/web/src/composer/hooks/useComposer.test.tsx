@@ -848,13 +848,14 @@ describe('useComposer — project hydration and replacement', () => {
     const recoveryStorage = new MemoryStorage()
     const recovered = createEmptyProject('recovered')
     recovered.name = 'Recovered edit'
-    writeProjectRecovery(recoveryStorage, recovered, 3)
+    writeProjectRecovery(recoveryStorage, 'local:anonymous', recovered, 3)
     const store = storeWith()
     const hook = renderHook(() =>
       useComposer({
         createEngine: () => new FakeEngine(),
         store,
         recoveryStorage,
+        recoveryScope: 'local:anonymous',
         autosaveDelay: 60_000,
       }),
     )
@@ -864,13 +865,18 @@ describe('useComposer — project hydration and replacement', () => {
       status: 'ready-with-project',
       source: 'recovery',
     })
-    expect(store.loadLast).toHaveBeenCalledOnce()
+    expect(store.loadLast).not.toHaveBeenCalled()
   })
 
   it('gives a valid shared snapshot precedence over recovery and last project', async () => {
     const { encodeProjectToFragment } = await import('../formats/share')
     const recoveryStorage = new MemoryStorage()
-    writeProjectRecovery(recoveryStorage, createEmptyProject('recovered'), 2)
+    writeProjectRecovery(
+      recoveryStorage,
+      'local:anonymous',
+      createEmptyProject('recovered'),
+      2,
+    )
     const shared = createEmptyProject('shared-source')
     shared.name = 'Shared winner'
     const store = storeWith({
@@ -882,6 +888,7 @@ describe('useComposer — project hydration and replacement', () => {
         createEngine: () => new FakeEngine(),
         store,
         recoveryStorage,
+        recoveryScope: 'local:anonymous',
         sharedProjectHash: `#${encodeProjectToFragment(shared)}`,
         onSharedProjectConsumed: consumed,
         autosaveDelay: 60_000,
@@ -902,7 +909,7 @@ describe('useComposer — project hydration and replacement', () => {
     const recoveryStorage = new MemoryStorage()
     const anonymous = createEmptyProject('anonymous-recovery')
     anonymous.name = 'Anonymous recovery'
-    writeProjectRecovery(recoveryStorage, anonymous, 8)
+    writeProjectRecovery(recoveryStorage, 'local:anonymous', anonymous, 8)
     const remote = createEmptyProject('remote-last')
     remote.name = 'Remote last'
     const store = storeWith({ loadLast: vi.fn(async () => remote) })
@@ -911,7 +918,7 @@ describe('useComposer — project hydration and replacement', () => {
         createEngine: () => new FakeEngine(),
         store,
         recoveryStorage,
-        recoveryScope: 'remote',
+        recoveryScope: 'remote:user-a',
         autosaveDelay: 60_000,
       }),
     )
@@ -921,6 +928,34 @@ describe('useComposer — project hydration and replacement', () => {
       status: 'ready-with-project',
       source: 'last',
     })
+  })
+
+  it('restores same-user remote recovery before that user stale remote last project', async () => {
+    const recoveryStorage = new MemoryStorage()
+    const recovered = createEmptyProject('remote-project')
+    recovered.name = 'Latest recovered edit'
+    writeProjectRecovery(recoveryStorage, 'remote:user-a', recovered, 9)
+    const stale = createEmptyProject('remote-project')
+    stale.name = 'Stale remote copy'
+    const store = storeWith({ loadLast: vi.fn(async () => stale) })
+    const hook = renderHook(() =>
+      useComposer({
+        createEngine: () => new FakeEngine(),
+        store,
+        recoveryStorage,
+        recoveryScope: 'remote:user-a',
+        autosaveDelay: 60_000,
+      }),
+    )
+
+    await waitFor(() =>
+      expect(hook.result.current.project.name).toBe('Latest recovered edit'),
+    )
+    expect(hook.result.current.hydration).toEqual({
+      status: 'ready-with-project',
+      source: 'recovery',
+    })
+    expect(store.loadLast).not.toHaveBeenCalled()
   })
 
   it('continues after restore error without changing stored data and retries on remount', async () => {
@@ -993,7 +1028,7 @@ describe('useComposer — project hydration and replacement', () => {
     save.mockRejectedValueOnce(new Error('offline once more'))
     await expect(hook.result.current.replaceWithDemo()).resolves.toBe('blocked')
     await waitFor(() => expect(hook.result.current.replacement.status).toBe('blocked'))
-    act(() => hook.result.current.discardProjectReplacement())
+    await act(() => hook.result.current.discardProjectReplacement())
     await waitFor(() => expect(hook.result.current.project.tracks.length).toBeGreaterThan(1))
   })
 
@@ -1020,6 +1055,74 @@ describe('useComposer — project hydration and replacement', () => {
     expect((await store.load('same-id'))?.name).toBe('Latest local edit')
   })
 
+  it('treats destination load/setLast failures as failed without offering discard', async () => {
+    const current = createEmptyProject('current')
+    const target = createEmptyProject('target')
+    const store = storeWith({
+      loadLast: vi.fn(async () => current),
+      load: vi.fn(async (id) => (id === 'target' ? target : null)),
+      setLast: vi.fn(async () => {
+        throw new Error('last pointer failed')
+      }),
+    })
+    const hook = renderHook(() =>
+      useComposer({
+        createEngine: () => new FakeEngine(),
+        store,
+        recoveryStorage: new MemoryStorage(),
+        recoveryScope: 'local:anonymous',
+        autosaveDelay: 60_000,
+      }),
+    )
+    await waitFor(() => expect(hook.result.current.project.id).toBe('current'))
+
+    await expect(hook.result.current.openStoredProject('target')).resolves.toBe('failed')
+
+    expect(hook.result.current.project.id).toBe('current')
+    expect(hook.result.current.replacement.status).toBe('idle')
+    await waitFor(() =>
+      expect(hook.result.current.actionMessage).toMatchObject({
+        tone: 'error',
+        text: 'Could not open project',
+      }),
+    )
+  })
+
+  it('catches a discarded replacement destination failure without floating rejection', async () => {
+    const current = createEmptyProject('current')
+    const save = vi
+      .fn<ProjectStore['save']>()
+      .mockRejectedValue(new Error('offline'))
+    const store = storeWith({
+      save,
+      load: vi.fn(async () => null),
+    })
+    const hook = renderHook(() =>
+      useComposer({
+        createEngine: () => new FakeEngine(),
+        store,
+        initialProject: current,
+        recoveryStorage: new MemoryStorage(),
+        recoveryScope: 'local:anonymous',
+        autosaveDelay: 60_000,
+      }),
+    )
+    act(() => hook.result.current.setProjectName('Dirty'))
+    await expect(hook.result.current.openStoredProject('missing')).resolves.toBe('blocked')
+    await waitFor(() => expect(hook.result.current.replacement.status).toBe('blocked'))
+
+    await expect(hook.result.current.discardProjectReplacement()).resolves.toBe('failed')
+
+    expect(hook.result.current.project.id).toBe('current')
+    await waitFor(() => expect(hook.result.current.replacement.status).toBe('idle'))
+    await waitFor(() =>
+      expect(hook.result.current.actionMessage).toMatchObject({
+        tone: 'error',
+        text: 'Could not open project',
+      }),
+    )
+  })
+
   it('clears discarded recovery so the abandoned edit cannot return on hydration', async () => {
     const recoveryStorage = new MemoryStorage()
     const stored = createEmptyProject('stored')
@@ -1036,20 +1139,24 @@ describe('useComposer — project hydration and replacement', () => {
         createEngine: () => new FakeEngine(),
         store,
         recoveryStorage,
-        recoveryScope: 'local',
+        recoveryScope: 'local:anonymous',
         autosaveDelay: 60_000,
       }),
     )
     await waitFor(() => expect(first.result.current.project.id).toBe('stored'))
     act(() => first.result.current.setProjectName('Discard me'))
     await waitFor(() =>
-      expect(readProjectRecovery(recoveryStorage)?.project.name).toBe('Discard me'),
+      expect(
+        readProjectRecovery(recoveryStorage, 'local:anonymous')?.project.name,
+      ).toBe('Discard me'),
     )
     await expect(first.result.current.replaceWithBlank()).resolves.toBe('blocked')
     await waitFor(() => expect(first.result.current.replacement.status).toBe('blocked'))
-    act(() => first.result.current.discardProjectReplacement())
+    await act(() => first.result.current.discardProjectReplacement())
     await waitFor(() => expect(first.result.current.project.id).not.toBe('stored'))
-    expect(readProjectRecovery(recoveryStorage)?.project.name).not.toBe('Discard me')
+    expect(
+      readProjectRecovery(recoveryStorage, 'local:anonymous')?.project.name,
+    ).not.toBe('Discard me')
     first.unmount()
 
     const second = renderHook(() =>
@@ -1057,11 +1164,13 @@ describe('useComposer — project hydration and replacement', () => {
         createEngine: () => new FakeEngine(),
         store,
         recoveryStorage,
-        recoveryScope: 'local',
+        recoveryScope: 'local:anonymous',
         autosaveDelay: 60_000,
       }),
     )
-    await waitFor(() => expect(second.result.current.project.name).toBe('Stored version'))
+    await waitFor(() =>
+      expect(second.result.current.project.name).not.toBe('Discard me'),
+    )
   })
 
   it('keeps a durable save clean when refreshing recents fails', async () => {
@@ -1121,5 +1230,46 @@ describe('useComposer — project hydration and replacement', () => {
     expect(hook.result.current.savedProjects.map((project) => project.id)).toEqual([
       'remote',
     ])
+  })
+
+  it('ignores a stale remote hydration completion after switching to local identity', async () => {
+    const remote = deferred<Project | null>()
+    const local = createEmptyProject('local-project')
+    local.name = 'Local winner'
+    const loadLast = vi
+      .fn<ProjectStore['loadLast']>()
+      .mockImplementationOnce(() => remote.promise)
+      .mockResolvedValueOnce(local)
+    const store = storeWith({ loadLast })
+    const hook = renderHook(
+      ({ revision, scope }: { revision: string; scope: string }) =>
+        useComposer({
+          createEngine: () => new FakeEngine(),
+          store,
+          recoveryStorage: new MemoryStorage(),
+          recoveryScope: scope,
+          storeRevision: revision,
+          autosaveDelay: 60_000,
+        }),
+      {
+        initialProps: {
+          revision: 'authenticated:user-a',
+          scope: 'remote:user-a',
+        },
+      },
+    )
+    await waitFor(() => expect(loadLast).toHaveBeenCalledTimes(1))
+
+    hook.rerender({
+      revision: 'anonymous',
+      scope: 'local:anonymous',
+    })
+    await waitFor(() => expect(hook.result.current.project.name).toBe('Local winner'))
+
+    const staleRemote = createEmptyProject('remote-project')
+    staleRemote.name = 'Stale remote'
+    remote.resolve(staleRemote)
+    await new Promise((resolve) => setTimeout(resolve, 25))
+    expect(hook.result.current.project.name).toBe('Local winner')
   })
 })

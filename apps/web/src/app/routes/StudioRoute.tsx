@@ -50,7 +50,10 @@ export function StudioRoute() {
           store,
           watermarkExports,
           storeRevision: auth.status,
-          recoveryScope: authenticated ? 'remote' : 'local',
+          recoveryScope:
+            authenticated && auth.user
+              ? `remote:${auth.user.id}`
+              : 'local:anonymous',
           sharedProjectHash: location.hash,
           onSharedProjectConsumed: consumeSharedProject,
         }}
