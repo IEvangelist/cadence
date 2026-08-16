@@ -93,9 +93,14 @@ describe('<TrackRail />', () => {
       'This removes its notes, automation, and mix settings.',
     )
     expect(value.removeTrack).not.toHaveBeenCalledWith('written')
-    expect(screen.getByRole('alertdialog')).toContainElement(
-      document.activeElement as HTMLElement,
-    )
+    const confirm = screen.getByRole('button', { name: /^Delete track$/ })
+    const cancel = screen.getByRole('button', { name: 'Cancel' })
+    expect(cancel).toHaveFocus()
+    await user.tab()
+    expect(confirm).toHaveFocus()
+    await user.tab({ shift: true })
+    expect(cancel).toHaveFocus()
+    expect(document.body).toHaveStyle({ pointerEvents: 'none' })
 
     await user.keyboard('{Escape}')
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
@@ -107,6 +112,7 @@ describe('<TrackRail />', () => {
     await user.click(screen.getByRole('button', { name: 'Delete Written' }))
     await user.click(screen.getByRole('button', { name: 'Delete track' }))
     expect(value.removeTrack).toHaveBeenCalledWith('written')
+    expect(screen.getByRole('heading', { name: 'Tracks' })).toHaveFocus()
   })
 
   it('detects automation and non-default mixer state as destructive data', () => {

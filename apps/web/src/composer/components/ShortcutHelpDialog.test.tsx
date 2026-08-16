@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -37,6 +38,25 @@ const registry: StudioCommandRegistry = {
   ],
 }
 
+function Harness() {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  return (
+    <>
+      <button ref={triggerRef} type="button" onClick={() => setOpen(true)}>
+        Open shortcuts
+      </button>
+      <button type="button">Background action</button>
+      <ShortcutHelpDialog
+        open={open}
+        registry={registry}
+        onClose={() => setOpen(false)}
+        returnFocusRef={triggerRef}
+      />
+    </>
+  )
+}
+
 describe('<ShortcutHelpDialog />', () => {
   it('groups, searches, labels disabled commands, and explains conflicts', async () => {
     coversInteractions(
@@ -45,7 +65,8 @@ describe('<ShortcutHelpDialog />', () => {
       'studio.shortcuts.close',
     )
     const user = userEvent.setup()
-    render(<ShortcutHelpDialog open registry={registry} onClose={vi.fn()} />)
+    render(<Harness />)
+    await user.click(screen.getByRole('button', { name: 'Open shortcuts' }))
     expect(screen.getByRole('heading', { name: 'Transport' })).toBeInTheDocument()
     expect(screen.getByText(/Ctrl\+Alt\+C \(disabled\)/)).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent(/plugin.play cannot use Space/)
@@ -55,11 +76,30 @@ describe('<ShortcutHelpDialog />', () => {
     expect(screen.getByText('Insert chord')).toBeInTheDocument()
   })
 
-  it('closes with Escape', async () => {
+  it('traps focus and restores it after Escape and Close', async () => {
     const user = userEvent.setup()
-    const onClose = vi.fn()
-    render(<ShortcutHelpDialog open registry={registry} onClose={onClose} />)
+    render(<Harness />)
+    const trigger = screen.getByRole('button', { name: 'Open shortcuts' })
+    await user.click(trigger)
+    const search = screen.getByRole('searchbox', { name: 'Search commands' })
+    const close = screen.getByRole('button', { name: 'Close' })
+    expect(search).toHaveFocus()
+    await user.tab({ shift: true })
+    expect(close).toHaveFocus()
+    await user.tab()
+    expect(search).toHaveFocus()
+
+    const background = screen.getByText('Background action').parentElement
+    expect(background).toHaveAttribute(
+      'data-aria-hidden',
+      'true',
+    )
+    expect(document.body).toHaveStyle({ pointerEvents: 'none' })
     await user.keyboard('{Escape}')
-    expect(onClose).toHaveBeenCalledOnce()
+    expect(trigger).toHaveFocus()
+
+    await user.click(trigger)
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+    expect(trigger).toHaveFocus()
   })
 })

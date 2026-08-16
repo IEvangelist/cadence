@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import type { ComposerController } from '../hooks/useComposer'
 import type { Track } from '../model/project'
 import { getInstrument } from '../instruments/registry'
+import { DialogClose, DialogSurface } from '../../ui/Dialog'
 import { trackRequiresDeleteConfirmation } from './trackRailModel'
 import './EditorWorkspace.css'
 
@@ -28,21 +29,15 @@ export function TrackRail({
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const deleteTriggerRef = useRef<HTMLButtonElement | null>(null)
   const cancelRef = useRef<HTMLButtonElement | null>(null)
+  const railHeadingRef = useRef<HTMLHeadingElement | null>(null)
+  const deleteCloseReasonRef = useRef<'cancel' | 'confirm'>('cancel')
   const visible = new Set(visibleTrackIds)
   const allVisible = project.tracks.every((track) => visible.has(track.id))
   const pendingTrack = project.tracks.find((track) => track.id === pendingDeleteId)
-  useEffect(() => {
-    if (pendingTrack) cancelRef.current?.focus()
-  }, [pendingTrack])
-
-  const cancelDelete = (): void => {
-    setPendingDeleteId(null)
-    queueMicrotask(() => deleteTriggerRef.current?.focus())
-  }
-
   const requestDelete = (track: Track, trigger: HTMLButtonElement): void => {
     if (trackRequiresDeleteConfirmation(controller, track)) {
       deleteTriggerRef.current = trigger
+      deleteCloseReasonRef.current = 'cancel'
       setPendingDeleteId(track.id)
       return
     }
@@ -52,7 +47,7 @@ export function TrackRail({
   return (
     <section className="track-rail" aria-label="Tracks">
       <header className="track-rail__header">
-        <h2>Tracks</h2>
+        <h2 ref={railHeadingRef} tabIndex={-1}>Tracks</h2>
         <div className="track-rail__header-actions">
           {project.tracks.length > 1 ? (
             <button
@@ -142,46 +137,53 @@ export function TrackRail({
         })}
       </ol>
 
-      {pendingTrack ? (
-        <div
-          className="track-delete-dialog"
-          role="alertdialog"
-          data-interaction="studio.track.delete.dialog"
-          aria-modal="true"
-          aria-labelledby="track-delete-title"
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') {
-              event.preventDefault()
-              cancelDelete()
-            }
-          }}
-        >
-          <h2 id="track-delete-title">Delete {pendingTrack.name}?</h2>
-          <p>This removes its notes, automation, and mix settings.</p>
+      <DialogSurface
+        open={Boolean(pendingTrack)}
+        onOpenChange={(open) => {
+          if (!open && pendingTrack) setPendingDeleteId(null)
+        }}
+        title={<h2>Delete {pendingTrack?.name ?? 'track'}?</h2>}
+        description={<p>This removes its notes, automation, and mix settings.</p>}
+        contentClassName="track-delete-dialog"
+        role="alertdialog"
+        data-interaction="studio.track.delete.dialog"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          cancelRef.current?.focus()
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          if (deleteCloseReasonRef.current === 'confirm') railHeadingRef.current?.focus()
+          else deleteTriggerRef.current?.focus()
+        }}
+      >
+        {pendingTrack ? (
           <div>
             <button
-              ref={cancelRef}
               type="button"
               className="btn btn-danger"
               data-interaction="studio.track.delete.confirm"
               onClick={() => {
+                deleteCloseReasonRef.current = 'confirm'
                 removeTrack(pendingTrack.id)
                 setPendingDeleteId(null)
               }}
             >
               Delete track
             </button>
-            <button
-              type="button"
-              className="btn"
-              data-interaction="studio.track.delete.cancel"
-              onClick={cancelDelete}
-            >
-              Cancel
-            </button>
+            <DialogClose asChild>
+              <button
+                ref={cancelRef}
+                type="button"
+                className="btn"
+                data-interaction="studio.track.delete.cancel"
+              >
+                Cancel
+              </button>
+            </DialogClose>
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </DialogSurface>
     </section>
   )
 }

@@ -438,6 +438,11 @@ test.describe('production interaction contract', () => {
     ).toBeFocused()
     await authenticatedPage.getByRole('button', { name: 'Delete Synth' }).click()
     await authenticatedPage.getByRole('button', { name: 'Cancel' }).click()
+    await authenticatedPage.getByRole('button', { name: 'Delete Synth' }).click()
+    await authenticatedPage
+      .getByRole('button', { name: 'Delete track', exact: true })
+      .click()
+    await expect(authenticatedPage.getByRole('heading', { name: 'Tracks' })).toBeFocused()
 
     const shareToggle = authenticatedPage.locator('[data-interaction="studio.share.toggle"]')
     await shareToggle.click()

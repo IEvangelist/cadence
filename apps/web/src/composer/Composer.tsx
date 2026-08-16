@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { appName, tagline } from '../appInfo'
 import { type UseComposerOptions, useComposer } from './hooks/useComposer'
 import type { ComposerController } from './hooks/useComposer'
@@ -184,6 +184,7 @@ function ComposerWorkspace({
   const mixer = useMixer(controller)
   const panels = usePanelLayout()
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const shortcutsTriggerRef = useRef<HTMLButtonElement>(null)
   const [detailLane, setDetailLane] = useState('velocity')
   const { project, audioReady, loadDemo } = controller
   const isEmpty = project.tracks.every((track) => track.notes.length === 0)
@@ -253,6 +254,7 @@ function ComposerWorkspace({
         ↷
       </button>
       <button
+        ref={shortcutsTriggerRef}
         type="button"
         className="btn btn-sm"
         data-interaction="studio.shortcuts.open"
@@ -424,6 +426,7 @@ function ComposerWorkspace({
         open={shortcutsOpen}
         registry={commands}
         onClose={() => setShortcutsOpen(false)}
+        returnFocusRef={shortcutsTriggerRef}
       />
     </StudioCommandProvider>
     <ProjectBrowser

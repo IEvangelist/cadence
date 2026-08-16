@@ -35,6 +35,47 @@ test.describe('composer', () => {
     )
   })
 
+  test('shortcut help traps focus, blocks the Studio, and restores its trigger', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    const trigger = page.getByRole('button', { name: 'Shortcuts' })
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled()
+    await expect(trigger).toBeEnabled()
+    await trigger.click()
+    const dialog = page.getByRole('dialog', { name: 'Keyboard shortcuts' })
+    const search = dialog.getByRole('searchbox', { name: 'Search commands' })
+    const close = dialog.getByRole('button', { name: 'Close' })
+    await expect(search).toBeFocused()
+
+    await page.keyboard.press('Shift+Tab')
+    await expect(close).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(search).toBeFocused()
+    await expect(page.locator('body')).toHaveCSS('pointer-events', 'none')
+    const addTrack = page.locator('[data-interaction="studio.track.add"]')
+    expect(
+      await addTrack.evaluate((control) => {
+        const rect = control.getBoundingClientRect()
+        const hit = document.elementFromPoint(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2,
+        )
+        return hit === control || control.contains(hit)
+      }),
+    ).toBe(false)
+
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    await expect(trigger).toBeFocused()
+
+    await trigger.click()
+    const closeButton = dialog.getByRole('button', { name: 'Close' })
+    await expect(closeButton).toBeVisible()
+    await closeButton.click()
+    await expect(trigger).toBeFocused()
+  })
+
   test('create a note, play, export MIDI, and persist across reload', async ({ page }) => {
     await page.goto('/')
 

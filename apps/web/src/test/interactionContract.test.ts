@@ -187,7 +187,16 @@ function scanSource() {
       }
       if (!isAstNode(value)) return
 
-      if (isOpeningElement(value) && isIntrinsic(value.name.name) && isInteractive(value)) {
+      const isContractSurface =
+        isOpeningElement(value) &&
+        (isIntrinsic(value.name.name) ||
+          (value.name.name === 'DialogSurface' &&
+            stringAttribute(value, 'data-interaction') !== undefined))
+      if (
+        isContractSurface &&
+        isOpeningElement(value) &&
+        (isInteractive(value) || value.name.name === 'DialogSurface')
+      ) {
         const line = value.loc?.start.line ?? 0
         const key = allowlistKey(relativeFile, value)
         if (allowlist.has(key)) {

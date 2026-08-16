@@ -35,4 +35,35 @@ describe('<EditorDetailLane />', () => {
     )
     expect(screen.getByRole('tabpanel')).toHaveTextContent('Automation editor')
   })
+
+  it('moves focus cyclically across enabled tabs and skips disabled items', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(
+      <EditorDetailLane
+        activeId="velocity"
+        onChange={onChange}
+        items={[
+          { id: 'velocity', label: 'Velocity', content: null },
+          { id: 'disabled', label: 'Disabled', content: null, disabled: true },
+          { id: 'automation', label: 'Automation', content: null },
+          { id: 'properties', label: 'Properties', content: null },
+        ]}
+      />,
+    )
+    const velocity = screen.getByRole('tab', { name: 'Velocity' })
+    const automation = screen.getByRole('tab', { name: 'Automation' })
+    const properties = screen.getByRole('tab', { name: 'Properties' })
+    velocity.focus()
+
+    await user.keyboard('{ArrowRight}')
+    expect(automation).toHaveFocus()
+    expect(onChange).toHaveBeenLastCalledWith('automation')
+    await user.keyboard('{End}')
+    expect(properties).toHaveFocus()
+    await user.keyboard('{Home}')
+    expect(velocity).toHaveFocus()
+    await user.keyboard('{ArrowLeft}')
+    expect(properties).toHaveFocus()
+  })
 })

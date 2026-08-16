@@ -165,10 +165,7 @@
   gap: var(--space-1);
 }
 
-.track-delete-dialog,
-.shortcut-help {
-  position: fixed;
-  z-index: 40;
+.track-delete-dialog {
   inset: 50% auto auto 50%;
   width: min(34rem, calc(100vw - 2rem));
   max-height: calc(100dvh - 2rem);
@@ -316,11 +313,22 @@
 .shortcut-help {
   display: grid;
   gap: var(--space-3);
+  inset: 50% auto auto 50%;
+  width: min(34rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: var(--space-4);
+  overflow: auto;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-lg);
+  transform: translate(-50%, -50%);
 }
 
 .shortcut-help > header {
-  margin: calc(-1 * var(--space-4));
-  margin-bottom: 0;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .shortcut-help__groups {

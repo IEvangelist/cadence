@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useRef, type KeyboardEvent, type ReactNode } from 'react'
 import './EditorWorkspace.css'
 
 export interface EditorDetailLaneItem {
@@ -17,6 +17,27 @@ interface EditorDetailLaneProps {
 export function EditorDetailLane({ items, activeId, onChange }: EditorDetailLaneProps) {
   const active = items.find((item) => item.id === activeId && !item.disabled)
     ?? items.find((item) => !item.disabled)
+  const tabRefs = useRef(new Map<string, HTMLButtonElement>())
+  const enabledItems = items.filter((item) => !item.disabled)
+  const moveFocus = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    itemId: string,
+  ): void => {
+    const currentIndex = enabledItems.findIndex((item) => item.id === itemId)
+    if (currentIndex < 0) return
+    let nextIndex: number | null = null
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % enabledItems.length
+    if (event.key === 'ArrowLeft') {
+      nextIndex = (currentIndex - 1 + enabledItems.length) % enabledItems.length
+    }
+    if (event.key === 'Home') nextIndex = 0
+    if (event.key === 'End') nextIndex = enabledItems.length - 1
+    if (nextIndex === null) return
+    event.preventDefault()
+    const next = enabledItems[nextIndex]
+    onChange(next.id)
+    tabRefs.current.get(next.id)?.focus()
+  }
 
   return (
     <section className="editor-detail-lane" aria-label="Editor detail">
@@ -26,6 +47,10 @@ export function EditorDetailLane({ items, activeId, onChange }: EditorDetailLane
           return (
             <button
               key={item.id}
+              ref={(element) => {
+                if (element) tabRefs.current.set(item.id, element)
+                else tabRefs.current.delete(item.id)
+              }}
               id={`detail-tab-${item.id}`}
               type="button"
               role="tab"
@@ -36,6 +61,7 @@ export function EditorDetailLane({ items, activeId, onChange }: EditorDetailLane
               disabled={item.disabled}
               tabIndex={selected ? 0 : -1}
               onClick={() => onChange(item.id)}
+              onKeyDown={(event) => moveFocus(event, item.id)}
             >
               {item.label}
             </button>
