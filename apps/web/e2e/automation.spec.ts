@@ -90,6 +90,19 @@ async function dismissTour(page: Page): Promise<void> {
   }
 }
 
+async function openMixer(page: Page) {
+  const workspace = page.getByRole('region', { name: 'Mix workspace' })
+  if (await workspace.isVisible().catch(() => false)) {
+    return workspace.getByRole('region', { name: 'Mixer' })
+  }
+  const mixerToggle = page.getByRole('button', { name: /Mixer|Mix/ }).first()
+  if ((await mixerToggle.getAttribute('aria-expanded')) !== 'true') {
+    await mixerToggle.click()
+  }
+  await expect(mixerToggle).toHaveAttribute('aria-expanded', 'true')
+  return page.getByRole('region', { name: 'Mixer' })
+}
+
 test.describe('composer parameter automation', () => {
   test('master-gain automation silences the output over the timeline', async ({ page }) => {
     await installOutputTap(page)
@@ -128,6 +141,24 @@ test.describe('composer parameter automation', () => {
     // With the master bus automated to ≈ -60 dB, the output stays below the floor
     // the #97 guard requires playback to clear. If automation failed to apply, the
     // audible demo project would push this over 0.01 and fail the build.
+    expect(result.peak).toBeLessThan(0.01)
+  })
+
+  test('persisted manual master gain changes the audible output', async ({ page }) => {
+    await installOutputTap(page)
+    await page.goto('/')
+    await dismissTour(page)
+    await expect(page.locator('.pr-note').first()).toBeVisible()
+
+    const mixer = await openMixer(page)
+    await mixer
+      .getByRole('group', { name: 'Master bus' })
+      .getByRole('slider', { name: /Gain/ })
+      .fill('-60')
+    await page.locator('button.transport-play').click()
+
+    const result = await measureSettledPeakRms(page)
+    expect(result.analyserCount).toBeGreaterThan(0)
     expect(result.peak).toBeLessThan(0.01)
   })
 })
