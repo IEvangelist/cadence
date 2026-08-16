@@ -624,6 +624,45 @@ describe('useCollaboration — collaborative undo/redo (#156)', () => {
     expect(readProject(providers[0].doc).loop.enabled).toBe(false)
   })
 
+  it('classifies mixer gestures for Yjs capture while keeping mix state local-only', () => {
+    const initialProject = seedProject()
+    const store = new LocalStorageProjectStore(new MemoryStorage())
+    const { result } = renderHook(() =>
+      useIntegratedComposerCollaboration(initialProject, store),
+    )
+    const trackId = result.current.controller.selectedTrackId
+    const groups: Array<string | null> = []
+    const unsubscribe = result.current.controller.subscribeProjectTransitions((transition) => {
+      groups.push(transition.group)
+    })
+
+    act(() => result.current.controller.setTrackMix(trackId, { gainDb: -1 }))
+    act(() => result.current.controller.setTrackMix(trackId, { gainDb: -2 }))
+    act(() => result.current.controller.setTrackMix(trackId, { gainDb: -3 }))
+    act(() => result.current.controller.setTrackMix(trackId, { solo: true }))
+    act(() => result.current.controller.setTrackMix(trackId, { solo: false }))
+
+    expect(groups).toEqual([
+      `mix-track-gain:${trackId}`,
+      `mix-track-gain:${trackId}`,
+      `mix-track-gain:${trackId}`,
+      null,
+      null,
+    ])
+    expect(result.current.controller.project.mix?.tracks[trackId]).toMatchObject({
+      gainDb: -3,
+      solo: false,
+    })
+    // Mix is persisted locally but deliberately absent from the CRDT projection.
+    expect(readProject(providers[0].doc).mix?.tracks[trackId]).toMatchObject({
+      gainDb: 0,
+      solo: false,
+    })
+    expect(result.current.collaboration.canUndo).toBe(false)
+
+    unsubscribe()
+  })
+
   it('keeps one local gesture capture across a remote sync', () => {
     const initialProject = seedProject()
     const store = new LocalStorageProjectStore(new MemoryStorage())

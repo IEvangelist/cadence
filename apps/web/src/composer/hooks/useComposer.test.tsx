@@ -405,6 +405,34 @@ describe('useComposer — single-user undo/redo history (#156)', () => {
     expect(hook.result.current.project.tracks[0].notes).toHaveLength(0)
   })
 
+  it('coalesces continuous mixer sliders without merging discrete toggles', () => {
+    const { hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+
+    act(() => hook.result.current.setTrackMix(trackId, { gainDb: -1 }))
+    act(() => hook.result.current.setTrackMix(trackId, { gainDb: -2 }))
+    act(() => hook.result.current.setTrackMix(trackId, { gainDb: -3 }))
+    expect(hook.result.current.project.mix?.tracks[trackId].gainDb).toBe(-3)
+
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.mix?.tracks[trackId].gainDb).toBe(0)
+
+    act(() => hook.result.current.setMasterMix({ limiterThresholdDb: -2 }))
+    act(() => hook.result.current.setMasterMix({ limiterThresholdDb: -3 }))
+    act(() => hook.result.current.setMasterMix({ limiterThresholdDb: -4 }))
+    expect(hook.result.current.project.mix?.master.limiterThresholdDb).toBe(-4)
+
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.mix?.master.limiterThresholdDb).toBe(-1)
+
+    act(() => hook.result.current.setTrackMix(trackId, { solo: true }))
+    act(() => hook.result.current.setTrackMix(trackId, { solo: false }))
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.mix?.tracks[trackId].solo).toBe(true)
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.mix?.tracks[trackId].solo).toBe(false)
+  })
+
   it('does not coalesce discrete one-shot commands even when they land back-to-back', () => {
     const { hook } = setup()
     const trackId = hook.result.current.selectedTrackId

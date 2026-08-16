@@ -419,6 +419,14 @@ function historyGroupKey(action: ComposerAction): string | undefined {
       return `rename-track:${action.trackId}`
     case 'set-project-name':
       return 'set-project-name'
+    case 'set-track-mix':
+      if (action.changes.gainDb !== undefined) return `mix-track-gain:${action.trackId}`
+      if (action.changes.pan !== undefined) return `mix-track-pan:${action.trackId}`
+      return undefined
+    case 'set-master-mix':
+      if (action.changes.gainDb !== undefined) return 'mix-master-gain'
+      if (action.changes.limiterThresholdDb !== undefined) return 'mix-master-threshold'
+      return undefined
     default:
       return undefined
   }
