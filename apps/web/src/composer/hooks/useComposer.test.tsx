@@ -472,20 +472,20 @@ describe('useComposer — single-user undo/redo history (#156)', () => {
     expect(hook.result.current.state.selectedNoteIds).toEqual([noteId])
   })
 
-  it('resets history on any load-project action (new project, demo, snapshot load)', () => {
+  it('resets history on any load-project action (new project, demo, snapshot load)', async () => {
     const { hook } = setup()
     const trackId = hook.result.current.selectedTrackId
 
     act(() => hook.result.current.addNoteAt(trackId, 60, 0, 1))
     expect(hook.result.current.canUndo).toBe(true)
     act(() => hook.result.current.newProject())
-    expect(hook.result.current.canUndo).toBe(false)
+    await waitFor(() => expect(hook.result.current.canUndo).toBe(false))
     expect(hook.result.current.canRedo).toBe(false)
 
     act(() => hook.result.current.addTrack())
     expect(hook.result.current.canUndo).toBe(true)
     act(() => hook.result.current.loadDemo())
-    expect(hook.result.current.canUndo).toBe(false)
+    await waitFor(() => expect(hook.result.current.canUndo).toBe(false))
 
     act(() => hook.result.current.setTempo(77))
     expect(hook.result.current.canUndo).toBe(true)
@@ -495,7 +495,7 @@ describe('useComposer — single-user undo/redo history (#156)', () => {
         name: 'Snapshot',
       }),
     )
-    expect(hook.result.current.canUndo).toBe(false)
+    await waitFor(() => expect(hook.result.current.canUndo).toBe(false))
   })
 
   it('resets history when a remote sync replaces the document', () => {
