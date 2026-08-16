@@ -11,6 +11,14 @@ beforeEach(() => {
     'fetch',
     vi.fn(async () => new Response(null, { status: 401 })),
   )
+  vi.stubGlobal(
+    'ResizeObserver',
+    class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  )
 })
 
 afterEach(() => {

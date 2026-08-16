@@ -21,6 +21,18 @@ import {
   writeLanePoint,
 } from './automation'
 import { quantizeBeat } from '../timing/timing'
+import {
+  type ProjectMasterMix,
+  type ProjectMixInsert,
+  type ProjectTrackMix,
+  addMixInsert,
+  ensureTrackMix,
+  removeMixInsert,
+  removeTrackMix,
+  setMasterMix,
+  setMixInsertEnabled,
+  setTrackMix,
+} from './mix'
 
 export interface ComposerState {
   project: Project
@@ -58,6 +70,15 @@ export type ComposerAction =
   | { type: 'write-automation-point'; target: AutomationTarget; trackId?: string; point: AutomationPoint }
   | { type: 'remove-automation-point'; target: AutomationTarget; trackId?: string; beat: number }
   | { type: 'clear-automation-lane'; target: AutomationTarget; trackId?: string }
+  | {
+      type: 'set-track-mix'
+      trackId: string
+      changes: Partial<Pick<ProjectTrackMix, 'gainDb' | 'pan' | 'solo'>>
+    }
+  | { type: 'add-mix-insert'; trackId: string; insert: ProjectMixInsert }
+  | { type: 'remove-mix-insert'; trackId: string; insertId: string }
+  | { type: 'set-mix-insert-enabled'; trackId: string; insertId: string; enabled: boolean }
+  | { type: 'set-master-mix'; changes: Partial<ProjectMasterMix> }
 
 /** Smallest allowed note length in beats (a 64th note). */
 export const MIN_NOTE_DURATION = 1 / 16
@@ -149,8 +170,13 @@ export function composerReducer(
       // editor's cursor: keep the selected track/notes when they still exist,
       // otherwise fall back to the first track / drop stale note ids. Automation
       // is NOT carried by the CRDT binding yet, so preserve this editor's local
-      // lanes rather than letting a remote sync wipe them (single-user for now).
-      const project = { ...action.project, automation: state.project.automation }
+      // lanes or mix rather than letting a remote sync wipe them (single-user for
+      // now). Neither field is carried by the CRDT binding.
+      const project = {
+        ...action.project,
+        automation: state.project.automation,
+        mix: state.project.mix,
+      }
       const selectedTrackId = project.tracks.some((t) => t.id === state.selectedTrackId)
         ? state.selectedTrackId
         : (project.tracks[0]?.id ?? '')
@@ -206,7 +232,11 @@ export function composerReducer(
     case 'add-track': {
       return {
         ...state,
-        project: { ...state.project, tracks: [...state.project.tracks, action.track] },
+        project: {
+          ...state.project,
+          tracks: [...state.project.tracks, action.track],
+          mix: ensureTrackMix(state.project.mix, action.track.id),
+        },
         selectedTrackId: action.track.id,
         selectedNoteIds: [],
       }
@@ -225,6 +255,7 @@ export function composerReducer(
           tracks,
           // Drop any automation lanes that pointed at the removed track.
           automation: clearTrackLanes(state.project.automation ?? [], action.trackId),
+          mix: removeTrackMix(state.project.mix, action.trackId),
         },
         selectedTrackId,
         selectedNoteIds:
@@ -432,6 +463,61 @@ export function composerReducer(
         project: {
           ...state.project,
           automation: clearLane(state.project.automation ?? [], action.target, action.trackId),
+        },
+      }
+    }
+
+    case 'set-track-mix': {
+      return {
+        ...state,
+        project: {
+          ...state.project,
+          mix: setTrackMix(state.project.mix, action.trackId, action.changes),
+        },
+      }
+    }
+
+    case 'add-mix-insert': {
+      return {
+        ...state,
+        project: {
+          ...state.project,
+          mix: addMixInsert(state.project.mix, action.trackId, action.insert),
+        },
+      }
+    }
+
+    case 'remove-mix-insert': {
+      return {
+        ...state,
+        project: {
+          ...state.project,
+          mix: removeMixInsert(state.project.mix, action.trackId, action.insertId),
+        },
+      }
+    }
+
+    case 'set-mix-insert-enabled': {
+      return {
+        ...state,
+        project: {
+          ...state.project,
+          mix: setMixInsertEnabled(
+            state.project.mix,
+            action.trackId,
+            action.insertId,
+            action.enabled,
+          ),
+        },
+      }
+    }
+
+    case 'set-master-mix': {
+      return {
+        ...state,
+        project: {
+          ...state.project,
+          mix: setMasterMix(state.project.mix, action.changes),
         },
       }
     }

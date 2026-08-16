@@ -130,4 +130,22 @@ test.describe('composer parameter automation', () => {
     // audible demo project would push this over 0.01 and fail the build.
     expect(result.peak).toBeLessThan(0.01)
   })
+
+  test('persisted manual master gain changes the audible output', async ({ page }) => {
+    await installOutputTap(page)
+    await page.goto('/')
+    await dismissTour(page)
+    await expect(page.locator('.pr-note').first()).toBeVisible()
+
+    const mixer = await openMixWorkspace(page)
+    await mixer
+      .getByRole('group', { name: 'Master bus' })
+      .getByRole('slider', { name: /Gain/ })
+      .fill('-60')
+    await page.locator('button.transport-play').click()
+
+    const result = await measureSettledPeakRms(page)
+    expect(result.analyserCount).toBeGreaterThan(0)
+    expect(result.peak).toBeLessThan(0.01)
+  })
 })

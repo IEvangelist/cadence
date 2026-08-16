@@ -44,7 +44,8 @@ function assistantRegion() {
   if (inspector.getAttribute('aria-expanded') === 'false') {
     fireEvent.click(inspector)
   }
-  fireEvent.click(screen.getByRole('tab', { name: 'Assistant' }))
+  fireEvent.click(screen.getByRole('tab', { name: 'AI' }))
+  fireEvent.click(screen.getByRole('tab', { name: 'Basic' }))
   return screen.getByRole('region', { name: 'AI Assistant' })
 }
 

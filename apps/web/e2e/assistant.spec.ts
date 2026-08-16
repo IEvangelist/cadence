@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { test, expect } from '@playwright/test'
 import { createBlankProject } from './projectActions'
-import { openInspectorPanel } from './studioActions'
+import { openAiInspectorMode } from './studioActions'
 
 // The AI assistant is exercised against the production build with the model
 // MOCKED: `window.__CADENCE_AI_MOCK__` makes the provider factory return the
@@ -22,7 +22,7 @@ test.describe('AI assistant', () => {
     await createBlankProject(page)
     await expect(page.getByText('Your canvas is empty.')).toBeVisible()
 
-    const inspector = await openInspectorPanel(page, 'Assistant')
+    const inspector = await openAiInspectorMode(page, 'Basic')
     const panel = inspector.getByRole('region', { name: 'AI Assistant' })
 
     // "Generate melody" can start from an empty region.
@@ -61,7 +61,7 @@ test.describe('AI assistant', () => {
     await page.goto('/')
     await createBlankProject(page)
 
-    const inspector = await openInspectorPanel(page, 'Assistant')
+    const inspector = await openAiInspectorMode(page, 'Basic')
     const panel = inspector.getByRole('region', { name: 'AI Assistant' })
     const generateAction = panel.getByRole('radio', { name: /Generate melody/ })
 
@@ -81,7 +81,7 @@ test.describe('AI assistant', () => {
   }) => {
     await page.goto('/')
     await createBlankProject(page)
-    const inspector = await openInspectorPanel(page, 'Assistant')
+    const inspector = await openAiInspectorMode(page, 'Basic')
 
     const scan = () =>
       new AxeBuilder({ page })

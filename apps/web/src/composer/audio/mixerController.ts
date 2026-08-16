@@ -24,6 +24,7 @@ import type {
 } from '../contract/mixing'
 import type { EffectNode } from '../plugins/types'
 import { newId } from '../model/project'
+import { createProjectMix, type ProjectMix } from '../model/mix'
 import { sampleAutomation, upsertPoint } from './automation'
 import type { MixerGraph } from './mixerGraph'
 
@@ -45,6 +46,10 @@ export interface MixerController extends MixerContract {
   getView(): MixerView
   /** Reconcile the track set + mirror `Track.muted`; drives channel lifecycle. */
   syncTracks(tracks: readonly { id: string; muted: boolean }[]): void
+  /** Replace manual mixer state from the persisted project document. */
+  hydrate(mix: ProjectMix | undefined): void
+  /** Re-resolve insert nodes after plugin availability changes. */
+  refreshInserts(): void
   addInsert(trackId: string, effectId: string): void
   removeInsert(trackId: string, insertId: string): void
   setInsertEnabled(trackId: string, insertId: string, enabled: boolean): void
@@ -157,6 +162,37 @@ export function createMixerController(deps: MixerControllerDeps = {}): MixerCont
     graph.setTrackInserts(trackId, nodes)
   }
 
+  function paramsEqual(
+    left: Readonly<Record<string, number>>,
+    right: Readonly<Record<string, number>>,
+  ): boolean {
+    const leftEntries = Object.entries(left)
+    const rightKeys = Object.keys(right)
+    return (
+      leftEntries.length === rightKeys.length &&
+      leftEntries.every(([key, value]) => right[key] === value)
+    )
+  }
+
+  function insertsEqual(
+    left: readonly TrackInsert[],
+    right: readonly TrackInsert[],
+  ): boolean {
+    return (
+      left.length === right.length &&
+      left.every((insert, index) => {
+        const candidate = right[index]
+        return (
+          candidate !== undefined &&
+          insert.id === candidate.id &&
+          insert.effectId === candidate.effectId &&
+          insert.enabled === candidate.enabled &&
+          paramsEqual(insert.params, candidate.params)
+        )
+      })
+    )
+  }
+
   function findLane(target: AutomationTarget, trackId?: string): AutomationLane | undefined {
     return lanes.find((lane) => lane.target === target && lane.trackId === trackId)
   }
@@ -190,6 +226,45 @@ export function createMixerController(deps: MixerControllerDeps = {}): MixerCont
       }
       applyAudibility()
       commit()
+    },
+    hydrate(next) {
+      const mix = next ?? createProjectMix([...trackStates.keys()])
+      const nextTrackIds = new Set(Object.keys(mix.tracks))
+      for (const id of [...trackStates.keys()]) {
+        if (nextTrackIds.has(id)) continue
+        trackStates.delete(id)
+        insertsByTrack.delete(id)
+        graph?.disposeChannel(id)
+      }
+      for (const [trackId, persisted] of Object.entries(mix.tracks)) {
+        const muted = trackStates.get(trackId)?.muted ?? false
+        const previousInserts = insertsByTrack.get(trackId) ?? EMPTY_INSERTS
+        const nextInserts = persisted.inserts.map((insert) => ({
+          ...insert,
+          params: { ...insert.params },
+        }))
+        const insertsChanged = !insertsEqual(previousInserts, nextInserts)
+        trackStates.set(trackId, {
+          trackId,
+          gainDb: persisted.gainDb,
+          pan: persisted.pan,
+          solo: persisted.solo,
+          muted,
+        })
+        insertsByTrack.set(trackId, nextInserts)
+        graph?.ensureChannel(trackId)
+        graph?.setTrackGain(trackId, persisted.gainDb)
+        graph?.setTrackPan(trackId, persisted.pan)
+        if (insertsChanged) rebuildGraphInserts(trackId)
+      }
+      master = { ...mix.master }
+      graph?.setMasterGain(master.gainDb)
+      graph?.setLimiter(master.limiterEnabled, master.limiterThresholdDb)
+      applyAudibility()
+      commit()
+    },
+    refreshInserts() {
+      for (const trackId of trackStates.keys()) rebuildGraphInserts(trackId)
     },
     setTrackGain(trackId, gainDb) {
       const state = ensureTrack(trackId)

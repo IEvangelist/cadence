@@ -223,6 +223,12 @@ describe('tracks', () => {
     })
     expect(state.project.tracks).toHaveLength(2)
     expect(state.selectedTrackId).toBe('track_b')
+    expect(state.project.mix?.tracks.track_b).toEqual({
+      gainDb: 0,
+      pan: 0,
+      solo: false,
+      inserts: [],
+    })
   })
 
   it('removes the selected track and reselects the first remaining', () => {
@@ -233,6 +239,73 @@ describe('tracks', () => {
     state = composerReducer(state, { type: 'remove-track', trackId: 'track_b' })
     expect(state.project.tracks).toHaveLength(1)
     expect(state.selectedTrackId).toBe('track_a')
+    expect(state.project.mix?.tracks.track_b).toBeUndefined()
+  })
+
+  describe('persisted mix', () => {
+    it('writes clamped track and master settings through the reducer', () => {
+      let state = composerReducer(seed(), {
+        type: 'set-track-mix',
+        trackId: 'track_a',
+        changes: { gainDb: 99, pan: -9, solo: true },
+      })
+      state = composerReducer(state, {
+        type: 'set-master-mix',
+        changes: { gainDb: -999, limiterEnabled: true, limiterThresholdDb: 20 },
+      })
+
+      expect(state.project.mix?.tracks.track_a).toMatchObject({
+        gainDb: 6,
+        pan: -1,
+        solo: true,
+      })
+      expect(state.project.mix?.master).toEqual({
+        gainDb: -60,
+        limiterEnabled: true,
+        limiterThresholdDb: 0,
+      })
+    })
+
+    it('adds, toggles, and removes inserts without validating effect availability', () => {
+      let state = composerReducer(seed(), {
+        type: 'add-mix-insert',
+        trackId: 'track_a',
+        insert: {
+          id: 'ghost',
+          effectId: 'plugin.unavailable',
+          enabled: true,
+          params: { mix: 0.4 },
+        },
+      })
+      expect(state.project.mix?.tracks.track_a.inserts[0].effectId).toBe('plugin.unavailable')
+
+      state = composerReducer(state, {
+        type: 'set-mix-insert-enabled',
+        trackId: 'track_a',
+        insertId: 'ghost',
+        enabled: false,
+      })
+      expect(state.project.mix?.tracks.track_a.inserts[0].enabled).toBe(false)
+
+      state = composerReducer(state, {
+        type: 'remove-mix-insert',
+        trackId: 'track_a',
+        insertId: 'ghost',
+      })
+      expect(state.project.mix?.tracks.track_a.inserts).toEqual([])
+    })
+
+    it('preserves local mix across collaboration sync without claiming CRDT convergence', () => {
+      let state = composerReducer(seed(), {
+        type: 'set-track-mix',
+        trackId: 'track_a',
+        changes: { gainDb: -8 },
+      })
+      const remote = createEmptyProject('p')
+      remote.tracks = [createTrack({ name: 'Remote' }, 'track_a')]
+      state = composerReducer(state, { type: 'sync-remote', project: remote })
+      expect(state.project.mix?.tracks.track_a.gainDb).toBe(-8)
+    })
   })
 
   it('keeps selection when removing a non-selected track', () => {

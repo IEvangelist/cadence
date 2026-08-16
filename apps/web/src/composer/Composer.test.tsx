@@ -77,6 +77,35 @@ describe('<Composer />', () => {
     )).not.toBeInTheDocument()
   })
 
+  it('mounts unified AI, Mix, extension tools, and persisted rail Solo in production', async () => {
+    coversInteractions('studio.track.solo')
+    const user = userEvent.setup()
+    render(<Composer options={options()} />)
+
+    const solo = screen.getByRole('button', { name: 'Solo Synth' })
+    await user.click(solo)
+    expect(solo).toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(screen.getByRole('button', { name: 'Inspector' }))
+    await user.click(screen.getByRole('tab', { name: 'AI' }))
+    expect(screen.getByRole('region', { name: 'AI tools' })).toBeVisible()
+    expect(screen.getByRole('tab', { name: 'Basic' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByRole('region', { name: 'AI Studio' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: 'Advanced' }))
+    expect(await screen.findByRole('region', { name: 'AI Studio' })).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: /^Mix$/ }))
+    expect(screen.getByRole('region', { name: 'Mix workspace' })).toBeVisible()
+    expect(screen.getByRole('region', { name: 'Mixer' })).toBeVisible()
+
+    await user.click(screen.getByRole('tab', { name: 'Extensions' }))
+    const extensions = screen.getByRole('region', { name: 'Extensions' })
+    await user.click(within(extensions).getByRole('checkbox', { name: /Hello Cadence/ }))
+    expect(screen.getByRole('region', { name: 'Example plugin' })).toBeVisible()
+    await user.click(within(extensions).getByRole('checkbox', { name: 'Example plugin' }))
+    expect(screen.queryByRole('region', { name: 'Example plugin' })).not.toBeInTheDocument()
+  })
+
   it('shows Quick Starts in the initial Start Center, not the editor sidebar', async () => {
     render(
       <Composer

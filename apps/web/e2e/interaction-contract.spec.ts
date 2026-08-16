@@ -6,8 +6,10 @@ import {
 import {
   defaultProjectDetailDto,
   defaultProjectSummaryDto,
+  returningProjectStorage,
 } from './projectFixtures'
 import {
+  openAiInspectorMode,
   openInspectorPanel,
   openMixWorkspace,
   openStudioDestination,
@@ -83,7 +85,12 @@ async function mockApi(
   if (path === '/api/entitlements') {
     return json(
       authenticated
-        ? { ...proEntitlements, tier: pro ? 'Pro' : 'Free', stemSeparation: pro }
+        ? {
+            ...proEntitlements,
+            tier: pro ? 'Pro' : 'Free',
+            aiGenerationsPerDay: pro ? -1 : 10,
+            stemSeparation: pro,
+          }
         : { ...proEntitlements, tier: 'Free', stemSeparation: false },
     )
   }
@@ -356,7 +363,10 @@ test.describe('production interaction contract', () => {
       origins: [
         {
           origin,
-          localStorage: [{ name: 'cadence.v1.onboarding.seen', value: '1' }],
+          localStorage: [
+            { name: 'cadence.v1.onboarding.seen', value: '1' },
+            ...returningProjectStorage,
+          ],
         },
       ],
     }
@@ -368,6 +378,11 @@ test.describe('production interaction contract', () => {
     await freeUserPage.route('**/api/**', (route) => mockApi(route, true, false))
     await freeUserPage.goto('/')
     await expect(freeUserPage.getByRole('button', { name: 'Profile' })).toBeVisible()
+    const freeAiHost = await openAiInspectorMode(freeUserPage, 'Advanced')
+    const freeAiStudio = freeAiHost.getByRole('region', { name: 'AI Studio' })
+    await freeAiStudio.getByRole('radio', { name: /Style transfer/ }).check()
+    await expect(freeAiStudio.getByRole('link', { name: 'View plans' })).toBeVisible()
+    await assertInteractionContract(freeUserPage, 'authenticated free AI lock', observed)
     await openStudioDestination(freeUserPage, 'Stems')
     await expect(freeUserPage.getByRole('button', { name: 'See Pro plans' })).toBeVisible()
     await assertInteractionContract(freeUserPage, 'authenticated free stems', observed)
@@ -471,7 +486,7 @@ test.describe('production interaction contract', () => {
     ).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'track inspector', observed)
 
-    const aiStudioHost = await openInspectorPanel(authenticatedPage, 'AI Studio')
+    const aiStudioHost = await openAiInspectorMode(authenticatedPage, 'Advanced')
     const aiStudio = aiStudioHost.getByRole('region', { name: 'AI Studio' })
     await expect(aiStudio.getByText('Pro · on-device')).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'AI Studio text to motif', observed)
@@ -525,7 +540,7 @@ test.describe('production interaction contract', () => {
     await expect(authenticatedPage.getByText('Your canvas is empty.')).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'empty project', observed)
 
-    const assistantHost = await openInspectorPanel(authenticatedPage, 'Assistant')
+    const assistantHost = await openAiInspectorMode(authenticatedPage, 'Basic')
     const assistant = assistantHost.getByRole('region', { name: 'AI Assistant' })
     await assistant.getByRole('radio', { name: /Generate melody/ }).check()
     await assistant.getByRole('button', { name: 'Generate' }).click()

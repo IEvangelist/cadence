@@ -6,6 +6,7 @@
  * database/backend can persist these same shapes later without a rewrite.
  */
 import type { AutomationLane } from './automation'
+import { createProjectMix, type ProjectMix } from './mix'
 
 /** MIDI note number, 0–127. Middle C (C4) is 60. */
 export type Pitch = number
@@ -70,10 +71,15 @@ export interface Project {
    * the note-playback seam.
    */
   automation?: AutomationLane[]
+  /**
+   * Persisted manual mixer state. Optional for source compatibility; migration
+   * supplies neutral track/master values for legacy documents.
+   */
+  mix?: ProjectMix
 }
 
 /** Current persistence schema version. Bump when the shape changes. */
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 /** Pulses-per-quarter used for MIDI export/import. */
 export const DEFAULT_PPQ = 480
@@ -181,6 +187,7 @@ export function trackColorForIndex(index: number): string {
 
 /** A blank project with a single empty synth track. */
 export function createEmptyProject(id: string = newId('project')): Project {
+  const tracks = [createTrack({ name: 'Synth', instrumentId: 'poly-synth' })]
   return {
     schemaVersion: SCHEMA_VERSION,
     id,
@@ -189,8 +196,9 @@ export function createEmptyProject(id: string = newId('project')): Project {
     ppq: DEFAULT_PPQ,
     lengthBeats: BEATS_PER_BAR * 4,
     loop: { enabled: false, start: 0, end: BEATS_PER_BAR * 4 },
-    tracks: [createTrack({ name: 'Synth', instrumentId: 'poly-synth' })],
+    tracks,
     automation: [],
+    mix: createProjectMix(tracks.map((track) => track.id)),
   }
 }
 
@@ -221,6 +229,15 @@ export function createDemoProject(id: string = newId('project')): Project {
     drumNotes.push(createNote({ pitch: 42, start: beat + 0.5, duration: 0.25, velocity: 0.5 }))
   }
 
+  const tracks = [
+    createTrack({ name: 'Synth', instrumentId: 'poly-synth', notes: synthNotes }),
+    createTrack({
+      name: 'Drums',
+      instrumentId: 'drum-kit',
+      notes: drumNotes,
+      color: TRACK_COLORS[1],
+    }),
+  ]
   return {
     schemaVersion: SCHEMA_VERSION,
     id,
@@ -229,15 +246,8 @@ export function createDemoProject(id: string = newId('project')): Project {
     ppq: DEFAULT_PPQ,
     lengthBeats: BEATS_PER_BAR * 2,
     loop: { enabled: true, start: 0, end: BEATS_PER_BAR * 2 },
-    tracks: [
-      createTrack({ name: 'Synth', instrumentId: 'poly-synth', notes: synthNotes }),
-      createTrack({
-        name: 'Drums',
-        instrumentId: 'drum-kit',
-        notes: drumNotes,
-        color: TRACK_COLORS[1],
-      }),
-    ],
+    tracks,
     automation: [],
+    mix: createProjectMix(tracks.map((track) => track.id)),
   }
 }

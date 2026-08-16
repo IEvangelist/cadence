@@ -20,6 +20,8 @@ import {
   type AiEntitlementView,
   type ExportAction,
   type ExportEntitlementView,
+  COMPOSER_CONTRACT_VERSION,
+  type ProjectMix,
 } from '.'
 import { SilentAudioEngine } from '../audio/engine'
 import { MockAssistant } from '../ai/mockProvider'
@@ -28,6 +30,7 @@ import type { Entitlements } from '../../billing/entitlementsClient'
 describe('composer contract conformance', () => {
   it('keeps the controller aligned with the frozen public surface (forward conformance)', () => {
     expect(controllerImplementsContract).toBe(true)
+    expect(COMPOSER_CONTRACT_VERSION).toBe('1.2.0')
   })
 
   it('excludes #9 collaboration sync internals from the public contract', () => {
@@ -54,6 +57,12 @@ describe('composer contract conformance', () => {
       muted: false,
     }
     const mixerOverlay = { [mixerTrack.trackId]: mixerTrack }
+    const persistedMix: ProjectMix = {
+      tracks: {
+        track_1: { gainDb: -3, pan: 0.25, solo: false, inserts: [] },
+      },
+      master: { gainDb: 0, limiterEnabled: false, limiterThresholdDb: -1 },
+    }
 
     const template: ProjectTemplate = {
       id: 'empty-template',
@@ -120,6 +129,7 @@ describe('composer contract conformance', () => {
 
     expect(template.create().tracks.length).toBeGreaterThanOrEqual(1)
     expect(mixerOverlay.track_1.trackId).toBe('track_1')
+    expect(persistedMix.tracks.track_1.gainDb).toBe(-3)
     expect(entitlementView.canUse('generate', freeEntitlements)).toBe(false)
     expect(exportView.appliesWatermark('wav', freeEntitlements)).toBe(true)
     expect(collabStatus.participants[0].displayName).toBe('Vasquez')
