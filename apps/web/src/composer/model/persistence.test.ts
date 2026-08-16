@@ -135,6 +135,12 @@ describe('automation persistence', () => {
         const project = migrateProject({
           schemaVersion,
           tracks: [{ id: 't1', instrumentId: 'poly-synth', notes: [] }],
+          mix: {
+            tracks: {
+              t1: { gainDb: -12, pan: 1, solo: true, inserts: [] },
+            },
+            master: { gainDb: -3, limiterEnabled: true, limiterThresholdDb: -4 },
+          },
         })
         expect(project.schemaVersion).toBe(3)
         expect(project.mix).toEqual({

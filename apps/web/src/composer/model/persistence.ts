@@ -19,7 +19,7 @@ import {
   newId,
 } from './project'
 import { sanitizeAutomation } from './automation'
-import { sanitizeProjectMix } from './mix'
+import { createProjectMix, sanitizeProjectMix } from './mix'
 import { getInstrument } from '../instruments/registry'
 
 export class ProjectParseError extends Error {
@@ -115,6 +115,12 @@ export function migrateProject(data: unknown): Project {
   const rawPpq = num(raw.ppq, DEFAULT_PPQ)
   const ppq = rawPpq > 0 ? rawPpq : DEFAULT_PPQ
   const normalizedTracks = tracks.length > 0 ? tracks : coerceTrackless()
+  const trackIds = normalizedTracks.map((track) => track.id)
+  const sourceSchemaVersion = num(raw.schemaVersion, 1)
+  const mix =
+    sourceSchemaVersion < 3
+      ? createProjectMix(trackIds)
+      : sanitizeProjectMix(raw.mix, trackIds)
 
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -126,7 +132,7 @@ export function migrateProject(data: unknown): Project {
     loop: coerceLoop(raw.loop, lengthBeats),
     tracks: normalizedTracks,
     automation: sanitizeAutomation(raw.automation),
-    mix: sanitizeProjectMix(raw.mix, normalizedTracks.map((track) => track.id)),
+    mix,
   }
 }
 
