@@ -20,6 +20,7 @@ interface Identity {
 }
 
 function mockApi(user: Identity) {
+  let savedProject: Record<string, unknown> | null = null
   return async (route: Route): Promise<void> => {
     const request = route.request()
     const url = new URL(request.url())
@@ -31,7 +32,47 @@ function mockApi(user: Identity) {
     if (path === '/api/auth/me') return json({}, 401)
     if (path === '/api/auth/providers') return json({ providers: ['GitHub'] })
     if (path === '/api/auth/login' && method === 'POST') return json(user)
-    if (path === '/api/projects' && method === 'GET') return json([])
+    if (path === '/api/projects' && method === 'GET') {
+      return json(
+        savedProject
+          ? [
+              {
+                ...savedProject,
+                createdAt: '2025-01-01T00:00:00Z',
+                updatedAt: '2025-01-01T00:01:00Z',
+              },
+            ]
+          : [],
+      )
+    }
+    if (/^\/api\/projects\/[^/]+$/.test(path) && method === 'GET') {
+      return savedProject
+        ? json({
+            ...savedProject,
+            createdAt: '2025-01-01T00:00:00Z',
+            updatedAt: '2025-01-01T00:01:00Z',
+          })
+        : json({}, 404)
+    }
+    if (path === '/api/projects' && method === 'POST') {
+      savedProject = request.postDataJSON() as Record<string, unknown>
+      return json(
+        {
+          ...savedProject,
+          createdAt: '2025-01-01T00:00:00Z',
+          updatedAt: '2025-01-01T00:01:00Z',
+        },
+        201,
+      )
+    }
+    if (/^\/api\/projects\/[^/]+$/.test(path) && method === 'PUT') {
+      savedProject = request.postDataJSON() as Record<string, unknown>
+      return json({
+        ...savedProject,
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-01T00:01:00Z',
+      })
+    }
     // Anything else the app calls (entitlements, saves): succeed emptily.
     return json({}, method === 'GET' ? 200 : 204)
   }

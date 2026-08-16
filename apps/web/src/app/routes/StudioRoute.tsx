@@ -3,7 +3,6 @@ import { useLocation, useNavigate, useOutletContext } from 'react-router-dom'
 import { useAuth } from '../../auth/authContext'
 import { Composer } from '../../composer/Composer'
 import { buildCollabConfig } from '../../composer/model/collab/collabConfig'
-import { OnboardingTour } from '../../onboarding/OnboardingTour'
 import { useProjectStore } from '../projectStoreContext'
 import type { AppRouteContext } from '../routeContext'
 
@@ -30,12 +29,28 @@ export function StudioRoute() {
     )
   }, [location.pathname, location.search, navigate])
 
+  if (auth.status === 'loading') {
+    return (
+      <section
+        className="composer-hydration"
+        id="composer-main"
+        aria-label="Studio"
+        aria-busy="true"
+        tabIndex={-1}
+      >
+        <p role="status">Loading Studio...</p>
+      </section>
+    )
+  }
+
   return (
     <>
       <Composer
         options={{
           store,
           watermarkExports,
+          storeRevision: auth.status,
+          recoveryScope: authenticated ? 'remote' : 'local',
           sharedProjectHash: location.hash,
           onSharedProjectConsumed: consumeSharedProject,
         }}
@@ -43,7 +58,6 @@ export function StudioRoute() {
         canShare={authenticated}
         guardNavigation
       />
-      <OnboardingTour />
     </>
   )
 }

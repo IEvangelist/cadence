@@ -3,6 +3,16 @@ import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+async function createBlankProject(page: import('@playwright/test').Page): Promise<void> {
+  await page.getByRole('button', { name: 'Project', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'New project' }).click()
+  await page.getByRole('button', { name: /Blank project/ }).click()
+}
+
+async function openExportMenu(page: import('@playwright/test').Page): Promise<void> {
+  await page.getByRole('button', { name: 'Export & share' }).click()
+}
+
 // Full composer flow against the production build: create a note, run the
 // transport, export a .mid download, then reload and confirm the note persisted
 // (localStorage autosave/restore). Exercises the audio engine, piano roll,
@@ -12,7 +22,7 @@ test.describe('composer', () => {
     await page.goto('/')
 
     // Start from a clean project so the assertions are unambiguous.
-    await page.getByRole('button', { name: 'New' }).click()
+    await createBlankProject(page)
     await expect(page.getByText('Your canvas is empty.')).toBeVisible()
 
     const grid = page.getByRole('application', { name: /Note grid/ })
@@ -30,7 +40,10 @@ test.describe('composer', () => {
     await page.getByRole('button', { name: 'Save' }).click()
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: 'Export MIDI' }).click(),
+      (async () => {
+        await openExportMenu(page)
+        await page.getByRole('menuitem', { name: 'Export MIDI' }).click()
+      })(),
     ])
     expect(download.suggestedFilename()).toMatch(/\.mid$/)
 
@@ -43,7 +56,7 @@ test.describe('composer', () => {
   test('round-trips a project through the portable .cadence.json file', async ({ page }) => {
     await page.goto('/')
 
-    await page.getByRole('button', { name: 'New' }).click()
+    await createBlankProject(page)
     await expect(page.getByText('Your canvas is empty.')).toBeVisible()
 
     const grid = page.getByRole('application', { name: /Note grid/ })
@@ -54,7 +67,10 @@ test.describe('composer', () => {
     // Export the portable project file and capture the download bytes.
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByLabel('Export as').selectOption('project'),
+      (async () => {
+        await openExportMenu(page)
+        await page.getByRole('menuitem', { name: /Export Project file/ }).click()
+      })(),
     ])
     expect(download.suggestedFilename()).toMatch(/\.cadence\.json$/)
     const dir = await mkdtemp(join(tmpdir(), 'cadence-e2e-'))
@@ -64,7 +80,7 @@ test.describe('composer', () => {
     expect(saved.format).toBe('cadence-project')
 
     // Wipe the canvas, then re-import the file and confirm the notes return.
-    await page.getByRole('button', { name: 'New' }).click()
+    await createBlankProject(page)
     await expect(page.locator('.pr-note')).toHaveCount(0)
 
     await page.getByLabel('Import project or MusicXML file').setInputFiles(filePath)
@@ -75,7 +91,7 @@ test.describe('composer', () => {
     // Build a self-contained shared project by exporting the portable file,
     // encoding it into the #project= fragment, then loading that URL fresh.
     await page.goto('/')
-    await page.getByRole('button', { name: 'New' }).click()
+    await createBlankProject(page)
     const grid = page.getByRole('application', { name: /Note grid/ })
     await grid.click({ position: { x: 72, y: 96 } })
     await expect(page.locator('.pr-note')).toHaveCount(1)
@@ -89,7 +105,8 @@ test.describe('composer', () => {
         return original(text)
       }
     })
-    await page.getByRole('button', { name: 'Share' }).click()
+    await openExportMenu(page)
+    await page.getByRole('menuitem', { name: 'Share snapshot' }).click()
     const shareUrl = await page.evaluate(
       () => (window as unknown as { __copied?: string }).__copied ?? '',
     )

@@ -79,6 +79,27 @@ describe('AuthProvider / useAuth', () => {
     expect(onAuthChange).toHaveBeenLastCalledWith(true)
   })
 
+  it('publishes authenticated state only after store reconciliation settles', async () => {
+    let finishReconciliation!: () => void
+    const reconciliation = new Promise<void>((resolve) => {
+      finishReconciliation = resolve
+    })
+    const onAuthChange = vi.fn(async (authenticated: boolean) => {
+      if (authenticated) await reconciliation
+    })
+    renderWith(fakeClient(), onAuthChange)
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('anonymous'))
+
+    fireEvent.click(screen.getByText('signin'))
+    await waitFor(() => expect(onAuthChange).toHaveBeenLastCalledWith(true))
+    expect(screen.getByTestId('status')).toHaveTextContent('anonymous')
+    expect(screen.getByTestId('user')).toHaveTextContent('none')
+
+    finishReconciliation()
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'))
+    expect(screen.getByTestId('user')).toHaveTextContent('Ada')
+  })
+
   it('surfaces a sign-in error without changing status', async () => {
     const client = fakeClient({
       login: vi.fn(async () => {

@@ -73,6 +73,14 @@ async function dismissOnboarding(page: Page): Promise<void> {
   }
 }
 
+async function openQuickStarts(page: Page): Promise<import('@playwright/test').Locator> {
+  await page.getByRole('button', { name: 'Project', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'New project' }).click()
+  const gallery = page.locator('.quick-start-gallery')
+  await expect(gallery).toBeVisible()
+  return gallery
+}
+
 test.describe('quick starts (house dubs)', () => {
   test('opening the gallery and loading a template populates the composer', async ({
     page,
@@ -80,10 +88,7 @@ test.describe('quick starts (house dubs)', () => {
     await page.goto('/')
     await dismissOnboarding(page)
 
-    // Expand the collapsible Quick Starts panel, then load a template.
-    await page.getByRole('button', { name: 'Quick Starts' }).click()
-    const gallery = page.getByRole('region', { name: 'Quick Starts' })
-    await expect(gallery).toBeVisible()
+    const gallery = await openQuickStarts(page)
     await gallery.getByRole('button', { name: /Midnight Tape/ }).click()
 
     // The composer now holds the multi-track template, and the roll shows notes.
@@ -96,9 +101,7 @@ test.describe('quick starts (house dubs)', () => {
     await page.goto('/')
     await dismissOnboarding(page)
 
-    await page.getByRole('button', { name: 'Quick Starts' }).click()
-    await page
-      .getByRole('region', { name: 'Quick Starts' })
+    await (await openQuickStarts(page))
       .getByRole('button', { name: /Sunset Boulevard/ })
       .click()
     await expect(page.getByLabel('Project name')).toHaveValue('Sunset Boulevard')
@@ -115,15 +118,16 @@ test.describe('quick starts (house dubs)', () => {
     await page.goto('/')
     await dismissOnboarding(page)
 
-    // Focus the disclosure and activate it with the keyboard.
-    const disclosure = page.getByRole('button', { name: 'Quick Starts' })
-    await disclosure.focus()
-    await expect(disclosure).toBeFocused()
+    const projectMenu = page.getByRole('button', { name: 'Project', exact: true })
+    await projectMenu.focus()
+    await expect(projectMenu).toBeFocused()
+    await page.keyboard.press('Enter')
+    const newProject = page.getByRole('menuitem', { name: 'New project' })
+    await expect(newProject).toBeFocused()
     await page.keyboard.press('Enter')
 
-    // Focus a template card and activate it with the keyboard.
     const card = page
-      .getByRole('region', { name: 'Quick Starts' })
+      .locator('.quick-start-gallery')
       .getByRole('button', { name: /Weightless Drift/ })
     await card.focus()
     await expect(card).toBeFocused()

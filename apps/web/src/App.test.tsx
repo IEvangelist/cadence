@@ -100,7 +100,7 @@ describe('<App />', () => {
     render(<App router={router} />)
     await user.click(await screen.findByRole('button', { name: 'Return to Studio' }))
     await waitFor(() =>
-      expect(screen.getByRole('region', { name: 'Composer' })).toBeInTheDocument(),
+      expect(screen.getByRole('region', { name: 'Start a project' })).toBeInTheDocument(),
     )
     expect(router.state.location).toMatchObject({
       pathname: '/',

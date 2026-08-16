@@ -36,6 +36,7 @@ MP3 export possible.
 | --- | --- | --- |
 | [`@breezystack/lamejs`](https://www.npmjs.com/package/@breezystack/lamejs) | 1.2.7 | LGPL-3.0-or-later |
 | [`react-router-dom`](https://www.npmjs.com/package/react-router-dom) | 7.18.2 | MIT |
+| [`@radix-ui/react-dialog`](https://www.npmjs.com/package/@radix-ui/react-dialog) | 1.1.23 | MIT |
 | [`@radix-ui/react-dropdown-menu`](https://www.npmjs.com/package/@radix-ui/react-dropdown-menu) | 2.1.24 | MIT |
 | [`@radix-ui/react-popover`](https://www.npmjs.com/package/@radix-ui/react-popover) | 1.1.23 | MIT |
 | [`@radix-ui/react-tooltip`](https://www.npmjs.com/package/@radix-ui/react-tooltip) | 1.2.16 | MIT |
@@ -43,6 +44,8 @@ MP3 export possible.
 | [`@fontsource-variable/inter`](https://www.npmjs.com/package/@fontsource-variable/inter) | 5.3.0 | OFL-1.1 |
 | [`@fontsource-variable/space-grotesk`](https://www.npmjs.com/package/@fontsource-variable/space-grotesk) | 5.3.0 | OFL-1.1 |
 | [`@fontsource-variable/jetbrains-mono`](https://www.npmjs.com/package/@fontsource-variable/jetbrains-mono) | 5.3.0 | OFL-1.1 |
+
+Radix Dialog provides Cadence's accessible project/replacement dialogs.
 
 The web and desktop apps distribute the complete OFL-1.1 text for the bundled
 fonts and Lucide's ISC plus Feather MIT notices under `/licenses/`.

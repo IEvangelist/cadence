@@ -16,13 +16,11 @@ export const PANEL_LAYOUT_KEY = 'cadence.v1.composer.panelLayout'
 /**
  * Default disclosure state. Tracks + AI Assistant open (the primary controls and
  * the surfaces the onboarding tour anchors to); the taller AI Studio, Mixer, and
- * Extensions panels start collapsed so the rail is compact by default. Quick
- * Starts starts collapsed too — a discoverable-but-unobtrusive shelf of house-dub
- * templates that doesn't push the primary controls down.
+ * Extensions panels start collapsed so the rail is compact by default. Project
+ * templates live in the Start Center rather than competing with editor controls.
  */
 export const DEFAULT_PANEL_OPEN: Readonly<Record<string, boolean>> = {
   tracks: true,
-  quickStarts: false,
   assistant: true,
   aiStudio: false,
   mixer: false,

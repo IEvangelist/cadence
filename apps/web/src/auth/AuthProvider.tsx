@@ -37,9 +37,13 @@ export function AuthProvider({ children, client: injected, onAuthChange }: AuthP
   }, [onAuthChange])
 
   const applyUser = useCallback(async (next: Me | null) => {
+    try {
+      await onAuthChangeRef.current?.(next !== null)
+    } catch {
+      // Authentication is authoritative; local-to-remote reconciliation is best-effort.
+    }
     setUser(next)
     setStatus(next ? 'authenticated' : 'anonymous')
-    await onAuthChangeRef.current?.(next !== null)
   }, [])
 
   const refresh = useCallback(async () => {

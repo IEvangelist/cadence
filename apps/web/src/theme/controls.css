@@ -109,6 +109,24 @@
   background: var(--color-surface-sunken);
 }
 
+.ui-menu__separator {
+  height: 1px;
+  margin: var(--space-1) var(--space-2);
+  background: var(--color-border);
+}
+
+.ui-dialog__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgb(14 10 26 / 0.6);
+}
+
+.ui-dialog__content {
+  position: fixed;
+  z-index: 71;
+}
+
 .ui-tooltip {
   z-index: 60;
   padding: var(--space-1) var(--space-2);

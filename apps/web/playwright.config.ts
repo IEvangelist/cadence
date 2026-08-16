@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test'
+import { returningProjectStorage } from './e2e/projectFixtures'
 
 // The smoke suite is intentionally run against a *production build* served by
 // `vite preview`, so it proves the app compiles and renders the same bundle we
@@ -32,6 +33,7 @@ export default defineConfig({
           origin: baseURL,
           localStorage: [
             { name: 'cadence.v1.onboarding.seen', value: '1' },
+            ...returningProjectStorage,
           ],
         },
       ],

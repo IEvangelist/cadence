@@ -3,11 +3,14 @@ import { useBlocker } from 'react-router-dom'
 import type { ComposerController } from '../composer/hooks/useComposer'
 
 interface StudioNavigationGuardProps {
-  controller: Pick<ComposerController, 'isDirty' | 'isFlushing' | 'flushAutosave'>
+  controller: Pick<
+    ComposerController,
+    'isDirty' | 'isFlushing' | 'flushAutosave' | 'discardAutosaveRecovery'
+  >
 }
 
 export function StudioNavigationGuard({ controller }: StudioNavigationGuardProps) {
-  const { isDirty, isFlushing, flushAutosave } = controller
+  const { isDirty, isFlushing, flushAutosave, discardAutosaveRecovery } = controller
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
       isDirty &&
@@ -124,6 +127,7 @@ export function StudioNavigationGuard({ controller }: StudioNavigationGuardProps
           data-interaction="studio.autosave.discard"
           onClick={() => {
             generationRef.current += 1
+            discardAutosaveRecovery()
             blocker.proceed()
           }}
         >

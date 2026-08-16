@@ -11,17 +11,26 @@ import { StudioNavigationGuard } from './StudioNavigationGuard'
 
 function Studio({
   flushAutosave,
+  discardAutosaveRecovery = vi.fn(),
   dirty = true,
   isFlushing = false,
 }: {
   flushAutosave: () => Promise<void>
+  discardAutosaveRecovery?: () => void
   dirty?: boolean
   isFlushing?: boolean
 }) {
   const navigate = useNavigate()
   return (
     <>
-      <StudioNavigationGuard controller={{ isDirty: dirty, isFlushing, flushAutosave }} />
+      <StudioNavigationGuard
+        controller={{
+          isDirty: dirty,
+          isFlushing,
+          flushAutosave,
+          discardAutosaveRecovery,
+        }}
+      />
       <button type="button" onClick={() => void navigate('/pricing')}>
         Pricing
       </button>
@@ -32,10 +41,21 @@ function Studio({
   )
 }
 
-function renderGuard(flushAutosave: () => Promise<void>) {
+function renderGuard(
+  flushAutosave: () => Promise<void>,
+  discardAutosaveRecovery = vi.fn(),
+) {
   const router = createMemoryRouter(
     [
-      { path: '/', element: <Studio flushAutosave={flushAutosave} /> },
+      {
+        path: '/',
+        element: (
+          <Studio
+            flushAutosave={flushAutosave}
+            discardAutosaveRecovery={discardAutosaveRecovery}
+          />
+        ),
+      },
       { path: '/pricing', element: <h1>Pricing</h1> },
       { path: '/stems', element: <h1>Stems</h1> },
     ],
@@ -65,12 +85,17 @@ describe('<StudioNavigationGuard />', () => {
   it('requires an explicit discard after a failed save', async () => {
     coversInteractions('studio.autosave.discard')
     const user = userEvent.setup()
-    renderGuard(vi.fn(async () => Promise.reject(new Error('offline'))))
+    const discardRecovery = vi.fn()
+    renderGuard(
+      vi.fn(async () => Promise.reject(new Error('offline'))),
+      discardRecovery,
+    )
 
     await user.click(screen.getByRole('button', { name: 'Pricing' }))
     await user.click(await screen.findByRole('button', { name: 'Discard changes' }))
 
     expect(await screen.findByRole('heading', { name: 'Pricing' })).toBeInTheDocument()
+    expect(discardRecovery).toHaveBeenCalledOnce()
   })
 
   it('registers beforeunload only while dirty or flushing', () => {
