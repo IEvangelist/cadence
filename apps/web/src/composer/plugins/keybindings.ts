@@ -38,7 +38,8 @@ export function eventToKeybinding(event: {
   const parts: string[] = []
   if (event.ctrlKey || event.metaKey) parts.push('mod')
   if (event.altKey) parts.push('alt')
-  if (event.shiftKey) parts.push('shift')
+  // Printable symbols already encode Shift in `event.key` (`?`, `+`, etc.).
+  if (event.shiftKey && (key.length !== 1 || /^[a-z0-9]$/i.test(key))) parts.push('shift')
   parts.push(key)
   return parts.join('+')
 }
@@ -65,13 +66,28 @@ export function resolveKeybindingMap(
   return map
 }
 
-/** Render a binding for display, e.g. `mod+shift+h` → `Ctrl+Shift+H`. */
-export function formatKeybinding(binding: string): string {
+export type KeybindingPlatform = 'mac' | 'other'
+
+export function detectKeybindingPlatform(
+  platform = typeof navigator === 'undefined' ? '' : navigator.platform,
+): KeybindingPlatform {
+  return /mac|iphone|ipad|ipod/i.test(platform) ? 'mac' : 'other'
+}
+
+/** Render a binding using platform labels without changing canonical storage. */
+export function formatKeybinding(
+  binding: string,
+  platform: KeybindingPlatform = detectKeybindingPlatform(),
+): string {
   return canonicalizeKeybinding(binding)
     .split('+')
     .map((part) =>
       part === 'mod'
-        ? 'Ctrl'
+        ? platform === 'mac'
+          ? 'Cmd'
+          : 'Ctrl'
+        : part === 'alt' && platform === 'mac'
+          ? 'Option'
         : part.length === 1
           ? part.toUpperCase()
           : part.charAt(0).toUpperCase() + part.slice(1),

@@ -18,11 +18,13 @@ import {
   trackColorForIndex,
 } from '../model/project'
 import {
+  type ComposerAction,
   type ComposerState,
   composerReducer,
   initialState,
   selectedTrack as selectSelectedTrack,
 } from '../model/reducer'
+import { type HistoryController, createHistoryController } from '../model/history'
 import { selectVisibleTrackIds } from '../model/trackVisibility'
 import type { AutomationPoint, AutomationTarget } from '../model/automation'
 import {
@@ -183,6 +185,32 @@ export interface ComposerController {
   notify: (message: string) => void
   notifyError: (message: string) => void
 
+  /**
+   * Single-user document history (#156): a bounded, gesture-coalescing undo
+   * stack over LOCAL document mutations only (never selection/view state).
+   * `load-project`/restore/import/remote-sync reset it rather than becoming
+   * ordinary undo steps. INTERNAL to the app — deliberately excluded from the
+   * frozen public {@link ComposerPublicApi} contract surface until undo/redo is
+   * separately specced there. While a collaboration session is active, use
+   * {@link setHistoryEnabled} to disable this stack so a single click can't
+   * drive both the local history AND the collaborative `Y.UndoManager`
+   * (`useCollaboration`'s `CollaborationState.undo`/`redo`) at once.
+   */
+  canUndo: boolean
+  canRedo: boolean
+  undo: () => void
+  redo: () => void
+  /**
+   * Enable/disable the single-user history stack. Callers that own the
+   * collaboration lifecycle (e.g. the component wiring `useCollaboration`)
+   * should disable this while a collaborative session is active/writable, and
+   * re-enable it once collaboration ends. Always clears any retained entries
+   * on either transition, since they may no longer correspond to a document
+   * this controller advanced itself. INTERNAL — not part of
+   * {@link ComposerPublicApi}.
+   */
+  setHistoryEnabled: (enabled: boolean) => void
+
   play: () => void
   pause: () => void
   stop: () => void
@@ -316,6 +344,101 @@ function defaultProject(options: UseComposerOptions): Project {
   return options.initialProject ?? createEmptyProject('project_bootstrap')
 }
 
+/**
+ * Single-user history bound (#156). A generous cap — far more than a real
+ * editing session needs — that still keeps the retained snapshots bounded.
+ */
+const HISTORY_LIMIT = 100
+
+/**
+ * Actions that REPLACE the whole document (load/restore/import/remote-sync).
+ * These reset/rebase single-user history rather than becoming ordinary undo
+ * steps — undoing into a just-loaded/just-synced document would be surprising
+ * and, for `sync-remote`, would fight the CRDT rather than the local reducer.
+ */
+const HISTORY_RESET_ACTIONS = new Set<ComposerAction['type']>([
+  'load-project',
+  'sync-remote',
+])
+
+/**
+ * Actions that touch selection/view only, never the document. Excluded from
+ * history entirely (per #156: "document mutations only, not selection/view").
+ */
+const HISTORY_IGNORED_ACTIONS = new Set<ComposerAction['type']>([
+  'select-track',
+  'select-notes',
+  'clear-selection',
+])
+
+/**
+ * Group key for coalescing continuous pointer/slider gestures into one undo
+ * entry (#156). Only genuinely continuous edits get a key — dragging a note,
+ * dragging an automation point, sliding tempo/loop — so a rapid burst of the
+ * SAME gesture collapses, while discrete one-shot commands (add/remove a note,
+ * rename a track, add/remove a track…) always get their own entry.
+ */
+function historyGroupKey(action: ComposerAction): string | undefined {
+  switch (action.type) {
+    case 'update-note':
+      return `update-note:${action.trackId}:${action.noteId}`
+    case 'write-automation-point':
+      return `automation-point:${action.target}:${action.trackId ?? 'master'}`
+    case 'set-tempo':
+      return 'set-tempo'
+    case 'set-loop':
+      return 'set-loop'
+    default:
+      return undefined
+  }
+}
+
+/**
+ * Apply an undone/redone project snapshot without disturbing the CURRENT
+ * selection (undo/redo cover document mutations only — see #156). Mirrors the
+ * cursor-preservation in the reducer's `sync-remote` case, but — unlike that
+ * case — restores the snapshot's OWN automation lanes rather than overwriting
+ * them with the live ones, since a single-user undo must fully revert the
+ * document (including an undone automation edit).
+ */
+function applyHistorySnapshot(state: ComposerState, project: Project): ComposerState {
+  const selectedTrackId = project.tracks.some((t) => t.id === state.selectedTrackId)
+    ? state.selectedTrackId
+    : (project.tracks[0]?.id ?? '')
+  const liveNoteIds = new Set(
+    project.tracks.find((t) => t.id === selectedTrackId)?.notes.map((n) => n.id) ?? [],
+  )
+  return {
+    project,
+    selectedTrackId,
+    selectedNoteIds: state.selectedNoteIds.filter((id) => liveNoteIds.has(id)),
+  }
+}
+
+/** Internal action applying a history-controller snapshot (undo/redo). */
+interface HistoryApplyAction {
+  type: '__history-apply'
+  project: Project
+}
+
+type InternalComposerAction = ComposerAction | HistoryApplyAction
+
+/**
+ * Wraps the pure `composerReducer` so `useReducer` can also apply undo/redo
+ * snapshots. Stays outside the component (and `composerReducer` untouched) so
+ * the reducer stays pure and reusable; `applyHistorySnapshot` is the only extra
+ * case, and it never touches `historyRef` itself (recording is a SEPARATE
+ * effect in the hook body, driven off `state.project`, so it runs exactly once
+ * per commit rather than inside the reducer call).
+ */
+function composerReducerWithHistory(
+  state: ComposerState,
+  action: InternalComposerAction,
+): ComposerState {
+  if (action.type === '__history-apply') return applyHistorySnapshot(state, action.project)
+  return composerReducer(state, action)
+}
+
 export function useComposer(options: UseComposerOptions = {}): ComposerController {
   const autosaveDelay = options.autosaveDelay ?? 800
   const [store] = useState<ProjectStore>(() => options.store ?? createProjectStore())
@@ -327,10 +450,91 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         : options.recoveryStorage,
   )
 
-  const [state, dispatch] = useReducer(
-    composerReducer,
+  const [state, rawDispatch] = useReducer(
+    composerReducerWithHistory,
     options,
     (opts) => initialState(defaultProject(opts)),
+  )
+  // Keep a ref to the latest project so event handlers read fresh data without
+  // widening their dependency lists. The ref is written in an effect (not during
+  // render) to satisfy the React Compiler ref rules. Declared before the
+  // history wiring below since `dispatch` closes over it.
+  const projectRef = useRef(state.project)
+  useEffect(() => {
+    projectRef.current = state.project
+  }, [state.project])
+  // #156 single-user history: a bounded, gesture-coalescing undo/redo stack
+  // over document mutations only. Lazily created once via the
+  // ref-is-still-null check (the documented pattern for one-time ref init).
+  const historyRef = useRef<HistoryController<Project> | null>(null)
+  if (historyRef.current === null) {
+    historyRef.current = createHistoryController<Project>({ limit: HISTORY_LIMIT })
+  }
+  // Disabled while a collaboration session owns undo/redo via its own
+  // `Y.UndoManager` (see `setHistoryEnabled`) — see the interface doc on
+  // `ComposerController.setHistoryEnabled`.
+  const historyEnabledRef = useRef(true)
+  // Classification captured synchronously at dispatch time (before/groupKey);
+  // consumed by the effect below once the resulting `state.project` commits.
+  const pendingHistoryRef = useRef<{ before: Project; groupKey?: string } | null>(null)
+  // Mirrors `historyRef`'s `canUndo()`/`canRedo()` into real React state —
+  // reading a ref's `.current` during render (e.g. inline in the returned
+  // object) is not safe, so every mutation point below explicitly syncs these
+  // two flags instead of the render body computing them itself.
+  const [canUndo, setCanUndo] = useState(false)
+  const [canRedo, setCanRedo] = useState(false)
+  const syncHistoryFlags = useCallback(() => {
+    setCanUndo(historyRef.current!.canUndo())
+    setCanRedo(historyRef.current!.canRedo())
+  }, [])
+  const dispatch = useCallback((action: InternalComposerAction) => {
+    if (action.type === '__history-apply') {
+      // Applying an undo/redo snapshot must never itself become a new entry.
+      pendingHistoryRef.current = null
+    } else if (HISTORY_RESET_ACTIONS.has(action.type)) {
+      historyRef.current!.clear()
+      pendingHistoryRef.current = null
+      syncHistoryFlags()
+    } else if (!HISTORY_IGNORED_ACTIONS.has(action.type)) {
+      pendingHistoryRef.current = {
+        before: projectRef.current,
+        groupKey: historyGroupKey(action),
+      }
+    }
+    rawDispatch(action)
+  }, [syncHistoryFlags])
+  // Record the before → after transition once the dispatched action commits.
+  // Runs off `state.project` (not inside the reducer) so recording happens
+  // exactly once per commit and the reducer itself stays pure.
+  useEffect(() => {
+    const pending = pendingHistoryRef.current
+    pendingHistoryRef.current = null
+    if (!pending || !historyEnabledRef.current) return
+    if (state.project === pending.before) return
+    historyRef.current!.push(pending.before, state.project, pending.groupKey)
+    syncHistoryFlags()
+  }, [state.project, syncHistoryFlags])
+  const undo = useCallback(() => {
+    const project = historyRef.current!.undo()
+    syncHistoryFlags()
+    if (project !== undefined) dispatch({ type: '__history-apply', project })
+  }, [dispatch, syncHistoryFlags])
+  const redo = useCallback(() => {
+    const project = historyRef.current!.redo()
+    syncHistoryFlags()
+    if (project !== undefined) dispatch({ type: '__history-apply', project })
+  }, [dispatch, syncHistoryFlags])
+  const setHistoryEnabled = useCallback(
+    (enabled: boolean) => {
+      historyEnabledRef.current = enabled
+      // Any retained entries may no longer correspond to a document this
+      // controller advanced on its own (e.g. a collaborative session just
+      // took over, or just handed control back) — clear on either transition.
+      historyRef.current!.clear()
+      pendingHistoryRef.current = null
+      syncHistoryFlags()
+    },
+    [syncHistoryFlags],
   )
   const [snap, setSnap] = useState(0.25)
   const [transportState, setTransportState] = useState<TransportState>('stopped')
@@ -428,13 +632,6 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   const [engine] = useState<AudioEngine>(() => (options.createEngine ?? createAudioEngine)())
   const audioReady = useMemo(() => engine.constructor.name !== 'SilentAudioEngine', [engine])
 
-  // Keep a ref to the latest project so event handlers read fresh data without
-  // widening their dependency lists. The ref is written in an effect (not during
-  // render) to satisfy the React Compiler ref rules.
-  const projectRef = useRef(state.project)
-  useEffect(() => {
-    projectRef.current = state.project
-  }, [state.project])
   const announce = useCallback((text: string, tone: ProjectActionMessage['tone'] = 'info') => {
     setStatus(text)
     actionSequenceRef.current += 1
@@ -840,17 +1037,17 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     else void engine.play()
   }, [engine, transportState])
 
-  const setTempo = useCallback((bpm: number) => dispatch({ type: 'set-tempo', tempo: bpm }), [])
+  const setTempo = useCallback((bpm: number) => dispatch({ type: 'set-tempo', tempo: bpm }), [dispatch])
   const toggleLoop = useCallback(() => {
     dispatch({ type: 'set-loop', loop: { enabled: !projectRef.current.loop.enabled } })
-  }, [])
+  }, [dispatch])
 
   const addNoteAt = useCallback(
     (trackId: string, pitch: number, start: number, duration = 1) => {
       const note = createNote({ pitch, start, duration, velocity: 0.8 }, newId('note'))
       dispatch({ type: 'add-note', trackId, note })
     },
-    [],
+    [dispatch],
   )
   // Insert a batch of notes (e.g. an accepted AI suggestion) in one transition.
   // A single `insert-notes` dispatch (rather than a loop of `add-note`) keeps it
@@ -871,16 +1068,16 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         token: prev.token + 1,
       }))
     },
-    [],
+    [dispatch],
   )
   const updateNote = useCallback(
     (trackId: string, noteId: string, changes: Partial<Note>) =>
       dispatch({ type: 'update-note', trackId, noteId, changes }),
-    [],
+    [dispatch],
   )
   const removeNote = useCallback(
     (trackId: string, noteId: string) => dispatch({ type: 'remove-note', trackId, noteId }),
-    [],
+    [dispatch],
   )
   const quantizeNotes = useCallback(
     (
@@ -894,14 +1091,14 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         strength: options.strength,
         noteIds: options.noteIds,
       }),
-    [],
+    [dispatch],
   )
   const selectNote = useCallback(
     (noteId: string | null) =>
       dispatch(
         noteId ? { type: 'select-notes', noteIds: [noteId] } : { type: 'clear-selection' },
       ),
-    [],
+    [dispatch],
   )
   const previewNote = useCallback(
     (pitch: number) => {
@@ -976,27 +1173,27 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         newId('track'),
       ),
     })
-  }, [])
+  }, [dispatch])
   const removeTrack = useCallback(
     (trackId: string) => dispatch({ type: 'remove-track', trackId }),
-    [],
+    [dispatch],
   )
   const selectTrack = useCallback(
     (trackId: string) => dispatch({ type: 'select-track', trackId }),
-    [],
+    [dispatch],
   )
   const renameTrack = useCallback(
     (trackId: string, name: string) => dispatch({ type: 'rename-track', trackId, name }),
-    [],
+    [dispatch],
   )
   const setInstrument = useCallback(
     (trackId: string, instrumentId: InstrumentId) =>
       dispatch({ type: 'set-track-instrument', trackId, instrumentId }),
-    [],
+    [dispatch],
   )
   const toggleMute = useCallback(
     (trackId: string) => dispatch({ type: 'toggle-track-muted', trackId }),
-    [],
+    [dispatch],
   )
 
   // #131 multi-track view controls (all EPHEMERAL view state — see contextTrackIds).
@@ -1028,24 +1225,23 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   const writeAutomationPoint = useCallback(
     (target: AutomationTarget, trackId: string | undefined, point: AutomationPoint) =>
       dispatch({ type: 'write-automation-point', target, trackId, point }),
-    [],
+    [dispatch],
   )
   const removeAutomationPoint = useCallback(
     (target: AutomationTarget, trackId: string | undefined, beat: number) =>
       dispatch({ type: 'remove-automation-point', target, trackId, beat }),
-    [],
+    [dispatch],
   )
   const clearAutomationLane = useCallback(
     (target: AutomationTarget, trackId?: string) =>
       dispatch({ type: 'clear-automation-lane', target, trackId }),
-    [],
+    [dispatch],
   )
 
   const setProjectName = useCallback(
     (name: string) => dispatch({ type: 'set-project-name', name }),
-    [],
+    [dispatch],
   )
-
   const installReplacement = useCallback(
     async (request: ProjectReplacementRequest): Promise<void> => {
       const project =
@@ -1331,7 +1527,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   )
   const applyRemoteProject = useCallback((project: Project) => {
     dispatch({ type: 'sync-remote', project })
-  }, [])
+  }, [dispatch])
   const saveProject = useCallback(async () => {
     await flushAutosave()
     if (mountedRef.current) announce('Saved', 'success')
@@ -1465,6 +1661,11 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     replaceWithPluginFormat,
     notify,
     notifyError,
+    canUndo,
+    canRedo,
+    undo,
+    redo,
+    setHistoryEnabled,
     play,
     pause,
     stop,

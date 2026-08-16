@@ -234,3 +234,165 @@ describe('createCollabSession', () => {
     expect(viewer.doc.getMap('project').size).toBe(0)
   })
 })
+
+describe('createCollabSession — collaborative undo/redo (#156)', () => {
+  const idsOf = (p: Peer) => p.project.tracks[0].notes.map((n) => n.id)
+
+  it("A's undo removes only A's edit; B's unrelated later edit survives A's undo AND redo", () => {
+    const a = makePeer('A', seedProject())
+    const b = makePeer('B', undefined)
+    connect(a, b)
+    a.session.pushLocalProject(a.project)
+    Y.applyUpdate(b.doc, Y.encodeStateAsUpdate(a.doc), a.doc)
+
+    // Enabled only AFTER the initial seed/sync (#156: seeding/adoption must
+    // never itself be undoable).
+    a.session.enableUndo()
+    b.session.enableUndo()
+
+    // A adds a note; B receives it via the live doc sync.
+    const aEdit = structuredClone(a.project)
+    aEdit.tracks[0].notes.push(createNote({ pitch: 67, start: 2 }, 'aNote'))
+    a.project = aEdit
+    a.session.pushLocalProject(aEdit)
+    expect(idsOf(b)).toContain('aNote')
+
+    // B makes its own, unrelated edit afterwards.
+    const bEdit = structuredClone(b.project)
+    bEdit.tracks[0].notes.push(createNote({ pitch: 72, start: 4 }, 'bNote'))
+    b.project = bEdit
+    b.session.pushLocalProject(bEdit)
+    expect(idsOf(a)).toContain('bNote')
+
+    // A undoes — only A's own note disappears on BOTH peers; B's later,
+    // unrelated edit is preserved.
+    a.session.undo()
+    expect(idsOf(a).sort()).toEqual(['bNote', 'n1'])
+    expect(idsOf(b).sort()).toEqual(['bNote', 'n1'])
+
+    // A redoes — its own note comes back, B's edit is still untouched.
+    a.session.redo()
+    expect(idsOf(a).sort()).toEqual(['aNote', 'bNote', 'n1'])
+    expect(idsOf(b).sort()).toEqual(['aNote', 'bNote', 'n1'])
+  })
+
+  it("remote-only edits never populate a local client's undo stack", () => {
+    const a = makePeer('A', seedProject())
+    const b = makePeer('B', undefined)
+    connect(a, b)
+    a.session.pushLocalProject(a.project)
+    Y.applyUpdate(b.doc, Y.encodeStateAsUpdate(a.doc), a.doc)
+    a.session.enableUndo()
+
+    // B edits; A only ever receives remote updates — it never writes locally.
+    const bEdit = structuredClone(b.project)
+    bEdit.tracks[0].notes.push(createNote({ pitch: 69, start: 3 }, 'bOnly'))
+    b.project = bEdit
+    b.session.pushLocalProject(bEdit)
+
+    expect(idsOf(a)).toContain('bOnly')
+    expect(a.session.canUndo()).toBe(false)
+  })
+
+  it('viewers never get undo/redo capability', () => {
+    const a = makePeer('A', seedProject())
+    const viewer = makePeer('V', undefined, { canWrite: false })
+    connect(a, viewer)
+    a.session.pushLocalProject(a.project)
+    Y.applyUpdate(viewer.doc, Y.encodeStateAsUpdate(a.doc), a.doc)
+
+    viewer.session.enableUndo() // no-op: viewers never write, so nothing to track
+    expect(viewer.session.canUndo()).toBe(false)
+    expect(viewer.session.canRedo()).toBe(false)
+    expect(() => viewer.session.undo()).not.toThrow()
+    expect(() => viewer.session.redo()).not.toThrow()
+    expect(() => viewer.session.stopCapturing()).not.toThrow()
+    expect(idsOf(viewer)).toEqual(['n1'])
+  })
+
+  it('does not make the initial seed itself undoable', () => {
+    const a = makePeer('A', seedProject())
+    a.session.enableUndo() // enabled AFTER the constructor's synchronous seed
+    expect(a.session.canUndo()).toBe(false)
+    a.session.undo() // no-op: nothing was captured
+    expect(idsOf(a)).toEqual(['n1'])
+  })
+
+  it("a late joiner's adoption of the existing shared project is not undoable", () => {
+    const a = makePeer('A', seedProject())
+    const b = makePeer('B', undefined)
+    connect(a, b)
+    a.session.pushLocalProject(a.project)
+    // B adopts A's already-seeded project purely via doc sync — no local write.
+    Y.applyUpdate(b.doc, Y.encodeStateAsUpdate(a.doc), a.doc)
+
+    b.session.enableUndo()
+    expect(b.session.canUndo()).toBe(false)
+  })
+
+  it('a reconnect / project switch starts a brand-new session with no stale undo history', () => {
+    const a = makePeer('A', seedProject())
+    a.session.pushLocalProject(a.project)
+    a.session.enableUndo()
+    const edit = structuredClone(a.project)
+    edit.tracks[0].notes.push(createNote({ pitch: 61, start: 1 }, 'stale'))
+    a.project = edit
+    a.session.pushLocalProject(edit)
+    expect(a.session.canUndo()).toBe(true)
+
+    // Simulate what `useCollaboration` does on a project/identity change:
+    // destroy the old session and stand up a fresh doc + session for it.
+    a.session.destroy()
+    const freshDoc = new Y.Doc()
+    const freshAwareness = new Awareness(freshDoc)
+    const freshSession = createCollabSession({
+      doc: freshDoc,
+      awareness: freshAwareness,
+      user: { id: 'A', name: 'A', color: '#abc' },
+      canWrite: true,
+      initialProject: seedProject(),
+      onRemoteProject: () => {},
+    })
+    freshSession.enableUndo()
+    expect(freshSession.canUndo()).toBe(false)
+    freshSession.destroy()
+  })
+
+  it('coalesces rapid same-origin updates into one undo step, with stopCapturing separating discrete commands', () => {
+    const a = makePeer('A', seedProject())
+    a.session.pushLocalProject(a.project)
+    a.session.enableUndo()
+
+    const noteId = 'dragNote'
+    let edit = structuredClone(a.project)
+    edit.tracks[0].notes.push(createNote({ pitch: 60, start: 0 }, noteId))
+    a.project = edit
+    a.session.pushLocalProject(edit)
+    // Boundary: adding the note is a discrete command, distinct from the
+    // continuous pointer-drag that follows it.
+    a.session.stopCapturing()
+
+    // Simulate a pointer-drag: several rapid updates to the SAME note's
+    // `start`, with no boundary between them — these must coalesce.
+    for (const start of [0.1, 0.2, 0.3]) {
+      edit = structuredClone(a.project)
+      edit.tracks[0].notes = edit.tracks[0].notes.map((n) =>
+        n.id === noteId ? { ...n, start } : n,
+      )
+      a.project = edit
+      a.session.pushLocalProject(edit)
+    }
+    expect(a.project.tracks[0].notes.find((n) => n.id === noteId)?.start).toBe(0.3)
+
+    // ONE undo reverts the WHOLE drag (back to start: 0), not one step per
+    // intermediate update.
+    a.session.undo()
+    expect(a.project.tracks[0].notes.find((n) => n.id === noteId)?.start).toBe(0)
+    // The note-add is still a separate, undoable entry (kept apart by the
+    // `stopCapturing` boundary above).
+    expect(a.session.canUndo()).toBe(true)
+
+    a.session.undo()
+    expect(idsOf(a)).not.toContain(noteId)
+  })
+})

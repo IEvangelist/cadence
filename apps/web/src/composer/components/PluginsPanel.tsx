@@ -44,6 +44,7 @@ function KeybindingRecorder({
       type="button"
       className="btn btn-sm plugin-shortcut"
       data-interaction="studio.plugins.keybinding.record"
+      data-shortcut-recorder={recording ? 'active' : undefined}
       aria-pressed={recording}
       aria-label={`Shortcut for command${binding ? `, currently ${formatKeybinding(binding)}` : ', not set'}`}
       onClick={() => setRecording((value) => !value)}
@@ -71,6 +72,7 @@ export function PluginsPanel({ plugins }: PluginsPanelProps) {
     allPanels,
     isPanelVisible,
     setPanelVisible,
+    keybindingNotice,
   } = plugins
 
   return (
@@ -122,6 +124,11 @@ export function PluginsPanel({ plugins }: PluginsPanelProps) {
           </ul>
         </div>
       )}
+      {keybindingNotice ? (
+        <p className="plugin-keybinding-notice" role="status" aria-live="polite">
+          {keybindingNotice}
+        </p>
+      ) : null}
 
       {allPanels.length > 0 && (
         <div className="plugin-section">

@@ -82,7 +82,7 @@ const automation = traced(
   'src/composer/components/AutomationLane.test.tsx',
   'e2e/automation.spec.ts',
 )
-const instrument = traced('src/composer/components/InstrumentPicker.test.tsx')
+const instrument = traced('src/composer/components/InstrumentBrowser.test.tsx')
 const midi = traced('src/composer/components/MidiControls.test.tsx', 'e2e/midi.spec.ts')
 const mixer = traced('src/composer/components/MixerPanel.test.tsx', 'e2e/automation.spec.ts')
 const piano = traced('src/composer/components/PianoRoll.test.tsx', 'e2e/pro-editing.spec.ts')
@@ -101,7 +101,13 @@ const share = traced(
   'src/composer/components/ShareProjectButton.test.tsx',
   'e2e/collaboration.spec.ts',
 )
-const track = traced('src/composer/components/TrackPanel.test.tsx', 'e2e/multitrack.spec.ts')
+const track = traced('src/composer/components/TrackInspector.test.tsx', 'e2e/multitrack.spec.ts')
+const trackRail = traced('src/composer/components/TrackRail.test.tsx', 'e2e/multitrack.spec.ts')
+const detailLane = traced('src/composer/components/EditorDetailLane.test.tsx', 'e2e/pro-editing.spec.ts')
+const shortcuts = traced(
+  'src/composer/components/ShortcutHelpDialog.test.tsx',
+  'e2e/interaction-contract.spec.ts',
+)
 const transport = traced('src/composer/components/TransportBar.test.tsx', 'e2e/audio.spec.ts')
 const composer = traced('src/composer/Composer.test.tsx', 'e2e/composer.spec.ts')
 const studioFrame = traced('src/studio/StudioFrame.test.tsx', 'e2e/studio-frame.spec.ts')
@@ -486,9 +492,45 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
   instrument(
     'studio.track.instrument',
     'studio',
+    'button',
+    '/Choose instrument for .+/',
+    'Opens live instrument discovery for the repeated track.',
+  ),
+  instrument(
+    'studio.instrument-browser.close',
+    'studio',
+    'button',
+    'Close',
+    'Closes instrument discovery and returns focus to its trigger.',
+  ),
+  instrument(
+    'studio.instrument-browser.search',
+    'studio',
     'combobox',
-    '/Instrument for .+/',
-    'Changes the repeated track family instrument assignment.',
+    'Search instruments',
+    'Filters active registry instruments by normalized metadata.',
+  ),
+  instrument(
+    'studio.instrument-browser.kind',
+    'studio',
+    'button',
+    '/All|Melodic|Drums/',
+    'Filters discovery by melodic or drum kind and updates aria-pressed.',
+    'repeated',
+  ),
+  instrument(
+    'studio.instrument-browser.group',
+    'studio',
+    'combobox',
+    'Group',
+    'Filters discovery by live registry group.',
+  ),
+  instrument(
+    'studio.instrument-browser.option',
+    'studio',
+    'option',
+    '/.+/',
+    'Assigns the selected live registry instrument to the active track.',
     'repeated',
   ),
   midi(
@@ -1017,6 +1059,42 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'button',
     '/Show all tracks|Show only selected/',
     'Shows all tracks or only the selected track on the piano roll.',
+  ),
+  trackRail(
+    'studio.track.delete.confirm',
+    'studio',
+    'button',
+    'Delete track',
+    'Confirms removal of a populated track and its notes, automation, and mix state.',
+  ),
+  trackRail(
+    'studio.track.delete.cancel',
+    'studio',
+    'button',
+    'Cancel',
+    'Cancels destructive track removal.',
+  ),
+  detailLane(
+    'studio.editor-detail.tab',
+    'studio',
+    'tab',
+    '/Velocity|Automation|Properties/',
+    'Selects the contextual editor detail lane.',
+    'repeated',
+  ),
+  shortcuts(
+    'studio.shortcuts.close',
+    'studio',
+    'button',
+    'Close',
+    'Closes the keyboard shortcuts dialog.',
+  ),
+  shortcuts(
+    'studio.shortcuts.search',
+    'studio',
+    'textbox',
+    'Search commands',
+    'Filters core and extension commands in keyboard shortcut help.',
   ),
   track('studio.track.add', 'studio', 'button', '/Add track/', 'Adds and selects a new track.'),
   track(

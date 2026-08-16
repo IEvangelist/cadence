@@ -38,6 +38,12 @@ describe('eventToKeybinding', () => {
       eventToKeybinding({ ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, key: ' ' }),
     ).toBe('space')
   })
+
+  it('does not double-encode Shift for a printable symbol', () => {
+    expect(
+      eventToKeybinding({ ctrlKey: false, metaKey: false, altKey: false, shiftKey: true, key: '?' }),
+    ).toBe('?')
+  })
 })
 
 describe('resolveKeybindingMap', () => {
@@ -63,9 +69,10 @@ describe('resolveKeybindingMap', () => {
 
 describe('formatKeybinding', () => {
   it('renders a human-readable shortcut', () => {
-    expect(formatKeybinding('mod+shift+h')).toBe('Ctrl+Shift+H')
-    expect(formatKeybinding('mod+k')).toBe('Ctrl+K')
-    expect(formatKeybinding('alt+mod+space')).toBe('Ctrl+Alt+Space')
+    expect(formatKeybinding('mod+shift+h', 'other')).toBe('Ctrl+Shift+H')
+    expect(formatKeybinding('mod+k', 'other')).toBe('Ctrl+K')
+    expect(formatKeybinding('alt+mod+space', 'other')).toBe('Ctrl+Alt+Space')
+    expect(formatKeybinding('mod+alt+k', 'mac')).toBe('Cmd+Option+K')
   })
 })
 

@@ -8,7 +8,7 @@
  * it connects, mirrors local edits into the shared Yjs doc, applies converged
  * remote edits back through the controller, and surfaces the presence roster.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type * as Y from 'yjs'
 import type { Awareness } from 'y-protocols/awareness'
 import type { Project } from './../project'
@@ -63,6 +63,18 @@ export interface CollaborationState {
   connected: boolean
   canWrite: boolean
   presence: CollabPresence[]
+  /**
+   * Collaborative undo/redo (#156): a `Y.UndoManager` scoped to the shared
+   * project root, tracking only THIS client's own local edits. Distinct from
+   * — and, while collaboration is active, meant to REPLACE — the single-user
+   * history on `ComposerController` (see its `setHistoryEnabled`), so a
+   * single click never drives both stacks at once. Always `false`/no-op for
+   * viewers and before the initial seed/sync completes.
+   */
+  canUndo: boolean
+  canRedo: boolean
+  undo: () => void
+  redo: () => void
 }
 
 const INERT: CollaborationState = {
@@ -70,6 +82,10 @@ const INERT: CollaborationState = {
   connected: false,
   canWrite: false,
   presence: [],
+  canUndo: false,
+  canRedo: false,
+  undo: () => {},
+  redo: () => {},
 }
 
 export function useCollaboration(
@@ -79,6 +95,7 @@ export function useCollaboration(
 ): CollaborationState {
   const [presence, setPresence] = useState<CollabPresence[]>([])
   const [connected, setConnected] = useState(false)
+  const [undoState, setUndoState] = useState({ canUndo: false, canRedo: false })
 
   // Keep a live ref so the connection effect (which must not re-run on every
   // keystroke) always sees the latest controller callbacks/state.
@@ -140,18 +157,31 @@ export function useCollaboration(
     sessionRef.current = session
 
     const offPresence = session.onPresenceChange(setPresence)
+    const offUndoStack = session.onUndoStackChange(() =>
+      setUndoState({ canUndo: session.canUndo(), canRedo: session.canRedo() }),
+    )
     const offStatus = provider.onStatus?.((isConnected) => setConnected(isConnected))
     const offSynced = provider.onSynced?.(() => {
       // First client seeds the empty doc; joiners no-op and adopt via sync.
       session.seedIfEmpty(bindingRef.current.project)
       // Now it is safe to mirror subsequent local edits into the shared doc.
       mirrorReadyRef.current = true
+      // Enable collaborative undo only now — AFTER the seed/adoption above —
+      // so that seeding or adopting the shared project is never itself
+      // undoable (#156).
+      session.enableUndo()
     })
+    if (!deferSeed) {
+      // In-memory/test providers seeded synchronously above (no `onSynced`
+      // to defer to), so it is already safe to enable undo here.
+      session.enableUndo()
+    }
     // Push our starting state so a viewer/late editor immediately sees us.
     session.announce()
 
     return () => {
       offPresence()
+      offUndoStack()
       offStatus?.()
       offSynced?.()
       session.destroy()
@@ -159,6 +189,7 @@ export function useCollaboration(
       sessionRef.current = null
       mirrorReadyRef.current = false
       setConnected(false)
+      setUndoState({ canUndo: false, canRedo: false })
     }
   }, [
     projectId,
@@ -186,6 +217,18 @@ export function useCollaboration(
     })
   }, [binding.selectedTrackId, binding.selectedNoteIds])
 
+  const undo = useCallback(() => sessionRef.current?.undo(), [])
+  const redo = useCallback(() => sessionRef.current?.redo(), [])
+
   if (!config) return INERT
-  return { active: true, connected, canWrite, presence }
+  return {
+    active: true,
+    connected,
+    canWrite,
+    presence,
+    canUndo: undoState.canUndo,
+    canRedo: undoState.canRedo,
+    undo,
+    redo,
+  }
 }

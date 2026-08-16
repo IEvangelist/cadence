@@ -21,7 +21,8 @@ import {
   type Preferences,
   createPreferencesStore,
 } from './preferences'
-import { eventToKeybinding, resolveKeybindingMap } from './keybindings'
+import { canonicalizeKeybinding } from './keybindings'
+import { reservedCoreCommandFor } from '../commands/studioCommands'
 import { CORE_PLUGIN_ID } from './builtins'
 import type {
   CommandApi,
@@ -52,6 +53,10 @@ export interface PluginsController {
   keybindingFor: (commandId: string) => string | undefined
   /** Set or clear a command's keybinding override (persisted). */
   setKeybinding: (commandId: string, binding: string | null) => void
+  /** Raw persisted overrides consumed by the internal Studio dispatcher. */
+  keybindingOverrides: Readonly<Record<string, string>>
+  /** Accessible feedback from the latest binding conflict, if any. */
+  keybindingNotice: string | null
   /** Panels contributed by active plugins that are currently visible. */
   visiblePanels: PanelContribution[]
   /** All panels contributed by active plugins (for the visibility toggles). */
@@ -69,17 +74,6 @@ export interface UsePluginsOptions {
   preferencesStore?: PreferencesStore
 }
 
-function isEditableTarget(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null
-  if (!el || !el.tagName) return false
-  const tag = el.tagName.toUpperCase()
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable === true
-}
-
-function isDialogTarget(target: EventTarget | null): boolean {
-  return target instanceof Element && target.closest('[role="dialog"], [role="alertdialog"]') !== null
-}
-
 export function usePlugins(
   controller: ComposerController,
   options: UsePluginsOptions = {},
@@ -89,6 +83,7 @@ export function usePlugins(
     () => options.preferencesStore ?? createPreferencesStore(),
   )
   const [prefs, setPrefs] = useState<Preferences>(() => store.load())
+  const [keybindingNotice, setKeybindingNotice] = useState<string | null>(null)
 
   // Force a re-render whenever the host's plugin set/state changes.
   const [hostVersion, bumpHostVersion] = useReducer((n: number) => n + 1, 0)
@@ -169,41 +164,39 @@ export function usePlugins(
   )
 
   const keybindingFor = useCallback(
-    (commandId: string) =>
-      (Object.hasOwn(prefs.keybindings, commandId) ? prefs.keybindings[commandId] : undefined) ??
-      host.commands().find((c) => c.id === commandId)?.keybinding,
+    (commandId: string) => {
+      const binding =
+        (Object.hasOwn(prefs.keybindings, commandId) ? prefs.keybindings[commandId] : undefined) ??
+        host.commands().find((c) => c.id === commandId)?.keybinding
+      return binding && !reservedCoreCommandFor(binding) ? canonicalizeKeybinding(binding) : undefined
+    },
     [host, prefs.keybindings],
   )
 
   const setKeybinding = useCallback(
     (commandId: string, binding: string | null) => {
+      const reserved = binding ? reservedCoreCommandFor(binding) : undefined
+      if (reserved) {
+        updatePrefs((p) => {
+          const keybindings = { ...p.keybindings }
+          delete keybindings[commandId]
+          return { ...p, keybindings }
+        })
+        setKeybindingNotice(
+          `${binding} is reserved by a core Studio command. Try Mod+Alt+K or another unassigned shortcut.`,
+        )
+        return
+      }
       updatePrefs((p) => {
         const keybindings = { ...p.keybindings }
         if (binding) keybindings[commandId] = binding
         else delete keybindings[commandId]
         return { ...p, keybindings }
       })
+      setKeybindingNotice(null)
     },
     [updatePrefs],
   )
-
-  // Global keybinding dispatch. Ignored while typing in a form field.
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const map = resolveKeybindingMap(commands, prefs.keybindings)
-    if (map.size === 0) return
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (isEditableTarget(event.target) || isDialogTarget(event.target)) return
-      const binding = eventToKeybinding(event)
-      if (!binding) return
-      const commandId = map.get(binding)
-      if (!commandId) return
-      event.preventDefault()
-      runCommand(commandId)
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [commands, prefs.keybindings, runCommand])
 
   const isPanelVisible = useCallback(
     (id: string) => (Object.hasOwn(prefs.panelVisibility, id) ? prefs.panelVisibility[id] : true),
@@ -237,6 +230,8 @@ export function usePlugins(
     runCommand,
     keybindingFor,
     setKeybinding,
+    keybindingOverrides: prefs.keybindings,
+    keybindingNotice,
     visiblePanels,
     allPanels,
     isPanelVisible,

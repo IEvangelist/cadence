@@ -264,3 +264,92 @@ describe('useCollaboration', () => {
     built[0].destroy()
   })
 })
+
+describe('useCollaboration — collaborative undo/redo (#156)', () => {
+  it('tracks local edits for an immediate (non-deferred-seed) provider, and routes undo through applyRemoteProject', () => {
+    const project = seedProject()
+    const binding = makeBinding(project)
+    const { result, rerender } = renderHook(
+      (props: CollabBinding) => useCollaboration(props, config, factory),
+      { initialProps: binding },
+    )
+    // The initial seed happened before undo was enabled — not undoable.
+    expect(result.current.canUndo).toBe(false)
+
+    const edited = structuredClone(project)
+    edited.tracks[0].notes.push(createNote({ pitch: 67, start: 2 }, 'n2'))
+    act(() => rerender({ ...binding, project: edited }))
+    expect(result.current.canUndo).toBe(true)
+    expect(result.current.canRedo).toBe(false)
+
+    act(() => result.current.undo())
+    expect(result.current.canUndo).toBe(false)
+    expect(result.current.canRedo).toBe(true)
+    // The undo manager's own transaction is routed through the SAME
+    // `onRemoteProject` → `applyRemoteProject` path a genuine remote peer's
+    // edit takes (#156).
+    expect(binding.applyRemoteProject).toHaveBeenCalled()
+
+    act(() => result.current.redo())
+    expect(result.current.canUndo).toBe(true)
+    expect(result.current.canRedo).toBe(false)
+  })
+
+  it('never grants undo/redo capability to a viewer', () => {
+    const binding = makeBinding(seedProject())
+    const viewerConfig: CollabConfig = { ...config, role: 'viewer' }
+    const { result } = renderHook(() => useCollaboration(binding, viewerConfig, factory))
+
+    expect(result.current.canWrite).toBe(false)
+    expect(result.current.canUndo).toBe(false)
+    expect(result.current.canRedo).toBe(false)
+    // Calling undo/redo must be harmless no-ops.
+    act(() => result.current.undo())
+    act(() => result.current.redo())
+    expect(result.current.canUndo).toBe(false)
+    expect(result.current.canRedo).toBe(false)
+  })
+
+  it('does not make the deferred seed/adoption itself undoable', () => {
+    const built: Array<ReturnType<typeof fakeSyncingProvider>> = []
+    const syncingFactory = () => {
+      const p = fakeSyncingProvider()
+      built.push(p)
+      return p
+    }
+    const binding = makeBinding(seedProject())
+    const { result } = renderHook(() => useCollaboration(binding, config, syncingFactory))
+
+    expect(result.current.canUndo).toBe(false)
+    act(() => built[0].fireSync())
+    // The doc is now seeded, but the seed/adoption itself must not be undoable.
+    expect(result.current.canUndo).toBe(false)
+    built[0].destroy()
+  })
+
+  it('clears undo/redo state when the session is torn down and replaced (project switch / reconnect)', () => {
+    const project = seedProject()
+    const binding = makeBinding(project)
+    const { result, rerender } = renderHook(
+      ({ next, props }: { next: CollabConfig; props: CollabBinding }) =>
+        useCollaboration(props, next, factory),
+      { initialProps: { next: config, props: binding } },
+    )
+
+    const edited = structuredClone(project)
+    edited.tracks[0].notes.push(createNote({ pitch: 67, start: 2 }, 'n2'))
+    act(() => rerender({ next: config, props: { ...binding, project: edited } }))
+    expect(result.current.canUndo).toBe(true)
+
+    // A project/identity change tears down the old session and stands up a
+    // brand-new one — stale undo history must not survive the switch.
+    act(() =>
+      rerender({
+        next: { ...config, projectId: 'p2' },
+        props: makeBinding(seedProject()),
+      }),
+    )
+    expect(result.current.canUndo).toBe(false)
+    expect(result.current.canRedo).toBe(false)
+  })
+})
