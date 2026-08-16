@@ -27,11 +27,12 @@ test.describe('plugins / extensions', () => {
     const runButton = panel.getByRole('button', { name: 'Insert a C-major chord' })
     await expect(runButton).toBeVisible()
 
-    // The contributed instrument is now selectable in a track's instrument menu.
-    const trackInspector = await openInspectorPanel(page, 'Track')
-    await expect(
-      trackInspector.getByRole('option', { name: 'Music Box' }).first(),
-    ).toBeAttached()
+    // The contributed instrument appears live in registry-backed discovery.
+    await page.getByRole('button', { name: /Choose instrument for/ }).click()
+    const browser = page.getByRole('region', { name: 'Instrument browser' })
+    const musicBox = browser.getByRole('option', { name: /Music Box/ })
+    await expect(musicBox).toBeVisible()
+    await musicBox.click()
 
     // Select a track to receive the chord, then run the command.
     await page
