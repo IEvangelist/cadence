@@ -1347,6 +1347,35 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     ],
   )
 
+  const replaceUntrackedProject = useCallback(
+    (project: Project, label: string) => {
+      beginPersistenceTransition()
+      resetPersistenceForProject(false)
+      endPersistenceTransition()
+      dispatch({ type: 'load-project', project })
+      setHydration({ status: 'ready-with-project', source: 'created' })
+      setReplacement({ status: 'idle' })
+
+      const revealNotes = project.tracks[0]?.notes ?? []
+      if (revealNotes.length > 0) {
+        setRevealRequest((previous) => ({
+          noteIds: revealNotes.map((note) => note.id),
+          token: previous.token + 1,
+        }))
+      }
+      announce(label, 'success')
+      void refreshList()
+    },
+    [
+      announce,
+      beginPersistenceTransition,
+      dispatch,
+      endPersistenceTransition,
+      refreshList,
+      resetPersistenceForProject,
+    ],
+  )
+
   const requestProjectReplacement = useCallback(
     async (request: ProjectReplacementRequest): Promise<ProjectReplacementResult> => {
       const mustFlush =
@@ -1580,21 +1609,19 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   )
 
   const newProject = useCallback(() => {
-    void replaceWithBlank()
-  }, [replaceWithBlank])
+    replaceUntrackedProject(createEmptyProject(newId('project')), 'New project')
+  }, [replaceUntrackedProject])
   const loadDemo = useCallback(() => {
-    void replaceWithDemo()
-  }, [replaceWithDemo])
+    replaceUntrackedProject(createDemoProject(newId('project')), 'Loaded demo')
+  }, [replaceUntrackedProject])
   const loadProjectSnapshot = useCallback(
     (incoming: Project) => {
-      void requestProjectReplacement({
-        source: 'template',
-        project: { ...incoming, id: newId('project') },
-        label: `Loaded “${incoming.name}”`,
-        persisted: false,
-      })
+      replaceUntrackedProject(
+        { ...incoming, id: newId('project') },
+        `Loaded “${incoming.name}”`,
+      )
     },
-    [requestProjectReplacement],
+    [replaceUntrackedProject],
   )
   const applyRemoteProject = useCallback((project: Project) => {
     dispatch({ type: 'sync-remote', project })
