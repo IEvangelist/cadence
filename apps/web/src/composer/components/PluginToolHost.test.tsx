@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { coversInteractions } from '../../test/coversInteractions'
 import { createEmptyProject } from '../model/project'
@@ -6,7 +6,7 @@ import type { PanelContribution } from '../plugins'
 import { PluginToolHost } from './PluginToolHost'
 
 describe('<PluginToolHost />', () => {
-  it('mounts the active panel with complete tabs semantics and roving focus', () => {
+  it('mounts the active panel with complete tabs semantics and roving focus', async () => {
     coversInteractions('studio.plugins.panel.open')
     const firstRender = vi.fn(() => <button type="button">First action</button>)
     const secondRender = vi.fn(() => <button type="button">Second action</button>)
@@ -15,7 +15,7 @@ describe('<PluginToolHost />', () => {
       { id: 'second', title: 'Second tool', render: secondRender },
     ]
 
-    render(
+    const { rerender } = render(
       <PluginToolHost
         panels={panels}
         context={{ project: createEmptyProject('p'), runCommand: vi.fn() }}
@@ -54,6 +54,15 @@ describe('<PluginToolHost />', () => {
     fireEvent.keyDown(firstTab, { key: 'End' })
     expect(secondTab).toHaveFocus()
     expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', secondTab.id)
+
+    rerender(
+      <PluginToolHost
+        panels={[panels[0]]}
+        context={{ project: createEmptyProject('p'), runCommand: vi.fn() }}
+      />,
+    )
+    await waitFor(() => expect(firstTab).toHaveFocus())
+    expect(screen.getByRole('tab', { name: 'First tool' })).toHaveAttribute('tabindex', '0')
   })
 
   it('renders nothing when all contributed panels are hidden upstream', () => {

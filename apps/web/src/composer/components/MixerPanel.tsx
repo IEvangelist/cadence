@@ -55,6 +55,7 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
     writeAutomationPoint,
     removeAutomationPoint,
     clearAutomationLane,
+    stopHistoryCapture,
   } = mixer
 
   const gainRange = automationValueRange('trackGain')
@@ -66,6 +67,7 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
   const [pendingInsert, setPendingInsert] = useState<Record<string, string>>({})
   const defaultEffectId = availableEffects[0]?.id ?? ''
   const selectionFor = (trackId: string): string => pendingInsert[trackId] ?? defaultEffectId
+  const endGesture = () => stopHistoryCapture()
 
   return (
     <section className="mixer-panel" aria-label="Mixer">
@@ -94,6 +96,10 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
                 step={0.5}
                 value={track.gainDb}
                 onChange={(event) => setTrackGain(track.id, Number(event.target.value))}
+                onPointerUp={endGesture}
+                onPointerCancel={endGesture}
+                onKeyUp={endGesture}
+                onBlur={endGesture}
               />
               <span className="field-suffix">{formatDb(track.gainDb)}</span>
             </label>
@@ -108,6 +114,10 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
                 step={0.02}
                 value={track.pan}
                 onChange={(event) => setTrackPan(track.id, Number(event.target.value))}
+                onPointerUp={endGesture}
+                onPointerCancel={endGesture}
+                onKeyUp={endGesture}
+                onBlur={endGesture}
               />
               <span className="field-suffix">{formatPan(track.pan)}</span>
             </label>
@@ -241,6 +251,10 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
             step={0.5}
             value={master.gainDb}
             onChange={(event) => setMasterGain(Number(event.target.value))}
+            onPointerUp={endGesture}
+            onPointerCancel={endGesture}
+            onKeyUp={endGesture}
+            onBlur={endGesture}
           />
           <span className="field-suffix">{formatDb(master.gainDb)}</span>
         </label>
@@ -266,6 +280,10 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
             value={master.limiterThresholdDb}
             disabled={!master.limiterEnabled}
             onChange={(event) => setLimiterThreshold(Number(event.target.value))}
+            onPointerUp={endGesture}
+            onPointerCancel={endGesture}
+            onKeyUp={endGesture}
+            onBlur={endGesture}
           />
           <span className="field-suffix">{formatDb(master.limiterThresholdDb)}</span>
         </label>

@@ -234,6 +234,7 @@ export function createMixerController(deps: MixerControllerDeps = {}): MixerCont
         if (nextTrackIds.has(id)) continue
         trackStates.delete(id)
         insertsByTrack.delete(id)
+        graph?.disposeChannel(id)
       }
       for (const [trackId, persisted] of Object.entries(mix.tracks)) {
         const muted = trackStates.get(trackId)?.muted ?? false

@@ -202,6 +202,21 @@ describe('mixerController (with graph)', () => {
     expect(graph.disposeChannel).toHaveBeenCalledWith('t1')
   })
 
+  it('disposes obsolete graph channels when hydrating a replacement mix', () => {
+    const mixer = createMixerController({ graph })
+    mixer.syncTracks([{ id: 'old', muted: false }])
+    graph.disposeChannel.mockClear()
+
+    mixer.hydrate({
+      tracks: {
+        current: { gainDb: 0, pan: 0, solo: false, inserts: [] },
+      },
+      master: { gainDb: 0, limiterEnabled: false, limiterThresholdDb: -1 },
+    })
+
+    expect(graph.disposeChannel).toHaveBeenCalledWith('old')
+  })
+
   it('folds mute + solo into per-channel audibility', () => {
     const mixer = createMixerController({ graph })
     mixer.syncTracks([{ id: 't1', muted: false }, { id: 't2', muted: false }])

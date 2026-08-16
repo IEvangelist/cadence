@@ -58,6 +58,7 @@ function makeViewModel(overrides: Partial<MixerViewModel> = {}): MixerViewModel 
     writeAutomationPoint: vi.fn(),
     removeAutomationPoint: vi.fn(),
     clearAutomationLane: vi.fn(),
+    stopHistoryCapture: vi.fn(),
     ...overrides,
   }
 }
@@ -91,6 +92,8 @@ describe('MixerPanel', () => {
     fireEvent.click(leadStrip().getByRole('button', { name: 'Solo' }))
     expect(mixer.setTrackGain).toHaveBeenCalledWith('t1', 3)
     expect(mixer.setTrackPan).toHaveBeenCalledWith('t1', 0.5)
+    fireEvent.pointerUp(leadStrip().getByRole('slider', { name: /Gain/ }))
+    expect(mixer.stopHistoryCapture).toHaveBeenCalled()
     expect(mixer.toggleMute).toHaveBeenCalledWith('t1')
     expect(mixer.toggleSolo).toHaveBeenCalledWith('t1')
   })

@@ -41,6 +41,7 @@ const mixer: MixerViewModel = {
   writeAutomationPoint: vi.fn(),
   removeAutomationPoint: vi.fn(),
   clearAutomationLane: vi.fn(),
+  stopHistoryCapture: vi.fn(),
 }
 
 describe('<MixWorkspace />', () => {

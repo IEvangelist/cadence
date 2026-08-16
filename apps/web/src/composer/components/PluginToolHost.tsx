@@ -1,4 +1,4 @@
-import { Suspense, useRef, useState, type KeyboardEvent } from 'react'
+import { Suspense, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import type { PanelContribution, PanelRenderContext } from '../plugins'
 import './ToolWorkspaces.css'
 
@@ -26,6 +26,13 @@ export function PluginToolHost({ panels, context }: PluginToolHostProps) {
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const activePanel =
     panels.find((panel) => panel.id === requestedPanelId) ?? panels[0] ?? null
+
+  useEffect(() => {
+    if (!requestedPanelId || panels.some((panel) => panel.id === requestedPanelId)) return
+    const fallbackPanel = panels[0]
+    if (!fallbackPanel) return
+    tabRefs.current[fallbackPanel.id]?.focus()
+  }, [panels, requestedPanelId])
 
   if (!activePanel) return null
 

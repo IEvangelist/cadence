@@ -85,6 +85,7 @@ export interface MixerViewModel {
   ) => void
   /** Clear an entire automation lane. */
   clearAutomationLane: (target: AutomationTarget, trackId?: string) => void
+  stopHistoryCapture: () => void
 }
 
 const listEffectOptions = (): MixerEffectOption[] =>
@@ -298,5 +299,6 @@ export function useMixer(controller: ComposerController): MixerViewModel {
     writeAutomationPoint,
     removeAutomationPoint,
     clearAutomationLane,
+    stopHistoryCapture: controller.stopHistoryCapture,
   }
 }
