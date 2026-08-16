@@ -14,6 +14,7 @@ import { TransportBar } from './components/TransportBar'
 import { TrackRail } from './components/TrackRail'
 import { TrackInspector } from './components/TrackInspector'
 import { ShortcutHelpDialog } from './components/ShortcutHelpDialog'
+import { EditorDetailLane } from './components/EditorDetailLane'
 import { AssistantPanel } from './components/AssistantPanel'
 import { AiStudioPanel } from './components/AiStudioPanel'
 import { MixerPanel } from './components/MixerPanel'
@@ -183,6 +184,7 @@ function ComposerWorkspace({
   const mixer = useMixer(controller)
   const panels = usePanelLayout()
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [detailLane, setDetailLane] = useState('velocity')
   const { project, audioReady, loadDemo } = controller
   const isEmpty = project.tracks.every((track) => track.notes.length === 0)
 
@@ -256,6 +258,9 @@ function ComposerWorkspace({
       </button>
     </div>
   )
+  const selectedNote = project.tracks
+    .find((track) => track.id === controller.selectedTrackId)
+    ?.notes.find((note) => controller.state.selectedNoteIds.includes(note.id))
 
   // Publish the single live session's status through the contract-owned context so
   // feature panels can read it via useCollaborationStatus() without opening a second
@@ -317,7 +322,32 @@ function ComposerWorkspace({
           </button>
         </div>
       )}
-      <PianoRoll controller={controller} previewNotes={assistant.previewNotes} />
+      <div className="composer-editor-stack">
+        <PianoRoll controller={controller} previewNotes={assistant.previewNotes} />
+        <EditorDetailLane
+          activeId={detailLane}
+          onChange={setDetailLane}
+          items={[
+            {
+              id: 'velocity',
+              label: 'Velocity',
+              content: (
+                <p className="editor-detail-lane__status" role="status">
+                  {selectedNote
+                    ? `Selected note velocity: ${Math.round(selectedNote.velocity * 127)}`
+                    : 'Select a note to edit its velocity.'}
+                </p>
+              ),
+            },
+            {
+              id: 'automation',
+              label: 'Automation',
+              content: null,
+              disabled: true,
+            },
+          ]}
+        />
+      </div>
       {!audioReady && (
         <p className="audio-note" role="note">
           Audio output isn’t available in this environment - editing, saving, and MIDI
