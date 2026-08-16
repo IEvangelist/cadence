@@ -11,4 +11,3 @@ export function trackRequiresDeleteConfirmation(
   if (mixer && (mixer.gainDb !== 0 || mixer.pan !== 0 || mixer.solo)) return true
   return controller.mixer.listInserts(track.id).length > 0
 }
-

@@ -61,4 +61,3 @@ describe('instrument browser model', () => {
     expect(listInstrumentGroups(instruments)).toEqual(['Pads', 'Drums', 'Other'])
   })
 })
-

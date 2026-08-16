@@ -26,4 +26,3 @@ export function subscribeInstrumentLoadState(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
 }
-

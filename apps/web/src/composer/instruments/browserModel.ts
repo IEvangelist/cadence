@@ -61,4 +61,3 @@ export function listInstrumentGroups(
 ): string[] {
   return [...new Set(instruments.map((instrument) => instrument.group ?? 'Other'))]
 }
-
