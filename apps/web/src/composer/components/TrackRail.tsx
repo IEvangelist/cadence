@@ -43,17 +43,6 @@ export function TrackRail({
       <header className="track-rail__header">
         <h2>Tracks</h2>
         <div className="track-rail__header-actions">
-          {project.tracks.length > 1 ? (
-            <button
-              type="button"
-              className={`btn btn-sm${allVisible ? ' is-active' : ''}`}
-              data-interaction="studio.track.visibility-all"
-              aria-pressed={allVisible}
-              onClick={() => setAllTracksVisible(!allVisible)}
-            >
-              {allVisible ? 'Show only selected' : 'Show all tracks'}
-            </button>
-          ) : null}
           <button
             type="button"
             className="btn btn-sm"
