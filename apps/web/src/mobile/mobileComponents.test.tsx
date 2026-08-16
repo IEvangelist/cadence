@@ -6,7 +6,10 @@ import { COACH_MARKS } from './coachMarks'
 import { ContextualCoachMark } from './ContextualCoachMark'
 import { FullScreenSheet } from './FullScreenSheet'
 import { MobileHelpSheet } from './MobileHelpSheet'
+import { MobileAiReview } from './MobileAiReview'
 import { MobileNoteControls } from './MobileNoteControls'
+import { MobileProjectActions } from './MobileProjectActions'
+import { MobileTaskSheets } from './MobileTaskSheets'
 import { MobileTaskNavigator } from './MobileTaskNavigator'
 import { SelectedNoteEditorSheet } from './SelectedNoteEditorSheet'
 import { initialMobileTaskState } from './mobileTaskModel'
@@ -169,5 +172,94 @@ describe('mobile components', () => {
     expect(container.querySelector('.mobile-coach-mark')).toBeVisible()
     await user.click(screen.getByRole('button', { name: /Dismiss Pan first/ }))
     expect(onDismiss).toHaveBeenCalledWith('note-modes')
+  })
+
+  it('orchestrates each task through the shared full-screen sheet', () => {
+    const onClose = vi.fn()
+    render(
+      <MobileTaskSheets
+        openSheet="tracks"
+        onClose={onClose}
+        content={{
+          project: <p>Project content</p>,
+          tracks: <p>Track content</p>,
+          notes: <p>Note content</p>,
+          tools: <p>Tool content</p>,
+        }}
+      />,
+    )
+
+    expect(screen.getByRole('dialog', { name: 'Tracks' })).toBeVisible()
+    expect(screen.getByText('Track content')).toBeVisible()
+    expect(screen.queryByText('Project content')).not.toBeInTheDocument()
+  })
+
+  it('exposes every phone project command with busy-state protection', async () => {
+    coversInteractions('mobile.project.action')
+    const user = userEvent.setup()
+    const handlers = {
+      onCreate: vi.fn(),
+      onOpen: vi.fn(),
+      onImport: vi.fn(),
+      onSave: vi.fn(),
+      onShare: vi.fn(),
+      onExport: vi.fn(),
+    }
+    const { rerender } = render(<MobileProjectActions {...handlers} />)
+    expect(screen.getAllByRole('button')).toHaveLength(6)
+
+    for (const [label, handler] of [
+      ['Create', handlers.onCreate],
+      ['Open', handlers.onOpen],
+      ['Import', handlers.onImport],
+      ['Save', handlers.onSave],
+      ['Share', handlers.onShare],
+      ['Export', handlers.onExport],
+    ] as const) {
+      await user.click(screen.getByRole('button', { name: label }))
+      expect(handler).toHaveBeenCalledOnce()
+    }
+    expect(handlers.onCreate).toHaveBeenCalledOnce()
+
+    rerender(<MobileProjectActions {...handlers} busyAction="save" />)
+    expect(screen.getByRole('button', { name: 'Save in progress' })).toHaveAttribute(
+      'aria-busy',
+      'true',
+    )
+    expect(screen.getAllByRole('button').every((button) => button.hasAttribute('disabled'))).toBe(
+      true,
+    )
+  })
+
+  it('keeps Basic AI generation review explicit', async () => {
+    coversInteractions('mobile.ai.generate', 'mobile.ai.accept', 'mobile.ai.discard')
+    const user = userEvent.setup()
+    const onGenerate = vi.fn()
+    const onAccept = vi.fn()
+    const onDiscard = vi.fn()
+    const { rerender } = render(
+      <MobileAiReview
+        suggestion={null}
+        onGenerate={onGenerate}
+        onAccept={onAccept}
+        onDiscard={onDiscard}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Generate idea' }))
+    expect(onGenerate).toHaveBeenCalledOnce()
+
+    rerender(
+      <MobileAiReview
+        suggestion={{ title: 'Bass variation', description: 'A syncopated four-bar phrase.' }}
+        onGenerate={onGenerate}
+        onAccept={onAccept}
+        onDiscard={onDiscard}
+      />,
+    )
+    await user.click(screen.getByRole('button', { name: 'Accept' }))
+    await user.click(screen.getByRole('button', { name: 'Discard' }))
+    expect(onAccept).toHaveBeenCalledOnce()
+    expect(onDiscard).toHaveBeenCalledOnce()
   })
 })

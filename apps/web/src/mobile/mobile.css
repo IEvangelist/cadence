@@ -74,6 +74,7 @@
 
 .mobile-icon-button,
 .mobile-secondary-button,
+.mobile-primary-button,
 .mobile-danger-button,
 .mobile-segmented-control button,
 .mobile-task-nav__button,
@@ -86,6 +87,7 @@
 
 .mobile-icon-button,
 .mobile-secondary-button,
+.mobile-primary-button,
 .mobile-danger-button,
 .mobile-segmented-control button,
 .mobile-task-nav__button,
@@ -156,6 +158,7 @@
 }
 
 .mobile-secondary-button,
+.mobile-primary-button,
 .mobile-danger-button {
   width: 100%;
   padding: var(--space-2) var(--space-4);
@@ -166,6 +169,12 @@
 .mobile-secondary-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.mobile-primary-button {
+  border-color: var(--color-primary);
+  color: var(--color-on-primary);
+  background: var(--color-primary);
 }
 
 .mobile-danger-button {
@@ -268,8 +277,71 @@
   font-family: var(--font-mono);
 }
 
+.mobile-project-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.mobile-project-actions button {
+  min-height: 56px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+}
+
+.mobile-project-actions button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.mobile-ai-review {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.mobile-ai-review h3,
+.mobile-ai-review h4,
+.mobile-ai-review p {
+  margin: 0;
+}
+
+.mobile-ai-review h3,
+.mobile-ai-review h4 {
+  font-family: var(--font-display);
+}
+
+.mobile-ai-review header,
+.mobile-ai-review__suggestion {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.mobile-ai-review p {
+  color: var(--color-text-muted);
+}
+
+.mobile-ai-review__suggestion {
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.mobile-ai-review__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
 .mobile-icon-button:focus-visible,
 .mobile-secondary-button:focus-visible,
+.mobile-primary-button:focus-visible,
 .mobile-danger-button:focus-visible,
 .mobile-segmented-control button:focus-visible,
 .mobile-task-nav__button:focus-visible,
@@ -281,6 +353,7 @@
 
 .mobile-icon-button:active,
 .mobile-secondary-button:active,
+.mobile-primary-button:active,
 .mobile-danger-button:active,
 .mobile-segmented-control button:active,
 .mobile-task-nav__button:active,
@@ -328,6 +401,7 @@
 @media (prefers-reduced-motion: reduce) {
   .mobile-icon-button,
   .mobile-secondary-button,
+  .mobile-primary-button,
   .mobile-danger-button,
   .mobile-segmented-control button,
   .mobile-task-nav__button,
