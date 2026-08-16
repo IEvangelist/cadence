@@ -26,17 +26,23 @@ interface ProjectRecoveryEnvelope {
   project: string
 }
 
+export interface ProjectRecoveryWrite {
+  token: string
+  order: number
+}
+
 export function clearProjectRecoveryLineage(
   storage: SyncStorage | null,
   scope: string,
   projectId: string,
   lineageId: string | null,
+  throughOrder = Number.POSITIVE_INFINITY,
 ): void {
   if (!storage || !lineageId) return
   const records = listRecoveryRecords(storage, scope, projectId)
   const removedTokens = new Set<string>()
   for (const record of records) {
-    if (record.lineageId !== lineageId) continue
+    if (record.lineageId !== lineageId || record.order > throughOrder) continue
     storage.removeItem(projectRecoveryKey(scope, projectId, record.token))
     removedTokens.add(record.token)
   }
@@ -111,7 +117,7 @@ export function writeProjectRecovery(
   revision: number,
   lineageId = newRecoveryLineageId(),
   previousToken?: string | null,
-): string | null {
+): ProjectRecoveryWrite | null {
   if (!storage) return null
   const token = newRecoveryToken()
   const envelope: ProjectRecoveryEnvelope = {
@@ -141,7 +147,7 @@ export function writeProjectRecovery(
   } catch {
     // The durable record remains discoverable even if pointer/pruning updates fail.
   }
-  return token
+  return { token, order: envelope.order }
 }
 
 export function clearProjectRecovery(

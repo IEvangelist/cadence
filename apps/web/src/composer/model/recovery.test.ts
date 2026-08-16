@@ -22,7 +22,7 @@ describe('project recovery', () => {
     const token = writeProjectRecovery(storage, scope, project, 4)
 
     expect(readProjectRecovery(storage, scope)).toMatchObject({
-      token,
+      token: token?.token,
       revision: 4,
       project,
     })
@@ -35,10 +35,10 @@ describe('project recovery', () => {
     expect(token).not.toBeNull()
 
     clearProjectRecovery(storage, scope, project.id, 'another-writer')
-    expect(storage.getItem(projectRecoveryKey(scope, project.id, token!))).not.toBeNull()
+    expect(storage.getItem(projectRecoveryKey(scope, project.id, token!.token))).not.toBeNull()
 
-    clearProjectRecovery(storage, scope, project.id, token)
-    expect(storage.getItem(projectRecoveryKey(scope, project.id, token!))).toBeNull()
+    clearProjectRecovery(storage, scope, project.id, token!.token)
+    expect(storage.getItem(projectRecoveryKey(scope, project.id, token!.token))).toBeNull()
   })
 
   it('ignores malformed recovery data', () => {
@@ -69,7 +69,7 @@ describe('project recovery', () => {
     expect(readProjectRecovery(storage, scope, 'first')?.revision).toBe(2)
     expect(readProjectRecovery(storage, scope, 'second')?.revision).toBe(3)
 
-    clearProjectRecovery(storage, scope, 'second', secondToken)
+    clearProjectRecovery(storage, scope, 'second', secondToken?.token ?? null)
     expect(readProjectRecovery(storage, scope)?.project.id).toBe('first')
     expect(readProjectRecovery(storage, scope, 'first')?.revision).toBe(2)
     expect(firstToken).not.toBeNull()
@@ -95,7 +95,7 @@ describe('project recovery', () => {
       )
       expect(readProjectRecovery(storage, scope)?.project.id).toBe('second')
 
-      storage.removeItem(projectRecoveryKey(scope, 'second', secondToken!))
+      storage.removeItem(projectRecoveryKey(scope, 'second', secondToken!.token))
       expect(readProjectRecovery(storage, scope)?.project.id).toBe('first')
       expect(firstToken).not.toBeNull()
     } finally {
@@ -111,15 +111,14 @@ describe('project recovery', () => {
     try {
       vi.setSystemTime(new Date(1_000))
       const firstToken = writeProjectRecovery(storage, scope, first, 1)!
-      vi.setSystemTime(new Date(2_000))
       const secondToken = writeProjectRecovery(storage, scope, second, 1)!
       storage.setItem(
         recoveryIndexKey(scope),
-        JSON.stringify({ version: 1, projectId: first.id, token: firstToken }),
+        JSON.stringify({ version: 1, projectId: first.id, token: firstToken.token }),
       )
 
       expect(readProjectRecovery(storage, scope)?.project.id).toBe(second.id)
-      expect(storage.getItem(recoveryIndexKey(scope))).toContain(secondToken)
+      expect(storage.getItem(recoveryIndexKey(scope))).toContain(secondToken.token)
     } finally {
       vi.useRealTimers()
     }
@@ -138,9 +137,9 @@ describe('project recovery', () => {
       vi.setSystemTime(new Date(2_000))
       const writerB = writeProjectRecovery(storage, scope, second, 1)!
 
-      clearProjectRecovery(storage, scope, first.id, writerA)
+      clearProjectRecovery(storage, scope, first.id, writerA.token)
 
-      expect(readProjectRecovery(storage, scope)?.token).toBe(writerB)
+      expect(readProjectRecovery(storage, scope)?.token).toBe(writerB.token)
       expect(readProjectRecovery(storage, scope)?.project.name).toBe('Writer B')
     } finally {
       vi.useRealTimers()
@@ -160,9 +159,9 @@ describe('project recovery', () => {
       vi.setSystemTime(new Date(2_000))
       const secondToken = writeProjectRecovery(storage, scope, second, 2)!
 
-      clearProjectRecovery(storage, scope, second.id, secondToken)
+      clearProjectRecovery(storage, scope, second.id, secondToken.token)
 
-      expect(readProjectRecovery(storage, scope)?.token).toBe(firstToken)
+      expect(readProjectRecovery(storage, scope)?.token).toBe(firstToken.token)
       expect(readProjectRecovery(storage, scope)?.project.name).toBe('First')
     } finally {
       vi.useRealTimers()

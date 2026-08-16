@@ -1442,6 +1442,60 @@ describe('useComposer — project hydration and replacement', () => {
     })
   })
 
+  it('clears only the persisted recovery boundary while a newer edit is pending', async () => {
+    const firstSave = deferred<StoredProjectMeta>()
+    const save = vi
+      .fn<ProjectStore['save']>()
+      .mockImplementationOnce(() => firstSave.promise)
+      .mockRejectedValueOnce(new Error('B save failed'))
+      .mockImplementation(async (project) => ({
+        id: project.id,
+        name: project.name,
+        updatedAt: Date.now(),
+      }))
+    const stored = createEmptyProject('boundary-project')
+    const store = storeWith({
+      save,
+      loadLast: vi.fn(async () => stored),
+    })
+    const recoveryStorage = new MemoryStorage()
+    const hook = renderHook(() =>
+      useComposer({
+        createEngine: () => new FakeEngine(),
+        store,
+        recoveryStorage,
+        recoveryScope: 'local:anonymous',
+        autosaveDelay: 60_000,
+      }),
+    )
+    await waitFor(() => expect(hook.result.current.project.id).toBe(stored.id))
+    act(() => hook.result.current.setProjectName('Edit A'))
+    await waitFor(() =>
+      expect(
+        readProjectRecovery(recoveryStorage, 'local:anonymous')?.project.name,
+      ).toBe('Edit A'),
+    )
+    const flushing = hook.result.current.flushAutosave()
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+    act(() => hook.result.current.setProjectName('Edit B'))
+    await waitFor(() =>
+      expect(
+        readProjectRecovery(recoveryStorage, 'local:anonymous')?.project.name,
+      ).toBe('Edit B'),
+    )
+
+    firstSave.resolve({ id: stored.id, name: 'Edit A', updatedAt: 1 })
+    await expect(flushing).rejects.toThrow('B save failed')
+    expect(
+      readProjectRecovery(recoveryStorage, 'local:anonymous')?.project.name,
+    ).toBe('Edit B')
+
+    await act(() => hook.result.current.retrySave())
+    expect(
+      readProjectRecovery(recoveryStorage, 'local:anonymous', stored.id),
+    ).toBeNull()
+  })
+
   it('keeps a durable save clean when refreshing recents fails', async () => {
     const project = createEmptyProject('saved-with-list-error')
     const store = storeWith({

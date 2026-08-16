@@ -361,6 +361,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   const persistenceGenerationRef = useRef(0)
   const failedRevisionRef = useRef<number | null>(null)
   const recoveryTokenRef = useRef<string | null>(null)
+  const recoveryOrderRef = useRef(0)
   const recoveryTokensRef = useRef(new Set<string>())
   const recoveryLineageRef = useRef(newRecoveryLineageId())
   const skipNextProjectRevisionRef = useRef(false)
@@ -392,6 +393,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     savedRevisionRef.current = 0
     failedRevisionRef.current = null
     recoveryTokenRef.current = null
+    recoveryOrderRef.current = 0
     recoveryTokensRef.current.clear()
     recoveryLineageRef.current = lineageId
     flushPromiseRef.current = null
@@ -567,6 +569,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
           if (!isCurrent()) return
           resetPersistenceForProject(false, recovery.lineageId)
           recoveryTokenRef.current = recovery.token
+          recoveryOrderRef.current = recovery.order
           recoveryTokensRef.current.add(recovery.token)
           dispatch({ type: 'load-project', project: recovery.project })
           setHydration({ status: 'ready-with-project', source: 'recovery' })
@@ -654,6 +657,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
           attemptedRevision = revisionRef.current
           const project = projectRef.current
           const recoveryTokens = [...recoveryTokensRef.current]
+          const recoveryOrder = recoveryOrderRef.current
           await persist(project)
           if (!isCurrent()) return
           savedRevisionRef.current = Math.max(savedRevisionRef.current, attemptedRevision)
@@ -669,6 +673,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
               options.recoveryScope,
               project.id,
               recoveryLineageRef.current,
+              recoveryOrder,
             )
             for (const token of recoveryTokens) recoveryTokensRef.current.delete(token)
             if (
@@ -782,7 +787,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     }
     if (options.recoveryScope) {
       const previousToken = recoveryTokenRef.current
-      const token = writeProjectRecovery(
+      const write = writeProjectRecovery(
         recoveryStorage,
         options.recoveryScope,
         state.project,
@@ -790,9 +795,10 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         recoveryLineageRef.current,
         previousToken,
       )
-      if (token) {
-        recoveryTokenRef.current = token
-        recoveryTokensRef.current.add(token)
+      if (write) {
+        recoveryTokenRef.current = write.token
+        recoveryOrderRef.current = write.order
+        recoveryTokensRef.current.add(write.token)
       }
     }
     setSaveState((current) => ({
