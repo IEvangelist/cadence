@@ -28,6 +28,7 @@ test.describe('plugins / extensions', () => {
     await expect(runButton).toBeVisible()
 
     // The contributed instrument appears live in registry-backed discovery.
+    await openInspectorPanel(page, 'Track')
     await page.getByRole('button', { name: /Choose instrument for/ }).click()
     const browser = page.getByRole('region', { name: 'Instrument browser' })
     const musicBox = browser.getByRole('option', { name: /Music Box/ })
@@ -37,7 +38,7 @@ test.describe('plugins / extensions', () => {
     // Select a track to receive the chord, then run the command.
     await page
       .getByRole('complementary', { name: 'Track rail' })
-      .getByRole('button', { name: /Selected: Synth|Select Synth/ })
+      .getByRole('button', { name: /Selected Synth|Select Synth/ })
       .first()
       .click()
 

@@ -67,6 +67,26 @@ export function TrackInspector({
         </button>
       </div>
 
+      {controller.project.tracks.length > 1 ? (
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={() =>
+            controller.setAllTracksVisible(
+              !controller.project.tracks.every((candidate) =>
+                controller.visibleTrackIds.includes(candidate.id),
+              ),
+            )
+          }
+        >
+          {controller.project.tracks.every((candidate) =>
+            controller.visibleTrackIds.includes(candidate.id),
+          )
+            ? 'Show only selected'
+            : 'Show all tracks'}
+        </button>
+      ) : null}
+
       {browserOpen ? (
         <InstrumentBrowser
           selectedId={track.instrumentId}

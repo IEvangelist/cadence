@@ -15,7 +15,7 @@ export async function openInspectorPanel(
   const inspector = page.getByRole('button', { name: 'Inspector' })
   if ((await inspector.getAttribute('aria-expanded')) !== 'true') await inspector.click()
   await page.getByRole('tab', { name: tabName, exact: true }).click()
-  const panel = page.getByRole('tabpanel')
+  const panel = page.getByRole('tabpanel', { name: tabName, exact: true })
   await expect(panel).toBeVisible()
   return panel
 }

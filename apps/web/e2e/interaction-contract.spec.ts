@@ -391,6 +391,8 @@ test.describe('production interaction contract', () => {
     await expect(authenticatedPage.locator('#composer-main')).toBeFocused()
     await assertInteractionContract(authenticatedPage, 'authenticated studio', observed)
 
+    await authenticatedPage.getByRole('button', { name: 'Inspector', exact: true }).click()
+    await authenticatedPage.getByRole('tab', { name: 'Track', exact: true }).click()
     await authenticatedPage
       .getByRole('button', { name: /Choose instrument for/ })
       .click()

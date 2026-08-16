@@ -269,6 +269,40 @@ function ComposerWorkspace({
     },
   ]
 
+  const editActions = (
+    <div className="composer-edit-actions" aria-label="Edit commands">
+      <button
+        type="button"
+        className="btn btn-sm"
+        data-interaction="studio.history.undo"
+        aria-keyshortcuts="Control+Z Meta+Z"
+        disabled={!history.canUndo}
+        onClick={history.undo}
+      >
+        Undo
+      </button>
+      <button
+        type="button"
+        className="btn btn-sm"
+        data-interaction="studio.history.redo"
+        aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z"
+        disabled={!history.canRedo}
+        onClick={history.redo}
+      >
+        Redo
+      </button>
+      <button
+        type="button"
+        className="btn btn-sm"
+        data-interaction="studio.shortcuts.open"
+        aria-keyshortcuts="?"
+        onClick={() => setShortcutsOpen(true)}
+      >
+        Shortcuts
+      </button>
+    </div>
+  )
+
   const writeSurface = (
     <div className="studio-write-surface">
       {isEmpty && (
@@ -313,6 +347,7 @@ function ComposerWorkspace({
           ]}
         />
       </div>
+      {editActions}
       {!audioReady && (
         <p className="audio-note" role="note">
           Audio output isn’t available in this environment - editing, saving, and MIDI
@@ -340,37 +375,6 @@ function ComposerWorkspace({
           <div className="studio-persistent-transport">
             <TransportBar controller={controller} />
             <MidiControls controller={controller} />
-            <div className="composer-edit-actions" aria-label="Edit commands">
-              <button
-                type="button"
-                className="btn btn-sm"
-                data-interaction="studio.history.undo"
-                aria-keyshortcuts="Control+Z Meta+Z"
-                disabled={!history.canUndo}
-                onClick={history.undo}
-              >
-                Undo
-              </button>
-              <button
-                type="button"
-                className="btn btn-sm"
-                data-interaction="studio.history.redo"
-                aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z"
-                disabled={!history.canRedo}
-                onClick={history.redo}
-              >
-                Redo
-              </button>
-              <button
-                type="button"
-                className="btn btn-sm"
-                data-interaction="studio.shortcuts.open"
-                aria-keyshortcuts="?"
-                onClick={() => setShortcutsOpen(true)}
-              >
-                Shortcuts
-              </button>
-            </div>
           </div>
         }
         rail={<TrackRail controller={controller} />}
