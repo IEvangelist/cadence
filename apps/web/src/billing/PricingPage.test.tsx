@@ -89,16 +89,22 @@ describe('<PricingPage />', () => {
   })
 
   it('still shows the plans when entitlements fail to load', async () => {
+    coversInteractions('pricing.retry')
+    const getEntitlements = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue(freeEntitlements)
     const client = fakeClient({
-      getEntitlements: vi.fn(async () => {
-        throw new Error('offline')
-      }),
+      getEntitlements,
     })
     render(<PricingPage client={client} redirect={vi.fn()} />)
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/couldn’t load your plan/i)
     // Free is the default, so the upgrade CTA is still offered.
     expect(screen.getByRole('button', { name: 'Upgrade to Pro' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(await screen.findByText(/You’re on the/)).toHaveTextContent('Free')
+    expect(getEntitlements).toHaveBeenCalledTimes(2)
   })
 
   it('calls onClose from the back button', async () => {

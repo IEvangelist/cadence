@@ -177,14 +177,36 @@ describe('<StemsPage />', () => {
   })
 
   it('reports when previous separations fail to load', async () => {
+    coversInteractions('stems.retry')
+    const listJobs = vi
+      .fn()
+      .mockRejectedValueOnce(new StemsError(500, 'boom'))
+      .mockResolvedValue([])
+    const client = fakeClient({
+      listJobs,
+    })
+    render(<StemsPage authenticated entitled client={client} />)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn’t load your previous/i)
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(await screen.findByRole('status', { name: 'No separations yet' })).toBeInTheDocument()
+    expect(listJobs).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows a newly created job even when loading retained jobs failed', async () => {
     const client = fakeClient({
       listJobs: vi.fn(async () => {
         throw new StemsError(500, 'boom')
       }),
     })
     render(<StemsPage authenticated entitled client={client} />)
+    await screen.findByRole('alert')
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn’t load your previous/i)
+    selectFile()
+    fireEvent.click(screen.getByRole('button', { name: 'Separate stems' }))
+
+    expect(await screen.findByRole('heading', { name: 'mix.wav' })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent(/previous separations/i)
   })
 
   it('calls onClose from the back button', () => {

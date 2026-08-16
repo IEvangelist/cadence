@@ -28,7 +28,8 @@ export function RouteEffects({ mainRef }: RouteEffectsProps) {
   useEffect(() => {
     if (previousPath.current === location.pathname) return
     previousPath.current = location.pathname
-    mainRef.current?.focus()
+    const routeHeading = mainRef.current?.querySelector<HTMLElement>('[data-route-heading]')
+    ;(routeHeading ?? mainRef.current)?.focus()
   }, [location.pathname, mainRef])
 
   return (

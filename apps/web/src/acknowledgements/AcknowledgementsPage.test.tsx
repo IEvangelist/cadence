@@ -48,6 +48,9 @@ describe('<AcknowledgementsPage />', () => {
       'href',
       '/licenses/lucide-ISC.txt',
     )
+    expect(
+      screen.getByRole('region', { name: /Scrollable third-party components table/i }),
+    ).toHaveAttribute('tabindex', '0')
   })
 
   it('lists Radix Dialog as the MIT dependency for accessible project/replacement dialogs', () => {

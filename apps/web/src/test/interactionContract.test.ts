@@ -47,7 +47,7 @@ interface AllowlistedInteraction {
 
 const allowlistedInteractions: readonly AllowlistedInteraction[] = [
   {
-    key: 'auth/AuthBar.tsx::form::auth-form',
+    key: 'auth/AuthDialog.tsx::form::auth-form',
     reason: 'The identified credentials submit button owns this non-focusable form submission.',
   },
   {
@@ -59,7 +59,11 @@ const allowlistedInteractions: readonly AllowlistedInteraction[] = [
     reason: 'The replacement alert dialog is represented by its identified retry, cancel, and discard controls.',
   },
   {
-    key: 'auth/AuthBar.tsx::form::auth-form auth-magic',
+    key: 'auth/AuthDialogAdapter.tsx::DialogSurface::auth-dialog',
+    reason: 'The authentication dialog is represented by its identified close and form controls.',
+  },
+  {
+    key: 'auth/AuthDialog.tsx::form::auth-form auth-magic',
     reason: 'The identified magic-link submit button owns this non-focusable form submission.',
   },
   {

@@ -18,7 +18,13 @@ export function StudioRoute() {
   const store = useProjectStore()
   const location = useLocation()
   const navigate = useNavigate()
-  const { authenticated, watermarkExports } = useOutletContext<AppRouteContext>()
+  const {
+    authenticated,
+    openSignIn,
+    signingOut,
+    signOut,
+    watermarkExports,
+  } = useOutletContext<AppRouteContext>()
   const collab = useMemo(
     () =>
       buildCollabConfig({
@@ -76,8 +82,11 @@ export function StudioRoute() {
             />
             <ThemeMenu />
             <AuthBar
+              onShowSignIn={openSignIn}
               onShowProfile={() => void navigate(destination('/profile', location))}
               profileActive={false}
+              signingOut={signingOut}
+              onSignOut={signOut}
             />
           </>
         }

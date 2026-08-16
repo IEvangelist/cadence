@@ -24,4 +24,32 @@ test.describe('responsive', () => {
       expect(overflow).toBeLessThanOrEqual(1)
     })
   }
+
+  for (const viewport of viewports) {
+    test(`secondary routes have no horizontal overflow at ${viewport.name}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport)
+      for (const path of ['/pricing', '/stems', '/licenses', '/profile']) {
+        await page.goto(path)
+        await expect(page.getByRole('main')).toBeVisible()
+
+        const overflow = await page.evaluate(() => {
+          const element = document.documentElement
+          return element.scrollWidth - element.clientWidth
+        })
+        expect(overflow, `${path} overflow at ${viewport.name}`).toBeLessThanOrEqual(1)
+      }
+
+      if (viewport.name === 'mobile') {
+        const dialog = page.getByRole('dialog', { name: 'Sign in to Cadence' })
+        await expect(dialog).toBeVisible()
+        const bounds = await dialog.boundingBox()
+        expect(bounds).not.toBeNull()
+        expect(bounds!.x).toBeGreaterThanOrEqual(0)
+        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width)
+        expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(viewport.height)
+      }
+    })
+  }
 })

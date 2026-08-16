@@ -1,13 +1,16 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { appName, tagline } from '../appInfo'
 import { AuthBar } from '../auth/AuthBar'
+import { useAuthDialog } from '../auth/authDialogContext'
 import { useAuth } from '../auth/authContext'
 import { useEntitlements } from '../billing/useEntitlements'
 import { watermarkExportsFor } from '../composer/formats/exportEntitlements'
 import { ThemeMenu } from '../theme/ThemeMenu'
 import type { AppRouteContext } from './routeContext'
 import { RouteEffects } from './RouteEffects'
+import { AuthCallbackEffect } from './AuthCallbackEffect'
+import { clearAuthReturnTarget } from '../auth/authReturnTarget'
 
 function destination(pathname: string, location: ReturnType<typeof useLocation>) {
   return { pathname, search: location.search, hash: location.hash }
@@ -15,14 +18,34 @@ function destination(pathname: string, location: ReturnType<typeof useLocation>)
 
 export function AppFrame() {
   const auth = useAuth()
+  const authDialog = useAuthDialog()
   const location = useLocation()
   const navigate = useNavigate()
   const mainRef = useRef<HTMLElement>(null)
+  const [signingOut, setSigningOut] = useState(false)
   const authenticated = auth.status === 'authenticated'
   const entitlements = useEntitlements(authenticated)
   const studio = location.pathname === '/'
+  const signOut = async () => {
+    setSigningOut(true)
+    try {
+      await auth.signOut()
+    } catch (error) {
+      console.warn('The server sign-out request failed after local sign-out.', error)
+    } finally {
+      clearAuthReturnTarget()
+      if (location.pathname === '/profile') {
+        authDialog.closeAuth()
+        void navigate(destination('/', location), { replace: true })
+      }
+      setSigningOut(false)
+    }
+  }
   const routeContext: AppRouteContext = {
     authenticated,
+    signingOut,
+    openSignIn: () => authDialog.openAuth(),
+    signOut,
     entitlements,
     watermarkExports: watermarkExportsFor(entitlements),
   }
@@ -35,6 +58,7 @@ export function AppFrame() {
         tabIndex={-1}
       >
         <RouteEffects mainRef={mainRef} />
+        <AuthCallbackEffect />
         {studio ? (
           <a
             className="skip-link"
@@ -54,8 +78,11 @@ export function AppFrame() {
           </div>
           <div className="app-header__actions">
             <AuthBar
+              onShowSignIn={() => authDialog.openAuth()}
               onShowProfile={() => void navigate(destination('/profile', location))}
               profileActive={location.pathname === '/profile'}
+              signingOut={signingOut}
+              onSignOut={signOut}
             />
             <nav className="app-nav" aria-label="Primary">
               <button
