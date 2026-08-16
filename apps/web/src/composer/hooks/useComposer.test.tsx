@@ -418,6 +418,22 @@ describe('useComposer — single-user undo/redo history (#156)', () => {
     expect(hook.result.current.project.tracks[0].notes).toHaveLength(0)
   })
 
+  it('keeps two discrete commands separate when React batches them in one event', () => {
+    const { hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+
+    act(() => {
+      hook.result.current.addNoteAt(trackId, 60, 0, 1)
+      hook.result.current.addNoteAt(trackId, 64, 1, 1)
+    })
+    expect(hook.result.current.project.tracks[0].notes).toHaveLength(2)
+
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.tracks[0].notes).toHaveLength(1)
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.tracks[0].notes).toHaveLength(0)
+  })
+
   it('coalesces continuous project and track name typing into one field edit', () => {
     const { hook } = setup()
     const trackId = hook.result.current.selectedTrackId

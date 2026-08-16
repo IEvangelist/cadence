@@ -470,9 +470,11 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   // render) to satisfy the React Compiler ref rules. Declared before the
   // history wiring below since `dispatch` closes over it.
   const projectRef = useRef(state.project)
+  const stateRef = useRef(state)
   useEffect(() => {
     projectRef.current = state.project
-  }, [state.project])
+    stateRef.current = state
+  }, [state])
   // #156 single-user history: a bounded, gesture-coalescing undo/redo stack
   // over document mutations only. Lazily created once via the
   // ref-is-still-null check (the documented pattern for one-time ref init).
@@ -484,9 +486,6 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   // `Y.UndoManager` (see `setHistoryEnabled`) — see the interface doc on
   // `ComposerController.setHistoryEnabled`.
   const historyEnabledRef = useRef(true)
-  // Classification captured synchronously at dispatch time (before/groupKey);
-  // consumed by the effect below once the resulting `state.project` commits.
-  const pendingHistoryRef = useRef<{ before: Project; groupKey?: string } | null>(null)
   // Mirrors `historyRef`'s `canUndo()`/`canRedo()` into real React state —
   // reading a ref's `.current` during render (e.g. inline in the returned
   // object) is not safe, so every mutation point below explicitly syncs these
@@ -502,12 +501,13 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     setCanRedo(historyRef.current!.canRedo())
   }, [])
   const dispatch = useCallback((action: InternalComposerAction) => {
+    const beforeState = stateRef.current
+    const nextState = composerReducerWithHistory(beforeState, action)
+    stateRef.current = nextState
     if (action.type === '__history-apply') {
       // Applying an undo/redo snapshot must never itself become a new entry.
-      pendingHistoryRef.current = null
     } else if (HISTORY_RESET_ACTIONS.has(action.type)) {
       historyRef.current!.clear()
-      pendingHistoryRef.current = null
       setHistoryCapture((current) => ({
         group: null,
         boundary: current.boundary + 1,
@@ -515,28 +515,20 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
       syncHistoryFlags()
     } else if (!HISTORY_IGNORED_ACTIONS.has(action.type)) {
       const groupKey = historyGroupKey(action)
-      pendingHistoryRef.current = {
-        before: projectRef.current,
-        groupKey,
-      }
       setHistoryCapture((current) => ({
         ...current,
         group: groupKey ?? null,
       }))
+      if (
+        historyEnabledRef.current &&
+        nextState.project !== beforeState.project
+      ) {
+        historyRef.current!.push(beforeState.project, nextState.project, groupKey)
+        syncHistoryFlags()
+      }
     }
     rawDispatch(action)
   }, [syncHistoryFlags])
-  // Record the before → after transition once the dispatched action commits.
-  // Runs off `state.project` (not inside the reducer) so recording happens
-  // exactly once per commit and the reducer itself stays pure.
-  useEffect(() => {
-    const pending = pendingHistoryRef.current
-    pendingHistoryRef.current = null
-    if (!pending || !historyEnabledRef.current) return
-    if (state.project === pending.before) return
-    historyRef.current!.push(pending.before, state.project, pending.groupKey)
-    syncHistoryFlags()
-  }, [state.project, syncHistoryFlags])
   const undo = useCallback(() => {
     const project = historyRef.current!.undo()
     syncHistoryFlags()
@@ -554,7 +546,6 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
       // controller advanced on its own (e.g. a collaborative session just
       // took over, or just handed control back) — clear on either transition.
       historyRef.current!.clear()
-      pendingHistoryRef.current = null
       syncHistoryFlags()
     },
     [syncHistoryFlags],
