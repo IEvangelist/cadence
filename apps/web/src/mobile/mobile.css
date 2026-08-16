@@ -372,6 +372,21 @@
   touch-action: none;
 }
 
+@media (pointer: coarse) {
+  .mobile-icon-button,
+  .mobile-secondary-button,
+  .mobile-primary-button,
+  .mobile-danger-button,
+  .mobile-segmented-control button,
+  .mobile-task-nav__button,
+  .mobile-note-field button,
+  .mobile-note-field input,
+  .mobile-project-actions button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
 @media (min-width: 48rem) {
   .mobile-sheet {
     inset: auto 0 0 auto;
