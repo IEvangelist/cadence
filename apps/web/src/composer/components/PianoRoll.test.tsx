@@ -106,6 +106,30 @@ describe('<PianoRoll />', () => {
     expect(moved.style.left).not.toBe(beforeLeft)
   })
 
+  it('finalizes a drag on pointercancel so later pointer moves cannot mutate it', () => {
+    mockGridRect()
+    render(<Harness />)
+    const grid = screen.getByRole('application')
+    fireEvent.pointerDown(grid, { clientX: 0, clientY: 80 })
+    const note = screen.getAllByRole('button').find((button) =>
+      button.className.includes('pr-note'),
+    )!
+
+    fireEvent.pointerDown(note, { clientX: 0, clientY: 80 })
+    fireEvent.pointerMove(window, {
+      clientX: DEFAULT_LAYOUT.beatWidth * 2,
+      clientY: 80,
+    })
+    fireEvent.pointerCancel(window)
+    const cancelledLeft = note.style.left
+
+    fireEvent.pointerMove(window, {
+      clientX: DEFAULT_LAYOUT.beatWidth * 4,
+      clientY: 80,
+    })
+    expect(note.style.left).toBe(cancelledLeft)
+  })
+
   it('resizes a note by dragging its right (end) edge', () => {
     coversInteractions('studio.piano-roll.note.resize-end')
     mockGridRect()

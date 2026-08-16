@@ -231,15 +231,17 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
         })
       }
     }
-    const handleUp = () => {
+    const finishGesture = () => {
       if (gestureRef.current) latest.current.stopHistoryCapture()
       gestureRef.current = null
     }
     window.addEventListener('pointermove', handleMove)
-    window.addEventListener('pointerup', handleUp)
+    window.addEventListener('pointerup', finishGesture)
+    window.addEventListener('pointercancel', finishGesture)
     return () => {
       window.removeEventListener('pointermove', handleMove)
-      window.removeEventListener('pointerup', handleUp)
+      window.removeEventListener('pointerup', finishGesture)
+      window.removeEventListener('pointercancel', finishGesture)
     }
   }, [])
 
@@ -354,9 +356,9 @@ export function PianoRoll({ controller, previewNotes = [] }: PianoRollProps) {
     if (!lane) return
     const rect = lane.getBoundingClientRect()
     selectNote(noteId)
+    beginGesture({ kind: 'velocity', noteId, laneTop: rect.top, laneHeight: rect.height })
     const velocity = clamp01(1 - (event.clientY - rect.top) / rect.height)
     updateNote(track.id, noteId, { velocity: round2(velocity) })
-    beginGesture({ kind: 'velocity', noteId, laneTop: rect.top, laneHeight: rect.height })
   }
 
   const addAtPoint = (event: PointerEvent): void => {
