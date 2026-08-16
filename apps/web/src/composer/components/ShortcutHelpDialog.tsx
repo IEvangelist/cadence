@@ -38,6 +38,7 @@ export function ShortcutHelpDialog({
       ref={dialogRef}
       className="shortcut-help"
       role="dialog"
+      data-interaction="studio.shortcuts.dialog"
       tabIndex={-1}
       aria-modal="true"
       aria-labelledby="shortcut-help-title"

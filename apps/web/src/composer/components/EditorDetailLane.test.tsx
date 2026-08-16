@@ -2,9 +2,11 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { EditorDetailLane } from './EditorDetailLane'
+import { coversInteractions } from '../../test/coversInteractions'
 
 describe('<EditorDetailLane />', () => {
   it('renders one accessible detail panel and switches through its controlled API', async () => {
+    coversInteractions('studio.editor-detail.tab')
     const user = userEvent.setup()
     const onChange = vi.fn()
     const { rerender } = render(

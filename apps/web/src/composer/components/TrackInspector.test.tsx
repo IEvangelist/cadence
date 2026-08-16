@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ComposerController } from '../hooks/useComposer'
 import { createEmptyProject } from '../model/project'
 import type { InstrumentDefinition } from '../plugins/types'
+import { coversInteractions } from '../../test/coversInteractions'
 import { TrackInspector } from './TrackInspector'
 
 const instruments: InstrumentDefinition[] = [
@@ -55,6 +56,7 @@ function controller(): ComposerController {
 
 describe('<TrackInspector />', () => {
   it('renames the selected track and assigns representative registry instruments only to it', async () => {
+    coversInteractions('studio.track.name', 'studio.track.instrument')
     const user = userEvent.setup()
     const value = controller()
     render(

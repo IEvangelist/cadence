@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { InstrumentDefinition } from '../plugins/types'
+import { coversInteractions } from '../../test/coversInteractions'
 import { InstrumentBrowser } from './InstrumentBrowser'
 
 const lazyPack = vi.hoisted(() => ({ loaded: 0 }))
@@ -64,6 +65,13 @@ function setup(options: Partial<Parameters<typeof InstrumentBrowser>[0]> = {}) {
 
 describe('<InstrumentBrowser />', () => {
   it('searches metadata and filters by kind and group without selecting or loading', async () => {
+    coversInteractions(
+      'studio.instrument-browser.search',
+      'studio.instrument-browser.kind',
+      'studio.instrument-browser.group',
+      'studio.instrument-browser.list',
+      'studio.instrument-browser.option',
+    )
     const user = userEvent.setup()
     const loadState = vi.fn(() => 'ready' as const)
     const { onSelect } = setup({ getLoadState: loadState })
@@ -81,6 +89,7 @@ describe('<InstrumentBrowser />', () => {
   })
 
   it('supports listbox navigation, selection, Escape, and an empty result', async () => {
+    coversInteractions('studio.instrument-browser.close')
     const user = userEvent.setup()
     const { onSelect, onClose } = setup()
     const search = screen.getByRole('combobox', { name: 'Search instruments' })

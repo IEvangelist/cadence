@@ -185,6 +185,7 @@ export function InstrumentBrowser({
         id={listboxId}
         className="instrument-browser__list"
         role="listbox"
+        data-interaction="studio.instrument-browser.list"
         aria-label="Available instruments"
         onKeyDown={handleKeyDown}
       >
