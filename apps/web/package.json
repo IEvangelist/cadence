@@ -13,7 +13,10 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "e2e": "playwright test",
-    "e2e:install": "playwright install chromium"
+    "e2e:final-gate": "playwright test --config playwright.final-gate.config.ts",
+    "e2e:install": "playwright install chromium",
+    "e2e:visual": "playwright test --config playwright.visual.config.ts",
+    "test:bundle-size": "node scripts/check-bundle-size.mjs"
   },
   "dependencies": {
     "@breezystack/lamejs": "1.2.7",
