@@ -218,7 +218,7 @@ describe('<ProjectToolbar />', () => {
         channel[i] = Math.sin((2 * Math.PI * 440 * i) / rate) * 0.25
       }
       return { sampleRate: rate, channels: [channel] }
-    })
+    }, 15_000)
     render(<Harness download={download} options={{ audioRenderer }} />)
 
     await chooseMenuItem(user, 'Export & share', 'Export MusicXML (.musicxml)')

@@ -261,4 +261,26 @@ describe('project recovery', () => {
       clearProjectRecoveryChain(storage, scope, project.id, 'missing-token'),
     ).not.toThrow()
   })
+
+  it('clears an acyclic causal chain longer than one thousand records', () => {
+    const storage = new MemoryStorage()
+    const lineage = newRecoveryLineageId()
+    const project = createEmptyProject('long-chain')
+    let head: string | null = null
+    for (let revision = 1; revision <= 1_100; revision += 1) {
+      head = writeProjectRecovery(
+        storage,
+        scope,
+        { ...project, name: `Revision ${revision}` },
+        revision,
+        lineage,
+        head,
+      )!.token
+    }
+
+    clearProjectRecoveryChain(storage, scope, project.id, head)
+
+    expect(readProjectRecovery(storage, scope, project.id)).toBeNull()
+    expect(storage.getItem(recoveryIndexKey(scope))).toBeNull()
+  })
 })

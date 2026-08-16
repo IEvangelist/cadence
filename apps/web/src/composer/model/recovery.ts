@@ -69,7 +69,7 @@ export function clearProjectRecoveryChain(
     if (!storage || !headToken) return
     const removedTokens = new Set<string>()
     let token: string | null = headToken
-    for (let depth = 0; token && depth < 1_000; depth += 1) {
+    while (token) {
       if (removedTokens.has(token)) break
       const record = readRecord(storage, scope, projectId, token)
       if (!record) break

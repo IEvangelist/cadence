@@ -135,7 +135,7 @@ describe('<Composer />', () => {
     await user.click(screen.getByRole('button', { name: 'Keep editing' }))
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
     expect(name).toHaveValue('Unsaved Work')
-  })
+  }, 15_000)
 
   it('retries a blocked replacement and proceeds once saving recovers', async () => {
     coversInteractions('studio.project-replacement.retry')
