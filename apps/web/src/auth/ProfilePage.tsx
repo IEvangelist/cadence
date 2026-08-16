@@ -159,16 +159,19 @@ export function ProfilePage({ onClose, onUnauthorized }: ProfilePageProps) {
             htmlFor={`${fieldId}-avatar`}
             hint="Use an HTTPS image URL."
           >
-            <input
-              id={`${fieldId}-avatar`}
-              type="url"
-              data-interaction="profile.avatar-url"
-              value={avatarUrl}
-              onChange={(event) => {
-                setAvatarUrl(event.target.value)
-                setSaved(false)
-              }}
-            />
+            {(controlProps) => (
+              <input
+                {...controlProps}
+                id={`${fieldId}-avatar`}
+                type="url"
+                data-interaction="profile.avatar-url"
+                value={avatarUrl}
+                onChange={(event) => {
+                  setAvatarUrl(event.target.value)
+                  setSaved(false)
+                }}
+              />
+            )}
           </FormField>
 
           <button

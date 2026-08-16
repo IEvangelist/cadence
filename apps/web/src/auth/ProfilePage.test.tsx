@@ -48,6 +48,13 @@ describe('ProfilePage', () => {
     expect(await screen.findByText(/Subscription tier:/)).toHaveTextContent('Free')
     expect(screen.getByLabelText('Display name')).toHaveValue('Ada')
     expect(screen.getByLabelText('Bio')).toHaveValue('Composer')
+    const avatar = screen.getByLabelText('Avatar URL')
+    const hintId = avatar.getAttribute('aria-describedby')
+    expect(hintId).toBeTruthy()
+    expect(document.getElementById(hintId!)).toBeVisible()
+    expect(document.getElementById(hintId!)).toHaveTextContent(
+      'Use an HTTPS image URL.',
+    )
   })
 
   it('shows an error when loading fails', async () => {
