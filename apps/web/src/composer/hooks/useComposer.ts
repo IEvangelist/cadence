@@ -1339,6 +1339,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     },
     [
       announce,
+      dispatch,
       endPersistenceTransition,
       refreshList,
       resetPersistenceForProject,

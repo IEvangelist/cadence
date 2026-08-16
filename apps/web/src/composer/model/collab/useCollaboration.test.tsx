@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as Y from 'yjs'
 import { Awareness } from 'y-protocols/awareness'
@@ -605,17 +605,23 @@ describe('useCollaboration — collaborative undo/redo (#156)', () => {
     )
 
     act(() => result.current.controller.newProject())
-    expect(readProject(providers[0].doc).id).toBe(result.current.controller.project.id)
+    await waitFor(() =>
+      expect(readProject(providers[0].doc).id).toBe(result.current.controller.project.id),
+    )
     expect(result.current.collaboration.canUndo).toBe(false)
 
     act(() => result.current.controller.loadDemo())
-    expect(readProject(providers[0].doc).name).toBe('Demo — Every idea, resolved')
+    await waitFor(() =>
+      expect(readProject(providers[0].doc).name).toBe('Demo — Every idea, resolved'),
+    )
     expect(result.current.collaboration.canUndo).toBe(false)
 
     const quickStart = createEmptyProject('quick-source')
     quickStart.name = 'Quick start'
     act(() => result.current.controller.loadProjectSnapshot(quickStart))
-    expect(readProject(providers[0].doc).name).toBe('Quick start')
+    await waitFor(() =>
+      expect(readProject(providers[0].doc).name).toBe('Quick start'),
+    )
     expect(result.current.collaboration.canUndo).toBe(false)
 
     await act(async () => result.current.controller.loadProject('opened'))
@@ -628,7 +634,9 @@ describe('useCollaboration — collaborative undo/redo (#156)', () => {
     act(() =>
       result.current.controller.importProjectFile(projectToFile(imported)),
     )
-    expect(readProject(providers[0].doc).name).toBe('Imported file')
+    await waitFor(() =>
+      expect(readProject(providers[0].doc).name).toBe('Imported file'),
+    )
     expect(result.current.collaboration.canUndo).toBe(false)
 
     const beforeRemoteOnly = readProject(providers[0].doc)
