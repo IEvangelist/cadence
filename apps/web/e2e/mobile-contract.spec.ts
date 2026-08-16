@@ -19,20 +19,52 @@ interface Point {
   y: number
 }
 
-async function pointer(
+async function pointInside(
   locator: Locator,
-  type: 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel',
-  point: Point,
-  pointerId = 1,
+  offset: Point = { x: 0.5, y: 0.5 },
+): Promise<Point> {
+  const box = await locator.boundingBox()
+  if (!box) throw new Error('Touch target has no bounding box')
+  return {
+    x: box.x + box.width * offset.x,
+    y: box.y + box.height * offset.y,
+  }
+}
+
+async function touchGesture(
+  page: Page,
+  points: readonly Point[],
+  touchId = 1,
+  cancel = false,
+  afterStart?: () => Promise<void>,
 ) {
-  await locator.dispatchEvent(type, {
-    bubbles: true,
-    pointerId,
-    pointerType: 'touch',
-    clientX: point.x,
-    clientY: point.y,
-    isPrimary: true,
+  if (points.length === 0) throw new Error('A touch gesture needs at least one point')
+  const session = await page.context().newCDPSession(page)
+  const touchPoint = (point: Point) => ({
+    ...point,
+    id: touchId,
+    radiusX: 1,
+    radiusY: 1,
+    force: 1,
   })
+
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [touchPoint(points[0])],
+  })
+  await afterStart?.()
+  for (const point of points.slice(1)) {
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [touchPoint(point)],
+    })
+    await page.waitForTimeout(16)
+  }
+  await session.send('Input.dispatchTouchEvent', {
+    type: cancel ? 'touchCancel' : 'touchEnd',
+    touchPoints: [],
+  })
+  await session.detach()
 }
 
 async function openHarness(page: Page) {
@@ -47,18 +79,18 @@ test.describe('mobile touch contract', () => {
 
   test('empty Pan/Select drag pans without creating a note', async ({ page }) => {
     const grid = page.getByTestId('note-grid')
-    await pointer(grid, 'pointerdown', { x: 300, y: 250 })
-    await pointer(grid, 'pointermove', { x: 250, y: 250 })
-    await pointer(grid, 'pointerup', { x: 250, y: 250 })
+    const start = await pointInside(grid, { x: 0.35, y: 0.7 })
+    await touchGesture(page, [start, { x: start.x - 80, y: start.y }])
 
     await expect(page.locator('[data-note-id]')).toHaveCount(1)
-    await expect(page.getByText('1 notes, 1 pan moves')).toBeVisible()
+    await expect
+      .poll(() => page.getByTestId('piano-scroll').evaluate((element) => element.scrollLeft))
+      .toBeGreaterThan(0)
   })
 
   test('empty Pan/Select tap never creates a note', async ({ page }) => {
     const grid = page.getByTestId('note-grid')
-    await pointer(grid, 'pointerdown', { x: 300, y: 250 })
-    await pointer(grid, 'pointerup', { x: 300, y: 250 })
+    await touchGesture(page, [await pointInside(grid, { x: 0.35, y: 0.7 })])
 
     await expect(page.locator('[data-note-id]')).toHaveCount(1)
   })
@@ -67,34 +99,62 @@ test.describe('mobile touch contract', () => {
     await page.getByRole('button', { name: 'Draw', exact: true }).click()
     const grid = page.getByTestId('note-grid')
 
-    await pointer(grid, 'pointerdown', { x: 300, y: 250 })
-    await pointer(grid, 'pointerup', { x: 300, y: 250 })
+    const tap = await pointInside(grid, { x: 0.35, y: 0.7 })
+    await touchGesture(page, [tap])
     await expect(page.locator('[data-note-id]')).toHaveCount(2)
 
-    await pointer(grid, 'pointerdown', { x: 350, y: 250 }, 2)
-    await pointer(grid, 'pointermove', { x: 320, y: 250 }, 2)
-    await pointer(grid, 'pointerup', { x: 320, y: 250 }, 2)
+    const drag = await pointInside(grid, { x: 0.4, y: 0.75 })
+    await touchGesture(page, [drag, { x: drag.x - 60, y: drag.y }], 2)
     await expect(page.locator('[data-note-id]')).toHaveCount(2)
   })
 
   test('note tap selects, drag moves, and cancel restores valid state', async ({ page }) => {
     const note = page.locator('[data-note-id="note-1"]')
-    await pointer(note, 'pointerdown', { x: 100, y: 100 }, 4)
-    await pointer(note, 'pointerup', { x: 100, y: 100 }, 4)
+    await touchGesture(page, [await pointInside(note)], 4)
     await expect(note).toHaveAttribute('aria-pressed', 'true')
 
     const originalStart = await note.getAttribute('data-start')
-    await pointer(note, 'pointerdown', { x: 100, y: 100 }, 5)
-    await pointer(note, 'pointermove', { x: 148, y: 100 }, 5)
-    await pointer(note, 'pointerup', { x: 148, y: 100 }, 5)
+    const dragStart = await pointInside(note)
+    const grid = page.getByTestId('note-grid')
+    await touchGesture(
+      page,
+      [dragStart, { x: dragStart.x + 48, y: dragStart.y }],
+      5,
+      false,
+      async () => {
+        const harness = page.locator('.mobile-harness')
+        await expect(harness).toHaveAttribute('data-captured-pointer', /\d+/)
+        const pointerId = Number(await harness.getAttribute('data-captured-pointer'))
+        expect(
+          await note.evaluate((element, id) => element.hasPointerCapture(id), pointerId),
+        ).toBe(true)
+
+        await grid.dispatchEvent('pointerdown', {
+          bubbles: true,
+          pointerId: pointerId + 100,
+          pointerType: 'touch',
+          clientX: dragStart.x + 80,
+          clientY: dragStart.y + 80,
+          isPrimary: false,
+        })
+        await expect(harness).toHaveAttribute(
+          'data-captured-pointer',
+          String(pointerId),
+        )
+      },
+    )
     expect(originalStart).toBe('2')
     await expect(note).toHaveAttribute('data-start', '3')
     await expect(note).toHaveAttribute('data-pitch', '60')
 
     const movedStart = await note.getAttribute('data-start')
-    await pointer(note, 'pointerdown', { x: 100, y: 100 }, 6)
-    await pointer(note, 'pointermove', { x: 148, y: 100 }, 6)
-    await pointer(note, 'pointercancel', { x: 148, y: 100 }, 6)
+    const cancelStart = await pointInside(note)
+    await touchGesture(
+      page,
+      [cancelStart, { x: cancelStart.x + 48, y: cancelStart.y }],
+      6,
+      true,
+    )
     await expect(note).toHaveAttribute('data-start', movedStart ?? '')
     await expect(page.locator('.mobile-harness')).not.toHaveAttribute(
       'data-captured-pointer',
@@ -103,8 +163,7 @@ test.describe('mobile touch contract', () => {
 
   test('selected-note sheet edits precise values and deletes', async ({ page }) => {
     const note = page.locator('[data-note-id="note-1"]')
-    await pointer(note, 'pointerdown', { x: 100, y: 100 }, 7)
-    await pointer(note, 'pointerup', { x: 100, y: 100 }, 7)
+    await touchGesture(page, [await pointInside(note)], 7)
     await page.getByRole('button', { name: 'Edit selected note' }).click()
     const editorControls = page.getByTestId('selected-note-sheet').locator('button, input')
     const controlHeights = await editorControls.evaluateAll((controls) =>
@@ -145,8 +204,7 @@ test.describe('mobile touch contract', () => {
     await expect(page.locator('[data-note-id]')).toHaveCount(2)
 
     const note = page.locator('[data-note-id="note-1"]')
-    await pointer(note, 'pointerdown', { x: 100, y: 100 }, 8)
-    await pointer(note, 'pointerup', { x: 100, y: 100 }, 8)
+    await touchGesture(page, [await pointInside(note)], 8)
     await grid.focus()
     await page.keyboard.press('ArrowRight')
     await expect(note).toHaveAttribute('data-start', '2.25')

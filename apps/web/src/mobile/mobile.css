@@ -1,7 +1,15 @@
-.mobile-sheet {
+.mobile-sheet-layer {
   position: fixed;
   inset: 0;
   z-index: 30;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  background: rgb(14 10 26 / 0.42);
+}
+
+.mobile-sheet {
+  position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   width: 100%;
@@ -388,8 +396,11 @@
 }
 
 @media (min-width: 48rem) {
+  .mobile-sheet-layer {
+    align-items: flex-end;
+  }
+
   .mobile-sheet {
-    inset: auto 0 0 auto;
     width: min(32rem, 100vw);
     min-height: min(46rem, 100dvh);
     max-height: 100dvh;

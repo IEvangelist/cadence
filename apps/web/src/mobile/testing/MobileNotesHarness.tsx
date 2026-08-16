@@ -58,7 +58,6 @@ export function MobileNotesHarness() {
   const [coachVisible, setCoachVisible] = useState(true)
   const [panCount, setPanCount] = useState(0)
   const [capturedPointerId, setCapturedPointerId] = useState<number | null>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const capturedTargetRef = useRef<HTMLElement | null>(null)
   const gestureRef = useRef<NoteGestureState>(idleNoteGesture)
@@ -76,13 +75,7 @@ export function MobileNotesHarness() {
             capturedTargetRef.current &&
             !capturedTargetRef.current.hasPointerCapture(effect.pointerId)
           ) {
-            try {
-              capturedTargetRef.current.setPointerCapture(effect.pointerId)
-            } catch (error) {
-              if (!(error instanceof DOMException && error.name === 'NotFoundError')) {
-                throw error
-              }
-            }
+            capturedTargetRef.current.setPointerCapture(effect.pointerId)
           }
           setCapturedPointerId(effect.pointerId)
           break
@@ -95,10 +88,6 @@ export function MobileNotesHarness() {
           noteBeforeMoveRef.current = null
           break
         case 'pan-by':
-          if (scrollRef.current) {
-            scrollRef.current.scrollLeft -= effect.dx
-            scrollRef.current.scrollTop -= effect.dy
-          }
           setPanCount((count) => count + 1)
           break
         case 'add-note':
@@ -148,7 +137,9 @@ export function MobileNotesHarness() {
   }
 
   const startEmpty = (event: PointerEvent<HTMLDivElement>) => {
-    if (event.target !== event.currentTarget) return
+    if (event.target !== event.currentTarget || gestureRef.current.kind !== 'idle') {
+      return
+    }
     const transition = beginEmptyGesture(
       pointerFromEvent(event, event.currentTarget),
       mobile.noteMode,
@@ -159,7 +150,7 @@ export function MobileNotesHarness() {
 
   const startNote = (event: PointerEvent<HTMLButtonElement>, note: Note) => {
     event.stopPropagation()
-    if (!gridRef.current) return
+    if (!gridRef.current || gestureRef.current.kind !== 'idle') return
     capturedTargetRef.current = event.currentTarget
     noteBeforeMoveRef.current = note
     const transition = beginNoteGesture(
@@ -189,6 +180,18 @@ export function MobileNotesHarness() {
   }
 
   const cancelPointer = (event: PointerEvent<HTMLDivElement>) => {
+    const transition = cancelNoteGesture(gestureRef.current, event.pointerId)
+    gestureRef.current = transition.state
+    applyEffects(transition.effects)
+  }
+
+  const losePointerCapture = (event: PointerEvent<HTMLButtonElement>) => {
+    if (
+      gestureRef.current.kind === 'idle' ||
+      gestureRef.current.pointerId !== event.pointerId
+    ) {
+      return
+    }
     const transition = cancelNoteGesture(gestureRef.current, event.pointerId)
     gestureRef.current = transition.state
     applyEffects(transition.effects)
@@ -306,7 +309,6 @@ export function MobileNotesHarness() {
           {notes.length} notes, {panCount} pan moves
         </p>
         <div
-          ref={scrollRef}
           className="mobile-piano-scroll mobile-harness__piano-scroll"
           data-testid="piano-scroll"
         >
@@ -341,6 +343,7 @@ export function MobileNotesHarness() {
                   width: Math.max(44, note.duration * CELL_WIDTH),
                 }}
                 onPointerDown={(event) => startNote(event, note)}
+                onLostPointerCapture={losePointerCapture}
               />
             ))}
           </div>

@@ -89,35 +89,37 @@ export function FullScreenSheet({
   }
 
   return (
-    <div
-      ref={sheetRef}
-      className="mobile-sheet"
-      data-testid={testId}
-      data-interaction="mobile.sheet.keyboard"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-      aria-describedby={description ? descriptionId : undefined}
-      tabIndex={-1}
-      onKeyDown={handleKeyDown}
-    >
-      <header className="mobile-sheet__header">
-        <div className="mobile-sheet__heading">
-          <h2 id={titleId}>{title}</h2>
-          {description && <p id={descriptionId}>{description}</p>}
-        </div>
-        <button
-          type="button"
-          className="mobile-icon-button"
-          data-interaction="mobile.sheet.close"
-          aria-label={`Close ${title}`}
-          onClick={onClose}
-        >
-          <Icon icon={X} />
-        </button>
-      </header>
-      <div className="mobile-sheet__body">{children}</div>
-      {footer && <footer className="mobile-sheet__footer">{footer}</footer>}
+    <div className="mobile-sheet-layer">
+      <div
+        ref={sheetRef}
+        className="mobile-sheet"
+        data-testid={testId}
+        data-interaction="mobile.sheet.keyboard"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={description ? descriptionId : undefined}
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
+      >
+        <header className="mobile-sheet__header">
+          <div className="mobile-sheet__heading">
+            <h2 id={titleId}>{title}</h2>
+            {description && <p id={descriptionId}>{description}</p>}
+          </div>
+          <button
+            type="button"
+            className="mobile-icon-button"
+            data-interaction="mobile.sheet.close"
+            aria-label={`Close ${title}`}
+            onClick={onClose}
+          >
+            <Icon icon={X} />
+          </button>
+        </header>
+        <div className="mobile-sheet__body">{children}</div>
+        {footer && <footer className="mobile-sheet__footer">{footer}</footer>}
+      </div>
     </div>
   )
 }
