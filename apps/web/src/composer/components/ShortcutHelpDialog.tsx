@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState, type RefObject } from 'react'
 import { formatKeybinding } from '../plugins/keybindings'
 import type { StudioCommandGroup, StudioCommandRegistry } from '../commands/studioCommands'
+import { DialogClose, DialogSurface } from '../../ui/Dialog'
 import './EditorWorkspace.css'
 
 interface ShortcutHelpDialogProps {
   open: boolean
   registry: StudioCommandRegistry
   onClose: () => void
+  returnFocusRef?: RefObject<HTMLElement | null>
 }
 
 const GROUPS: StudioCommandGroup[] = ['Project', 'Transport', 'Edit', 'View', 'Extensions']
@@ -15,9 +17,9 @@ export function ShortcutHelpDialog({
   open,
   registry,
   onClose,
+  returnFocusRef,
 }: ShortcutHelpDialogProps) {
   const [query, setQuery] = useState('')
-  const dialogRef = useRef<HTMLDivElement>(null)
   const commands = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase()
     return registry.commands.filter(
@@ -27,41 +29,28 @@ export function ShortcutHelpDialog({
         command.group.toLocaleLowerCase().includes(normalized),
     )
   }, [query, registry.commands])
-  useEffect(() => {
-    if (open) dialogRef.current?.focus()
-  }, [open])
-
-  if (!open) return null
-
   return (
-    <div
-      ref={dialogRef}
-      className="shortcut-help"
-      role="dialog"
+    <DialogSurface
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onClose()
+      }}
+      title={<h2>Keyboard shortcuts</h2>}
+      description={<p>Core Studio shortcuts are reserved from extensions.</p>}
+      contentClassName="shortcut-help"
       data-interaction="studio.shortcuts.dialog"
-      tabIndex={-1}
-      aria-modal="true"
-      aria-labelledby="shortcut-help-title"
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') {
-          event.preventDefault()
-          onClose()
-        }
+      onCloseAutoFocus={(event) => {
+        if (!returnFocusRef?.current) return
+        event.preventDefault()
+        returnFocusRef.current.focus()
       }}
     >
       <header>
-        <div>
-          <h2 id="shortcut-help-title">Keyboard shortcuts</h2>
-          <p>Core Studio shortcuts are reserved from extensions.</p>
-        </div>
-        <button
-          type="button"
-          className="btn"
-          data-interaction="studio.shortcuts.close"
-          onClick={onClose}
-        >
-          Close
-        </button>
+        <DialogClose asChild>
+          <button type="button" className="btn" data-interaction="studio.shortcuts.close">
+            Close
+          </button>
+        </DialogClose>
       </header>
       <label htmlFor="shortcut-help-search">Search commands</label>
       <input
@@ -106,6 +95,6 @@ export function ShortcutHelpDialog({
           ))}
         </div>
       ) : null}
-    </div>
+    </DialogSurface>
   )
 }
