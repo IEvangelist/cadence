@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { coversInteractions } from '../../test/coversInteractions'
 import { MidiControls } from './MidiControls'
@@ -32,8 +33,9 @@ describe('<MidiControls />', () => {
     expect(indicator()).toHaveAttribute('data-state', 'unsupported')
   })
 
-  it('lists connected devices and reports the current selection', () => {
-    coversInteractions('studio.midi.device')
+  it('lists connected devices and reports the current selection', async () => {
+    coversInteractions('studio.midi.settings', 'studio.midi.device')
+    const user = userEvent.setup()
     const selectInput = vi.fn()
     render(
       <MidiControls
@@ -48,7 +50,8 @@ describe('<MidiControls />', () => {
         })}
       />,
     )
-    const select = screen.getByLabelText('MIDI device') as HTMLSelectElement
+    await user.click(screen.getByRole('button', { name: 'MIDI' }))
+    const select = await screen.findByLabelText('MIDI device') as HTMLSelectElement
     expect(select.value).toBe('a')
     expect(within(select).getAllByRole('option')).toHaveLength(2)
     expect(indicator()).toHaveAttribute('data-state', 'connected')
@@ -57,9 +60,11 @@ describe('<MidiControls />', () => {
     expect(selectInput).toHaveBeenCalledWith('b')
   })
 
-  it('disables the selector and shows a placeholder with no devices', () => {
+  it('disables the selector and shows a placeholder with no devices', async () => {
+    const user = userEvent.setup()
     render(<MidiControls controller={controllerWith({ inputs: [] })} />)
-    const select = screen.getByLabelText('MIDI device')
+    await user.click(screen.getByRole('button', { name: 'MIDI' }))
+    const select = await screen.findByLabelText('MIDI device')
     expect(select).toBeDisabled()
     expect(screen.getByText('No MIDI devices')).toBeInTheDocument()
     expect(indicator()).toHaveAttribute('data-state', 'idle')
@@ -84,11 +89,13 @@ describe('<MidiControls />', () => {
     expect(indicator()).toHaveAttribute('data-state', 'recording')
   })
 
-  it('toggles opt-in quantize', () => {
+  it('toggles opt-in quantize', async () => {
     coversInteractions('studio.midi.quantize')
+    const user = userEvent.setup()
     const setQuantize = vi.fn()
     render(<MidiControls controller={controllerWith({ quantize: false, setQuantize })} />)
-    fireEvent.click(screen.getByRole('checkbox', { name: /quantize/i }))
+    await user.click(screen.getByRole('button', { name: 'MIDI' }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: /quantize/i }))
     expect(setQuantize).toHaveBeenCalledWith(true)
   })
 })

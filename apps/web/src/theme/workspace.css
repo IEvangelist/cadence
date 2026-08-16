@@ -14,6 +14,14 @@
   overflow: hidden;
 }
 
+@media (max-width: 47.9375rem) {
+  .app--composer {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+}
+
 .skip-link {
   position: absolute;
   top: var(--space-3);

@@ -1,3 +1,4 @@
+import * as Popover from '@radix-ui/react-popover'
 import { type ComposerController } from '../hooks/useComposer'
 
 interface MidiControlsProps {
@@ -45,24 +46,6 @@ export function MidiControls({ controller }: MidiControlsProps) {
         aria-label={stateLabel}
         title={stateLabel}
       />
-      <select
-        className="midi-select"
-        data-interaction="studio.midi.device"
-        aria-label="MIDI device"
-        value={midi.selectedInputId ?? ''}
-        onChange={(event) => midi.selectInput(event.target.value || null)}
-        disabled={!hasDevice}
-      >
-        {hasDevice ? (
-          midi.inputs.map((input) => (
-            <option key={input.id} value={input.id}>
-              {input.name}
-            </option>
-          ))
-        ) : (
-          <option value="">No MIDI devices</option>
-        )}
-      </select>
       <button
         type="button"
         className="btn btn-sm btn-toggle midi-arm"
@@ -73,15 +56,51 @@ export function MidiControls({ controller }: MidiControlsProps) {
       >
         Record
       </button>
-      <label className="field midi-quantize">
-        <input
-          type="checkbox"
-          data-interaction="studio.midi.quantize"
-          checked={midi.quantize}
-          onChange={(event) => midi.setQuantize(event.target.checked)}
-        />
-        <span>Quantize</span>
-      </label>
+      <Popover.Root>
+        <Popover.Trigger asChild>
+          <button
+            type="button"
+            className="btn btn-sm"
+            data-interaction="studio.midi.settings"
+          >
+            MIDI
+          </button>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content className="midi-settings" align="center" sideOffset={8}>
+            <label className="field">
+              <span>Device</span>
+              <select
+                className="midi-select"
+                data-interaction="studio.midi.device"
+                aria-label="MIDI device"
+                value={midi.selectedInputId ?? ''}
+                onChange={(event) => midi.selectInput(event.target.value || null)}
+                disabled={!hasDevice}
+              >
+                {hasDevice ? (
+                  midi.inputs.map((input) => (
+                    <option key={input.id} value={input.id}>
+                      {input.name}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">No MIDI devices</option>
+                )}
+              </select>
+            </label>
+            <label className="field midi-quantize">
+              <input
+                type="checkbox"
+                data-interaction="studio.midi.quantize"
+                checked={midi.quantize}
+                onChange={(event) => midi.setQuantize(event.target.checked)}
+              />
+              <span>Quantize while recording</span>
+            </label>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
     </div>
   )
 }

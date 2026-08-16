@@ -44,7 +44,6 @@ export function StudioFrame({
 }: StudioFrameProps) {
   const inspectorId = useId()
   const hasInspector = Boolean(inspector && inspectorOpen)
-  const workSurface = view === 'mix' ? mix : editor
   const className = [
     'studio-frame',
     railOpen ? 'studio-frame--rail-open' : '',
@@ -80,10 +79,25 @@ export function StudioFrame({
       <section
         className="studio-frame__editor"
         id="studio-editor"
-        aria-label={view === 'mix' ? 'Mix workspace' : 'Write workspace'}
+        aria-label="Workspace"
         data-studio-scroll="editor"
       >
-        {workSurface}
+        <div
+          className="studio-frame__surface"
+          data-studio-surface="write"
+          hidden={view !== 'write'}
+          inert={view !== 'write'}
+        >
+          {editor}
+        </div>
+        <div
+          className="studio-frame__surface"
+          data-studio-surface="mix"
+          hidden={view !== 'mix'}
+          inert={view !== 'mix'}
+        >
+          {mix}
+        </div>
       </section>
 
       {/* Painted in the app bar but kept after the editor in DOM focus order. */}

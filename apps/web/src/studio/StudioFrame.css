@@ -61,7 +61,9 @@
 
 .studio-frame__transport {
   grid-column: 2;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
 }
 
 .studio-frame__rail,
@@ -112,7 +114,10 @@
   height: var(--studio-bar-height);
   width: var(--studio-utility-width);
   padding: var(--space-2) var(--space-3);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  justify-content: flex-start;
 }
 
 .studio-frame__view-switch {
@@ -220,20 +225,6 @@
     --studio-utility-width: min(24rem, 48vw);
   }
 
-  @media (min-width: 75rem) and (max-width: 85.3125rem) {
-    .studio-frame__app-bar {
-      grid-template-columns: minmax(24rem, 1fr) minmax(0, auto);
-      gap: var(--space-1);
-    }
-
-    .studio-frame__utilities {
-      justify-content: flex-start;
-      overflow-x: auto;
-      overflow-y: hidden;
-      scrollbar-width: none;
-    }
-  }
-
   .studio-frame--inspector-open,
   .studio-frame--rail-open.studio-frame--inspector-open {
     grid-template-columns: var(--studio-rail-width) minmax(0, 1fr);
@@ -265,6 +256,21 @@
   }
 }
 
+@media (min-width: 75rem) and (max-width: 85.3125rem) {
+  .studio-frame {
+    --studio-utility-width: 26rem;
+  }
+
+  .studio-frame__app-bar {
+    grid-template-columns: minmax(24rem, 1fr) minmax(0, auto);
+    gap: var(--space-1);
+  }
+
+  .studio-frame__utilities {
+    justify-content: flex-start;
+  }
+}
+
 @media (max-width: 47.9375rem) {
   .studio-frame,
   .studio-frame--rail-open,
@@ -274,6 +280,8 @@
     grid-template-columns: minmax(0, 1fr);
     height: auto;
     min-height: 100dvh;
+    box-sizing: border-box;
+    padding-bottom: env(safe-area-inset-bottom);
     overflow: visible;
   }
 
@@ -320,6 +328,7 @@
 
   .studio-frame__editor {
     grid-row: 4;
+    min-height: 36rem;
   }
 
   .studio-frame__inspector {

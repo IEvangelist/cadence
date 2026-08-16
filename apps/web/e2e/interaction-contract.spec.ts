@@ -275,6 +275,13 @@ test.describe('production interaction contract', () => {
 
     await assertInteractionContract(page, 'studio', observed)
 
+    const midiSettings = page.getByRole('button', { name: 'MIDI', exact: true })
+    if (await midiSettings.isVisible().catch(() => false)) {
+      await midiSettings.click()
+      await assertInteractionContract(page, 'MIDI settings', observed)
+      await page.keyboard.press('Escape')
+    }
+
     await page.getByRole('button', { name: 'Choose theme' }).click()
     await assertInteractionContract(page, 'theme menu', observed)
     await page.getByRole('menuitemradio', { name: 'System theme' }).click()

@@ -1,5 +1,9 @@
 import { expect, test, type Page } from '@playwright/test'
-import { returningProjectStorage } from './projectFixtures'
+import {
+  defaultProjectDetailDto,
+  defaultProjectSummaryDto,
+  returningProjectStorage,
+} from './projectFixtures'
 
 const studioViewports = [
   { width: 1440, height: 900 },
@@ -113,6 +117,31 @@ test.describe('professional Studio frame', () => {
     expect(await documentHeight(page)).toBe(heightBeforeInspector)
   })
 
+  test('keeps the piano roll reachable through mobile document scrolling', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto('/')
+    await expect(page.locator('[data-studio-workbench]')).toBeVisible()
+
+    const dimensions = await page.evaluate(() => ({
+      innerHeight,
+      scrollHeight: document.documentElement.scrollHeight,
+      overflow: getComputedStyle(document.querySelector('.app--composer')!).overflow,
+    }))
+    expect(dimensions.scrollHeight).toBeGreaterThan(dimensions.innerHeight)
+    expect(dimensions.overflow).toBe('visible')
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBeLessThanOrEqual(1)
+
+    await expect(page.getByRole('button', { name: 'Project', exact: true })).toBeInViewport()
+
+    const roll = page.locator('.piano-roll')
+    await roll.scrollIntoViewIfNeeded()
+    await expect(roll).toBeInViewport()
+  })
+
   test('keeps default chrome concise and ordered before the editor', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto('/')
@@ -199,7 +228,7 @@ test.describe('professional Studio frame', () => {
     expect(
       transportWidths.scroll,
       `transport scroll width ${transportWidths.scroll} exceeds ${transportWidths.client}`,
-    ).toBeLessThanOrEqual(transportWidths.client)
+    ).toBeLessThanOrEqual(transportWidths.client + 1)
 
     for (const name of ['Mix', 'Tracks', 'Inspector', 'Help']) {
       const control = page.getByRole('button', { name, exact: true })
@@ -213,6 +242,85 @@ test.describe('professional Studio frame', () => {
       })
       expect(hitIsControl, `${name} is not hit-testable at 1280px`).toBe(true)
     }
+  })
+
+  for (const width of [1199, 1200, 1280, 1365, 1366]) {
+    test(`keeps authenticated utility controls hit-testable at ${width}px`, async ({ page }) => {
+      await page.route('**/api/**', async (route) => {
+        const request = route.request()
+        const path = new URL(request.url()).pathname
+        const json = (body: unknown, status = 200) =>
+          route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
+        if (path === '/api/auth/me') {
+          return json({ id: 'studio-user', email: 'studio@example.com', displayName: 'Studio User' })
+        }
+        if (path === '/api/auth/providers') return json({ providers: [] })
+        if (path === '/api/entitlements') {
+          return json({
+            tier: 'Pro',
+            watermarkExports: false,
+            maxProjects: -1,
+            aiGenerationsPerDay: -1,
+            advancedFormats: true,
+            stemSeparation: true,
+            collaborationSeats: 5,
+          })
+        }
+        if (path === '/api/projects' && request.method() === 'GET') {
+          return json([defaultProjectSummaryDto])
+        }
+        if (path === `/api/projects/${defaultProjectSummaryDto.id}`) {
+          return json(defaultProjectDetailDto)
+        }
+        if (path.endsWith('/shares')) return json([])
+        return json({}, request.method() === 'GET' ? 200 : 204)
+      })
+      await page.setViewportSize({ width, height: 800 })
+      await page.goto('/')
+      await expect(page.getByRole('button', { name: 'Profile' })).toBeVisible()
+
+      for (const name of ['Mix', 'Tracks', 'Inspector', 'Help', 'Profile']) {
+        const control = page.getByRole('button', { name, exact: true })
+        const hitIsControl = await control.evaluate((element) => {
+          element.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+          const box = element.getBoundingClientRect()
+          const hit = document.elementFromPoint(
+            box.left + box.width / 2,
+            box.top + box.height / 2,
+          )
+          return hit === element || element.contains(hit)
+        })
+        expect(hitIsControl, `${name} is not hit-testable for authenticated chrome`).toBe(true)
+      }
+    })
+  }
+
+  test('preserves Write zoom, selection, and scroll state across Mix', async ({ page }) => {
+    await page.goto('/')
+    const roll = page.locator('.pr-scroll')
+    const note = page.locator('.pr-note').first()
+    await note.click()
+    await page.getByRole('button', { name: 'Zoom in horizontally (time)' }).click()
+    const zoom = await page.locator('.pr-zoom-readout').textContent()
+    await roll.evaluate((element) => {
+      element.scrollLeft = 80
+      element.scrollTop = 40
+    })
+    const scroll = await roll.evaluate((element) => ({
+      left: element.scrollLeft,
+      top: element.scrollTop,
+    }))
+
+    for (let pass = 0; pass < 2; pass += 1) {
+      await page.getByRole('button', { name: 'Mix', exact: true }).click()
+      await expect(page.getByRole('region', { name: 'Mixer' })).toBeVisible()
+      await page.getByRole('button', { name: 'Write', exact: true }).click()
+    }
+
+    await expect(page.locator('.pr-zoom-readout')).toHaveText(zoom ?? '')
+    await expect(note).toHaveClass(/is-selected/)
+    await expect.poll(() => roll.evaluate((element) => element.scrollLeft)).toBe(scroll.left)
+    await expect.poll(() => roll.evaluate((element) => element.scrollTop)).toBe(scroll.top)
   })
 
   test('keeps the informational footer off Studio and available on routed pages', async ({

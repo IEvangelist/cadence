@@ -492,6 +492,13 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'repeated',
   ),
   midi(
+    'studio.midi.settings',
+    'studio',
+    'button',
+    'MIDI',
+    'Opens device selection and recording quantize settings.',
+  ),
+  midi(
     'studio.midi.device',
     'studio',
     'combobox',
@@ -509,7 +516,7 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'studio.midi.quantize',
     'studio',
     'checkbox',
-    'Quantize',
+    'Quantize while recording',
     'Enables or disables quantization for recorded MIDI notes.',
   ),
 

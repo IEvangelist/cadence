@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { coversInteractions } from '../test/coversInteractions'
 import { StudioCommandProvider } from './StudioCommandProvider'
@@ -45,6 +45,13 @@ function StatefulTransport() {
       Play {position}
     </button>
   )
+}
+
+function MountProbe({ onMount }: { onMount: () => void }) {
+  useEffect(() => {
+    onMount()
+  }, [onMount])
+  return <div role="application" aria-label="Persistent editor" tabIndex={0} />
 }
 
 function PlaybackReadout() {
@@ -140,6 +147,35 @@ describe('<StudioFrame />', () => {
 
     await user.click(screen.getByRole('button', { name: 'Mix' }))
     expect(screen.getByRole('button', { name: 'Play 1' })).toBeInTheDocument()
+  })
+
+  it('keeps the editor mounted across repeated workspace switches', async () => {
+    const user = userEvent.setup()
+    const onMount = vi.fn()
+
+    function PersistentHarness() {
+      const [view, setView] = useState<StudioView>('write')
+      return (
+        <StudioFrame
+          projectControls="Project"
+          transportControls="Transport"
+          rail="Tracks"
+          editor={<MountProbe onMount={onMount} />}
+          mix={<div role="application" aria-label="Mixer" />}
+          view={view}
+          onViewChange={setView}
+        />
+      )
+    }
+
+    render(<PersistentHarness />)
+    for (let pass = 0; pass < 2; pass += 1) {
+      await user.click(screen.getByRole('button', { name: 'Mix' }))
+      await user.click(screen.getByRole('button', { name: 'Write' }))
+    }
+
+    expect(onMount).toHaveBeenCalledOnce()
+    expect(screen.getByRole('application', { name: 'Persistent editor' })).toBeVisible()
   })
 
   it('reallocates the rail column while keeping a visible restore control', async () => {
