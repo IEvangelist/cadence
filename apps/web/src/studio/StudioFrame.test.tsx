@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { coversInteractions } from '../test/coversInteractions'
 import { StudioCommandProvider } from './StudioCommandProvider'
 import { StudioFrame, type StudioView } from './StudioFrame'
@@ -46,8 +46,13 @@ function StatefulTransport() {
 }
 
 function PlaybackReadout() {
-  const { isPlaying } = useStudioCommands()
-  return <output aria-label="Playback state">{isPlaying ? 'playing' : 'stopped'}</output>
+  const { isPlaying, togglePlay } = useStudioCommands()
+  return (
+    <>
+      <output aria-label="Playback state">{isPlaying ? 'playing' : 'stopped'}</output>
+      <button type="button" onClick={togglePlay}>Toggle from context</button>
+    </>
+  )
 }
 
 function CommandHarness({
@@ -145,5 +150,15 @@ describe('<StudioCommandProvider />', () => {
 
     rerender(<CommandHarness isPlaying togglePlay={togglePlay} />)
     expect(screen.getByRole('status', { name: 'Playback state' })).toHaveTextContent('playing')
+  })
+
+  it('exposes the transport command without owning its dispatcher', async () => {
+    const user = userEvent.setup()
+    const togglePlay = vi.fn()
+    render(<CommandHarness isPlaying={false} togglePlay={togglePlay} />)
+
+    await user.click(screen.getByRole('button', { name: 'Toggle from context' }))
+
+    expect(togglePlay).toHaveBeenCalledOnce()
   })
 })
