@@ -71,6 +71,7 @@ export function TrackInspector({
         <button
           type="button"
           className="btn btn-sm"
+          data-interaction="studio.track.visibility-all"
           onClick={() =>
             controller.setAllTracksVisible(
               !controller.project.tracks.every((candidate) =>
