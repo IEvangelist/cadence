@@ -10,6 +10,9 @@ describe('mobile CSS contract', () => {
     expect(css).toContain('env(safe-area-inset-right)')
     expect(css).toContain('env(safe-area-inset-bottom)')
     expect(css).toContain('env(safe-area-inset-left)')
+    expect(css).toMatch(
+      /\.mobile-sheet__body\s*\{[\s\S]*?env\(safe-area-inset-bottom\)/,
+    )
   })
 
   it('keeps coarse-pointer controls at least 44px', () => {

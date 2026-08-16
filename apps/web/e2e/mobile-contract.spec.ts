@@ -78,34 +78,37 @@ test.describe('mobile touch contract', () => {
   })
 
   test('empty Pan/Select drag pans without creating a note', async ({ page }) => {
-    const grid = page.getByTestId('note-grid')
-    const start = await pointInside(grid, { x: 0.35, y: 0.7 })
+    const scroll = page.getByTestId('piano-scroll')
+    const start = await pointInside(scroll, { x: 0.8, y: 0.7 })
     await touchGesture(page, [start, { x: start.x - 80, y: start.y }])
 
     await expect(page.locator('[data-note-id]')).toHaveCount(1)
     await expect
-      .poll(() => page.getByTestId('piano-scroll').evaluate((element) => element.scrollLeft))
+      .poll(() => scroll.evaluate((element) => element.scrollLeft))
       .toBeGreaterThan(0)
   })
 
   test('empty Pan/Select tap never creates a note', async ({ page }) => {
-    const grid = page.getByTestId('note-grid')
-    await touchGesture(page, [await pointInside(grid, { x: 0.35, y: 0.7 })])
+    const scroll = page.getByTestId('piano-scroll')
+    await touchGesture(page, [await pointInside(scroll, { x: 0.8, y: 0.7 })])
 
     await expect(page.locator('[data-note-id]')).toHaveCount(1)
   })
 
   test('Draw tap adds exactly one note and Draw drag does not add', async ({ page }) => {
     await page.getByRole('button', { name: 'Draw', exact: true }).click()
-    const grid = page.getByTestId('note-grid')
+    const scroll = page.getByTestId('piano-scroll')
 
-    const tap = await pointInside(grid, { x: 0.35, y: 0.7 })
+    const tap = await pointInside(scroll, { x: 0.8, y: 0.7 })
     await touchGesture(page, [tap])
     await expect(page.locator('[data-note-id]')).toHaveCount(2)
 
-    const drag = await pointInside(grid, { x: 0.4, y: 0.75 })
+    const drag = await pointInside(scroll, { x: 0.75, y: 0.9 })
     await touchGesture(page, [drag, { x: drag.x - 60, y: drag.y }], 2)
     await expect(page.locator('[data-note-id]')).toHaveCount(2)
+    await expect
+      .poll(() => scroll.evaluate((element) => element.scrollLeft))
+      .toBeGreaterThan(0)
   })
 
   test('note tap selects, drag moves, and cancel restores valid state', async ({ page }) => {
@@ -199,11 +202,16 @@ test.describe('mobile touch contract', () => {
 
   test('attached keyboard add, nudge, resize, and delete still work', async ({ page }) => {
     const grid = page.getByRole('application', { name: 'Mobile note grid' })
+    const note = page.locator('[data-note-id="note-1"]')
+    await note.focus()
+    await page.keyboard.press('Space')
+    await expect(note).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.locator('[data-note-id]')).toHaveCount(1)
+
     await grid.focus()
     await page.keyboard.press('Enter')
     await expect(page.locator('[data-note-id]')).toHaveCount(2)
 
-    const note = page.locator('[data-note-id="note-1"]')
     await touchGesture(page, [await pointInside(note)], 8)
     await grid.focus()
     await page.keyboard.press('ArrowRight')

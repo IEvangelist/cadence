@@ -5,7 +5,11 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from 'react'
-import type { Note } from '../../composer/model/project'
+import {
+  MAX_PITCH,
+  MIN_PITCH,
+  type Note,
+} from '../../composer/model/project'
 import { ContextualCoachMark } from '../ContextualCoachMark'
 import { FullScreenSheet } from '../FullScreenSheet'
 import { MobileHelpSheet } from '../MobileHelpSheet'
@@ -234,8 +238,8 @@ export function MobileNotesHarness() {
           : event.key === 'ArrowLeft'
             ? { start: Math.max(0, selectedNote.start - 0.25) }
             : event.key === 'ArrowUp'
-              ? { pitch: selectedNote.pitch + 1 }
-              : { pitch: selectedNote.pitch - 1 }
+              ? { pitch: Math.min(MAX_PITCH, selectedNote.pitch + 1) }
+              : { pitch: Math.max(MIN_PITCH, selectedNote.pitch - 1) }
       updateSelected(changes)
     }
   }
@@ -344,6 +348,12 @@ export function MobileNotesHarness() {
                 }}
                 onPointerDown={(event) => startNote(event, note)}
                 onLostPointerCapture={losePointerCapture}
+                onClick={() => dispatch({ type: 'select-note', noteId: note.id })}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.stopPropagation()
+                  }
+                }}
               />
             ))}
           </div>
