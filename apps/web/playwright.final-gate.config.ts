@@ -15,7 +15,7 @@ process.env.CADENCE_FINAL_GATE_BASE_URL = baseURL
 export default defineConfig({
   metadata: { baseURL, servedHead },
   testDir: './e2e',
-  testMatch: 'final-gate/**/*.spec.ts',
+  testMatch: '**/*.spec.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
