@@ -5,7 +5,7 @@ import type { SyncStorage } from './storage'
 export const PROJECT_RECOVERY_KEY_PREFIX = 'cadence.v1.recovery'
 
 export const recoveryIndexKey = (scope: string): string =>
-  `${PROJECT_RECOVERY_KEY_PREFIX}.${encodeURIComponent(scope)}.index`
+  `${PROJECT_RECOVERY_KEY_PREFIX}.${encodeURIComponent(scope)}.active`
 
 export const projectRecoveryKey = (scope: string, projectId: string): string =>
   `${PROJECT_RECOVERY_KEY_PREFIX}.${encodeURIComponent(scope)}.${encodeURIComponent(projectId)}`
@@ -14,14 +14,14 @@ interface ProjectRecoveryEnvelope {
   version: 1
   scope: string
   revision: number
+  updatedAt: number
   projectId: string
   project: string
 }
 
-interface ProjectRecoveryIndex {
+interface ProjectRecoveryPointer {
   version: 1
-  activeProjectId: string | null
-  projectIds: string[]
+  projectId: string
 }
 
 export interface ProjectRecovery {
@@ -45,9 +45,23 @@ export function readProjectRecovery(
   projectId?: string,
 ): ProjectRecovery | null {
   if (!storage) return null
-  const resolvedProjectId = projectId ?? readIndex(storage, scope).activeProjectId
-  if (!resolvedProjectId) return null
-  const raw = storage.getItem(projectRecoveryKey(scope, resolvedProjectId))
+  if (projectId) return readRecord(storage, scope, projectId)
+  const pointer = readPointer(storage, scope)
+  if (pointer) {
+    const active = readRecord(storage, scope, pointer.projectId)
+    if (active) return active
+  }
+  const discovered = discoverNewestRecord(storage, scope)
+  if (discovered) writePointer(storage, scope, discovered.project.id)
+  return discovered
+}
+
+function readRecord(
+  storage: SyncStorage,
+  scope: string,
+  projectId: string,
+): ProjectRecovery | null {
+  const raw = storage.getItem(projectRecoveryKey(scope, projectId))
   if (!raw) return null
   try {
     const envelope = JSON.parse(raw) as Partial<ProjectRecoveryEnvelope>
@@ -55,6 +69,7 @@ export function readProjectRecovery(
       envelope.version !== 1 ||
       envelope.scope !== scope ||
       typeof envelope.revision !== 'number' ||
+      typeof envelope.updatedAt !== 'number' ||
       typeof envelope.projectId !== 'string' ||
       typeof envelope.project !== 'string'
     ) {
@@ -80,16 +95,12 @@ export function writeProjectRecovery(
       version: 1,
       scope,
       revision,
+      updatedAt: Date.now(),
       projectId: project.id,
       project: serializeProject(project),
     }
     storage.setItem(projectRecoveryKey(scope, project.id), JSON.stringify(envelope))
-    const index = readIndex(storage, scope)
-    writeIndex(storage, scope, {
-      version: 1,
-      activeProjectId: project.id,
-      projectIds: [project.id, ...index.projectIds.filter((id) => id !== project.id)],
-    })
+    writePointer(storage, scope, project.id)
   } catch {
     // Recovery is a best-effort crash boundary and never replaces primary persistence.
   }
@@ -109,50 +120,70 @@ export function clearProjectRecovery(
     recovery.revision <= persistedRevision
   ) {
     storage.removeItem(projectRecoveryKey(scope, projectId))
-    const index = readIndex(storage, scope)
-    const projectIds = index.projectIds.filter((id) => id !== projectId)
-    if (projectIds.length === 0) {
+    const pointer = readPointer(storage, scope)
+    if (pointer?.projectId === projectId) {
       storage.removeItem(recoveryIndexKey(scope))
-    } else {
-      writeIndex(storage, scope, {
-        version: 1,
-        activeProjectId:
-          index.activeProjectId === projectId
-            ? projectIds[0]
-            : index.activeProjectId,
-        projectIds,
-      })
+      const remaining = discoverNewestRecord(storage, scope)
+      if (remaining) writePointer(storage, scope, remaining.project.id)
     }
   }
 }
 
-function readIndex(storage: SyncStorage, scope: string): ProjectRecoveryIndex {
+function readPointer(storage: SyncStorage, scope: string): ProjectRecoveryPointer | null {
   const raw = storage.getItem(recoveryIndexKey(scope))
-  if (!raw) return { version: 1, activeProjectId: null, projectIds: [] }
+  if (!raw) return null
   try {
-    const index = JSON.parse(raw) as Partial<ProjectRecoveryIndex>
-    if (
-      index.version !== 1 ||
-      (index.activeProjectId !== null && typeof index.activeProjectId !== 'string') ||
-      !Array.isArray(index.projectIds) ||
-      !index.projectIds.every((id) => typeof id === 'string')
-    ) {
-      return { version: 1, activeProjectId: null, projectIds: [] }
-    }
-    return {
-      version: 1,
-      activeProjectId: index.activeProjectId ?? null,
-      projectIds: index.projectIds,
-    }
+    const pointer = JSON.parse(raw) as Partial<ProjectRecoveryPointer>
+    return pointer.version === 1 && typeof pointer.projectId === 'string'
+      ? { version: 1, projectId: pointer.projectId }
+      : null
   } catch {
-    return { version: 1, activeProjectId: null, projectIds: [] }
+    return null
   }
 }
 
-function writeIndex(
+function writePointer(
   storage: SyncStorage,
   scope: string,
-  index: ProjectRecoveryIndex,
+  projectId: string,
 ): void {
-  storage.setItem(recoveryIndexKey(scope), JSON.stringify(index))
+  const pointer: ProjectRecoveryPointer = { version: 1, projectId }
+  storage.setItem(recoveryIndexKey(scope), JSON.stringify(pointer))
+}
+
+function discoverNewestRecord(
+  storage: SyncStorage,
+  scope: string,
+): ProjectRecovery | null {
+  if (typeof storage.length !== 'number' || !storage.key) return null
+  const prefix = `${PROJECT_RECOVERY_KEY_PREFIX}.${encodeURIComponent(scope)}.`
+  let newest: { recovery: ProjectRecovery; updatedAt: number; projectId: string } | null = null
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index)
+    if (!key?.startsWith(prefix) || key === recoveryIndexKey(scope)) continue
+    const encodedProjectId = key.slice(prefix.length)
+    let projectId: string
+    try {
+      projectId = decodeURIComponent(encodedProjectId)
+    } catch {
+      continue
+    }
+    const raw = storage.getItem(key)
+    if (!raw) continue
+    try {
+      const envelope = JSON.parse(raw) as Partial<ProjectRecoveryEnvelope>
+      const recovery = readRecord(storage, scope, projectId)
+      if (!recovery || typeof envelope.updatedAt !== 'number') continue
+      if (
+        !newest ||
+        envelope.updatedAt > newest.updatedAt ||
+        (envelope.updatedAt === newest.updatedAt && projectId > newest.projectId)
+      ) {
+        newest = { recovery, updatedAt: envelope.updatedAt, projectId }
+      }
+    } catch {
+      continue
+    }
+  }
+  return newest?.recovery ?? null
 }

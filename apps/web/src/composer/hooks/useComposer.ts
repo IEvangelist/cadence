@@ -354,11 +354,13 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   const hydrationGenerationRef = useRef(0)
   const revisionRef = useRef(0)
   const savedRevisionRef = useRef(0)
+  const persistenceGenerationRef = useRef(0)
   const failedRevisionRef = useRef<number | null>(null)
   const skipNextProjectRevisionRef = useRef(false)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const flushPromiseRef = useRef<Promise<void> | null>(null)
   const resetPersistenceForProject = useCallback((persisted: boolean) => {
+    persistenceGenerationRef.current += 1
     if (autosaveTimerRef.current !== null) {
       clearTimeout(autosaveTimerRef.current)
       autosaveTimerRef.current = null
@@ -584,6 +586,10 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
 
   const persist = useCallback(
     async (project: Project) => {
+      if (store.persist) {
+        await store.persist(project)
+        return
+      }
       await store.save(project)
       await store.setLast(project.id)
     },
@@ -597,6 +603,8 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     }
     if (flushPromiseRef.current) return flushPromiseRef.current
     if (hydration.status !== 'ready-with-project') return Promise.resolve()
+    const generation = persistenceGenerationRef.current
+    const isCurrent = () => persistenceGenerationRef.current === generation
     if (mountedRef.current) setIsFlushing(true)
     const savingRevision = revisionRef.current
     if (mountedRef.current) {
@@ -613,10 +621,11 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     const flush = async () => {
       let attemptedRevision = savedRevisionRef.current
       try {
-        while (savedRevisionRef.current < revisionRef.current) {
+        while (isCurrent() && savedRevisionRef.current < revisionRef.current) {
           attemptedRevision = revisionRef.current
           const project = projectRef.current
           await persist(project)
+          if (!isCurrent()) return
           savedRevisionRef.current = Math.max(savedRevisionRef.current, attemptedRevision)
           if (
             failedRevisionRef.current !== null &&
@@ -634,6 +643,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
           }
           void refreshList()
         }
+        if (!isCurrent()) return
         if (mountedRef.current) {
           const fullySaved = savedRevisionRef.current >= revisionRef.current
           setSaveState({
@@ -646,6 +656,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
           })
         }
       } catch (error) {
+        if (!isCurrent()) return
         failedRevisionRef.current = attemptedRevision
         if (mountedRef.current) {
           if (revisionRef.current > attemptedRevision) {
@@ -664,6 +675,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
       }
     }
     const pending = flush().finally(() => {
+      if (!isCurrent()) return
       if (flushPromiseRef.current === pending) flushPromiseRef.current = null
       if (mountedRef.current) {
         setIsFlushing(false)

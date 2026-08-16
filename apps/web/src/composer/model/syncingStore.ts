@@ -36,6 +36,14 @@ export class SyncingProjectStore implements ProjectStore {
     return this.active().save(project)
   }
 
+  async persist(project: Project): Promise<StoredProjectMeta> {
+    const backend = this.active()
+    if (backend.persist) return backend.persist(project)
+    const meta = await backend.save(project)
+    await backend.setLast(project.id)
+    return meta
+  }
+
   load(id: string): Promise<Project | null> {
     return this.active().load(id)
   }

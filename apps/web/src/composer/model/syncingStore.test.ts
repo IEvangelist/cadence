@@ -42,6 +42,32 @@ describe('SyncingProjectStore', () => {
     expect((await remote.list()).map((m) => m.id)).toEqual(['remote-only'])
   })
 
+  it('binds save and last-pointer update to the backend captured before await', async () => {
+    let finishSave!: (meta: { id: string; name: string; updatedAt: number }) => void
+    const pendingSave = new Promise<{ id: string; name: string; updatedAt: number }>(
+      (resolve) => {
+        finishSave = resolve
+      },
+    )
+    const remoteSave = vi.spyOn(remote, 'save').mockReturnValue(pendingSave)
+    // Exercise the fallback transaction too: it must capture `remote` once.
+    remote.persist = undefined
+    const remoteSetLast = vi.spyOn(remote, 'setLast')
+    const localSetLast = vi.spyOn(local, 'setLast')
+    auth.current = true
+    const project = createEmptyProject('remote-pending')
+
+    const persistence = store.persist(project)
+    expect(remoteSave).toHaveBeenCalledWith(project)
+    auth.current = false
+    finishSave({ id: project.id, name: project.name, updatedAt: 1 })
+    await persistence
+
+    expect(remoteSetLast).toHaveBeenCalledWith(project.id)
+    expect(localSetLast).not.toHaveBeenCalled()
+    expect(await local.loadLast()).toBeNull()
+  })
+
   it('delegates load/remove/loadLast/setLast to the active backend', async () => {
     const project = createEmptyProject('p3')
     await store.save(project)

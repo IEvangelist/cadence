@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createEmptyProject } from './project'
 import { MemoryStorage } from './storage'
 import {
   projectRecoveryKey,
+  recoveryIndexKey,
   clearProjectRecovery,
   readProjectRecovery,
   writeProjectRecovery,
@@ -61,5 +62,32 @@ describe('project recovery', () => {
     clearProjectRecovery(storage, scope, 'second', 3)
     expect(readProjectRecovery(storage, scope)?.project.id).toBe('first')
     expect(readProjectRecovery(storage, scope, 'first')?.revision).toBe(2)
+  })
+
+  it('repairs missing, stale, and partially-cleared active pointers', () => {
+    const storage = new MemoryStorage()
+    const first = createEmptyProject('first')
+    const second = createEmptyProject('second')
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date(1_000))
+      writeProjectRecovery(storage, scope, first, 1)
+      vi.setSystemTime(new Date(2_000))
+      writeProjectRecovery(storage, scope, second, 2)
+
+      storage.removeItem(recoveryIndexKey(scope))
+      expect(readProjectRecovery(storage, scope)?.project.id).toBe('second')
+
+      storage.setItem(
+        recoveryIndexKey(scope),
+        JSON.stringify({ version: 1, projectId: 'missing' }),
+      )
+      expect(readProjectRecovery(storage, scope)?.project.id).toBe('second')
+
+      storage.removeItem(projectRecoveryKey(scope, 'second'))
+      expect(readProjectRecovery(storage, scope)?.project.id).toBe('first')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
