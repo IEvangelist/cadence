@@ -13,7 +13,28 @@ export function useStudioCommandDispatcher(
   plugins: PluginsController,
 ): StudioCommandRegistry {
   const { commands, keybindingOverrides, runCommand } = plugins
-  const core = useMemo(() => createCoreStudioCommands(actions), [actions])
+  const {
+    isPlaying,
+    togglePlay,
+    canUndo,
+    canRedo,
+    undo,
+    redo,
+    openHelp,
+  } = actions
+  const core = useMemo(
+    () =>
+      createCoreStudioCommands({
+        isPlaying,
+        togglePlay,
+        canUndo,
+        canRedo,
+        undo,
+        redo,
+        openHelp,
+      }),
+    [canRedo, canUndo, isPlaying, openHelp, redo, togglePlay, undo],
+  )
   const candidates = useMemo(
     () =>
       commands.map((command) => ({

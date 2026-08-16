@@ -1061,6 +1061,27 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'Shows all tracks or only the selected track on the piano roll.',
   ),
   trackRail(
+    'studio.history.undo',
+    'studio',
+    'button',
+    'Undo',
+    'Reverts the latest local document edit without affecting selection or remote edits.',
+  ),
+  trackRail(
+    'studio.history.redo',
+    'studio',
+    'button',
+    'Redo',
+    'Reapplies the latest locally undone document edit.',
+  ),
+  shortcuts(
+    'studio.shortcuts.open',
+    'studio',
+    'button',
+    'Shortcuts',
+    'Opens grouped and searchable keyboard shortcut help.',
+  ),
+  trackRail(
     'studio.track.delete.confirm',
     'studio',
     'button',

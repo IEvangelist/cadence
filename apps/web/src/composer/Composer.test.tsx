@@ -178,4 +178,17 @@ describe('<Composer />', () => {
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
     expect(screen.getByLabelText('Project name')).toHaveValue('Demo — Every idea, resolved')
   })
+
+  it('uses Space for transport while the piano-roll grid is focused', () => {
+    render(<Composer options={options()} />)
+    const grid = screen.getByRole('application', { name: /Note grid/ })
+    grid.focus()
+
+    fireEvent.keyDown(grid, { key: ' ' })
+
+    expect(screen.getByRole('button', { name: /Pause/ })).toBeInTheDocument()
+    expect(screen.queryAllByRole('button').filter((button) =>
+      button.className.includes('pr-note'),
+    )).toHaveLength(0)
+  })
 })

@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { appName, tagline } from '../appInfo'
 import { type UseComposerOptions, useComposer } from './hooks/useComposer'
 import type { ComposerController } from './hooks/useComposer'
@@ -11,7 +11,10 @@ import { usePlugins } from './plugins/usePlugins'
 import { ProjectToolbar } from './components/ProjectToolbar'
 import { MidiControls } from './components/MidiControls'
 import { TransportBar } from './components/TransportBar'
-import { TrackPanel } from './components/TrackPanel'
+import { TrackRail } from './components/TrackRail'
+import { TrackInspector } from './components/TrackInspector'
+import { ShortcutHelpDialog } from './components/ShortcutHelpDialog'
+import { EditorDetailLane } from './components/EditorDetailLane'
 import { AssistantPanel } from './components/AssistantPanel'
 import { AiStudioPanel } from './components/AiStudioPanel'
 import { MixerPanel } from './components/MixerPanel'
@@ -32,11 +35,11 @@ import { selectCollaborationStatus } from './contract/collaborationSelector'
 import { StudioNavigationGuard } from '../app/StudioNavigationGuard'
 import { OnboardingTour } from '../onboarding/OnboardingTour'
 import {
-  StudioCommandProvider,
   StudioFrame,
   StudioInspectorPanels,
   type StudioView,
 } from '../studio'
+import { useStudioCommandDispatcher } from './commands/useStudioCommandDispatcher'
 import './Composer.css'
 
 interface ComposerProps {
@@ -179,6 +182,8 @@ function ComposerWorkspace({
   const plugins = usePlugins(controller)
   const mixer = useMixer(controller)
   const panels = usePanelLayout()
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [detailLane, setDetailLane] = useState('velocity')
   const { project, audioReady, loadDemo } = controller
   const isEmpty = project.tracks.every((track) => track.notes.length === 0)
 
@@ -188,10 +193,40 @@ function ComposerWorkspace({
       selectedTrackId: controller.selectedTrackId,
       selectedNoteIds: controller.state.selectedNoteIds,
       applyRemoteProject: controller.applyRemoteProject,
+      historyCaptureGroup: controller.historyCaptureGroup,
+      historyCaptureBoundary: controller.historyCaptureBoundary,
     },
     collab,
     collabProviderFactory,
   )
+  const setHistoryEnabled = controller.setHistoryEnabled
+  useEffect(() => {
+    setHistoryEnabled(!collaboration.active)
+  }, [collaboration.active, setHistoryEnabled])
+  const history = collaboration.active ? collaboration : controller
+  const commandActions = useMemo(
+    () => ({
+      isPlaying: controller.transportState === 'playing',
+      togglePlay: controller.togglePlay,
+      canUndo: history.canUndo,
+      canRedo: history.canRedo,
+      undo: history.undo,
+      redo: history.redo,
+      openHelp: () => setShortcutsOpen(true),
+    }),
+    [
+      controller.togglePlay,
+      controller.transportState,
+      history.canRedo,
+      history.canUndo,
+      history.redo,
+      history.undo,
+    ],
+  )
+  const commands = useStudioCommandDispatcher(commandActions, plugins)
+  const selectedNote = project.tracks
+    .find((track) => track.id === controller.selectedTrackId)
+    ?.notes.find((note) => controller.state.selectedNoteIds.includes(note.id))
 
   // Publish the single live session's status through the contract-owned context so
   // feature panels can read it via useCollaborationStatus() without opening a second
@@ -205,7 +240,7 @@ function ComposerWorkspace({
     {
       id: 'track',
       label: 'Track',
-      content: <TrackPanel controller={controller} />,
+      content: <TrackInspector controller={controller} />,
     },
     {
       id: 'assistant',
@@ -233,39 +268,6 @@ function ComposerWorkspace({
     },
   ]
 
-  const compactRail = (
-    <section className="studio-track-rail" aria-label="Tracks">
-      <header className="studio-track-rail__header">
-        <h2>Tracks</h2>
-        <span>{project.tracks.length}</span>
-      </header>
-      <ul className="studio-track-rail__list">
-        {project.tracks.map((track) => {
-          const selected = track.id === controller.selectedTrackId
-          return (
-            <li key={track.id}>
-              <button
-                type="button"
-                className={`studio-track-rail__track${selected ? ' is-selected' : ''}`}
-                data-interaction="studio.track.select"
-                aria-pressed={selected}
-                aria-label={`${selected ? 'Selected: ' : 'Select '}${track.name}`}
-                onClick={() => controller.selectTrack(track.id)}
-              >
-                <span
-                  className="studio-track-rail__swatch"
-                  style={{ backgroundColor: track.color }}
-                  aria-hidden="true"
-                />
-                <span>{track.name}</span>
-              </button>
-            </li>
-          )
-        })}
-      </ul>
-    </section>
-  )
-
   const writeSurface = (
     <div className="studio-write-surface">
       {isEmpty && (
@@ -284,7 +286,32 @@ function ComposerWorkspace({
           </button>
         </div>
       )}
-      <PianoRoll controller={controller} previewNotes={assistant.previewNotes} />
+      <div className="composer-editor-stack">
+        <PianoRoll controller={controller} previewNotes={assistant.previewNotes} />
+        <EditorDetailLane
+          activeId={detailLane}
+          onChange={setDetailLane}
+          items={[
+            {
+              id: 'velocity',
+              label: 'Velocity',
+              content: (
+                <p className="editor-detail-lane__status" role="status">
+                  {selectedNote
+                    ? `Selected note velocity: ${Math.round(selectedNote.velocity * 127)}`
+                    : 'Select a note to edit its velocity.'}
+                </p>
+              ),
+            },
+            {
+              id: 'automation',
+              label: 'Automation',
+              content: null,
+              disabled: true,
+            },
+          ]}
+        />
+      </div>
       {!audioReady && (
         <p className="audio-note" role="note">
           Audio output isn’t available in this environment - editing, saving, and MIDI
@@ -297,10 +324,6 @@ function ComposerWorkspace({
   return (
     <CollaborationStatusContext.Provider value={collaborationStatus}>
     {guardNavigation ? <StudioNavigationGuard controller={controller} /> : null}
-    <StudioCommandProvider
-      isPlaying={controller.transportState === 'playing'}
-      togglePlay={controller.togglePlay}
-    >
       <StudioFrame
         projectControls={
           <div className="studio-project-cluster">
@@ -318,7 +341,7 @@ function ComposerWorkspace({
             <MidiControls controller={controller} />
           </div>
         }
-        rail={compactRail}
+        rail={<TrackRail controller={controller} />}
         editor={writeSurface}
         mix={<div className="studio-mix-surface"><MixerPanel mixer={mixer} /></div>}
         inspector={
@@ -349,7 +372,6 @@ function ComposerWorkspace({
         inspectorOpen={inspectorOpen}
         onInspectorToggle={() => setInspectorOpen((open) => !open)}
       />
-    </StudioCommandProvider>
     <ProjectBrowser
       controller={controller}
       open={projectBrowserOpen}
@@ -360,6 +382,11 @@ function ComposerWorkspace({
       onReplaced={() => setProjectBrowserOpen(false)}
     />
     <OnboardingTour />
+    <ShortcutHelpDialog
+      open={shortcutsOpen}
+      registry={commands}
+      onClose={() => setShortcutsOpen(false)}
+    />
     </CollaborationStatusContext.Provider>
   )
 }

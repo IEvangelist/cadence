@@ -17,8 +17,12 @@ export function canonicalizeKeybinding(binding: string): string {
     .split('+')
     .map((p) => p.trim().toLowerCase())
     .filter(Boolean)
-  const mods = MODIFIER_ORDER.filter((m) => parts.includes(m))
-  const key = parts.find((p) => !MODIFIER_ORDER.includes(p as (typeof MODIFIER_ORDER)[number]))
+  let mods = MODIFIER_ORDER.filter((m) => parts.includes(m))
+  let key = parts.find((p) => !MODIFIER_ORDER.includes(p as (typeof MODIFIER_ORDER)[number]))
+  if (mods.includes('shift') && key === '/') {
+    mods = mods.filter((modifier) => modifier !== 'shift')
+    key = '?'
+  }
   return [...mods, ...(key ? [key] : [])].join('+')
 }
 

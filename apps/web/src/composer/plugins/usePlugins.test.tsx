@@ -157,68 +157,21 @@ describe('usePlugins', () => {
     expect(result.current.keybindingNotice).toMatch(/reserved by a core Studio command/i)
   })
 
-  it.each(['dialog', 'alertdialog'])(
-    'suppresses project-mutating shortcuts inside %s descendants',
-    (role) => {
+  it('ignores a stale persisted reserved override so the plugin default remains active', () => {
     const host = createPluginHost()
-    const run = vi.fn()
-    host.register(commandPlugin(run))
-    const dialog = document.createElement('div')
-    dialog.setAttribute('role', role)
-    const button = document.createElement('button')
-    dialog.append(button)
-    document.body.append(dialog)
+    host.register(commandPlugin(vi.fn()))
+    const store = enabledStore('acme.cmd')
+    store.update((prefs) => ({
+      ...prefs,
+      keybindings: { 'acme.hello': 'mod+z' },
+    }))
 
-    renderHook(() =>
-      usePlugins(stubController(), {
-        host,
-        preferencesStore: enabledStore('acme.cmd'),
-      }),
+    const { result } = renderHook(() =>
+      usePlugins(stubController(), { host, preferencesStore: store }),
     )
 
-    act(() => {
-      button.dispatchEvent(
-        new KeyboardEvent('keydown', {
-          key: 'h',
-          ctrlKey: true,
-          shiftKey: true,
-          bubbles: true,
-        }),
-      )
-    })
-
-    expect(run).not.toHaveBeenCalled()
-    dialog.remove()
-    },
-  )
-
-  it('keeps plugin shortcuts active on ordinary non-modal buttons', () => {
-    const host = createPluginHost()
-    const run = vi.fn()
-    host.register(commandPlugin(run))
-    const button = document.createElement('button')
-    document.body.append(button)
-
-    renderHook(() =>
-      usePlugins(stubController(), {
-        host,
-        preferencesStore: enabledStore('acme.cmd'),
-      }),
-    )
-
-    act(() => {
-      button.dispatchEvent(
-        new KeyboardEvent('keydown', {
-          key: 'h',
-          ctrlKey: true,
-          shiftKey: true,
-          bubbles: true,
-        }),
-      )
-    })
-
-    expect(run).toHaveBeenCalledOnce()
-    button.remove()
+    expect(result.current.keybindingOverrides).toEqual({})
+    expect(result.current.keybindingFor('acme.hello')).toBe('mod+shift+h')
   })
 
   it('tracks panel visibility with a persisted default of visible', () => {

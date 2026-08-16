@@ -51,6 +51,16 @@ describe('<PianoRoll />', () => {
     expect(screen.getAllByRole('button').filter((b) => b.className.includes('pr-note'))).toHaveLength(1)
   })
 
+  it('does not add a note with Space so the Studio dispatcher can control transport', () => {
+    render(<Harness />)
+    const grid = screen.getByRole('application')
+    grid.focus()
+    fireEvent.keyDown(grid, { key: ' ' })
+    expect(screen.queryAllByRole('button').filter((button) =>
+      button.className.includes('pr-note'),
+    )).toHaveLength(0)
+  })
+
   it('adds a note by clicking the grid and can delete it with the keyboard', () => {
     coversInteractions('studio.piano-roll.grid')
     mockGridRect()

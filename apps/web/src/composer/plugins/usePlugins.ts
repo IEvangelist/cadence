@@ -165,10 +165,16 @@ export function usePlugins(
 
   const keybindingFor = useCallback(
     (commandId: string) => {
-      const binding =
-        (Object.hasOwn(prefs.keybindings, commandId) ? prefs.keybindings[commandId] : undefined) ??
-        host.commands().find((c) => c.id === commandId)?.keybinding
-      return binding && !reservedCoreCommandFor(binding) ? canonicalizeKeybinding(binding) : undefined
+      const override = Object.hasOwn(prefs.keybindings, commandId)
+        ? prefs.keybindings[commandId]
+        : undefined
+      if (override && !reservedCoreCommandFor(override)) {
+        return canonicalizeKeybinding(override)
+      }
+      const fallback = host.commands().find((command) => command.id === commandId)?.keybinding
+      return fallback && !reservedCoreCommandFor(fallback)
+        ? canonicalizeKeybinding(fallback)
+        : undefined
     },
     [host, prefs.keybindings],
   )
@@ -217,6 +223,13 @@ export function usePlugins(
     () => allPanels.filter((panel) => isPanelVisible(panel.id)),
     [allPanels, isPanelVisible],
   )
+  const keybindingOverrides = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(prefs.keybindings).filter(([, binding]) => !reservedCoreCommandFor(binding)),
+      ),
+    [prefs.keybindings],
+  )
 
   const panelContext = useMemo<PanelRenderContext>(
     () => ({ project: controller.project, runCommand }),
@@ -230,7 +243,7 @@ export function usePlugins(
     runCommand,
     keybindingFor,
     setKeybinding,
-    keybindingOverrides: prefs.keybindings,
+    keybindingOverrides,
     keybindingNotice,
     visiblePanels,
     allPanels,

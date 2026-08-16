@@ -56,6 +56,10 @@ export interface CollabBinding {
   selectedTrackId: string
   selectedNoteIds: string[]
   applyRemoteProject: (project: Project) => void
+  /** Optional single-user action classification reused for Yjs capture grouping. */
+  historyCaptureGroup?: string | null
+  /** Explicit pointer/field boundary; changes seal the current Yjs capture item. */
+  historyCaptureBoundary?: number
 }
 
 export interface CollaborationState {
@@ -75,6 +79,7 @@ export interface CollaborationState {
   canRedo: boolean
   undo: () => void
   redo: () => void
+  stopCapturing: () => void
 }
 
 const INERT: CollaborationState = {
@@ -86,6 +91,7 @@ const INERT: CollaborationState = {
   canRedo: false,
   undo: () => {},
   redo: () => {},
+  stopCapturing: () => {},
 }
 
 export function useCollaboration(
@@ -105,6 +111,8 @@ export function useCollaboration(
   }, [binding])
 
   const sessionRef = useRef<ReturnType<typeof createCollabSession> | null>(null)
+  const lastCaptureGroupRef = useRef<string | null>(null)
+  const lastCaptureBoundaryRef = useRef(binding.historyCaptureBoundary ?? 0)
   // Gates the local→doc mirror. A networked joiner must not push its own local
   // project until it has synced and adopted the shared one, or it would seed a
   // duplicate. In-memory/test providers (no onSynced) mirror immediately.
@@ -188,6 +196,8 @@ export function useCollaboration(
       provider.destroy()
       sessionRef.current = null
       mirrorReadyRef.current = false
+      lastCaptureGroupRef.current = null
+      lastCaptureBoundaryRef.current = bindingRef.current.historyCaptureBoundary ?? 0
       setConnected(false)
       setUndoState({ canUndo: false, canRedo: false })
     }
@@ -206,8 +216,22 @@ export function useCollaboration(
   // Skipped until the initial sync so a joiner never duplicates the seed.
   useEffect(() => {
     if (!mirrorReadyRef.current) return
-    sessionRef.current?.pushLocalProject(binding.project)
-  }, [binding.project])
+    const session = sessionRef.current
+    if (!session) return
+    const group = binding.historyCaptureGroup ?? null
+    if (!group || group !== lastCaptureGroupRef.current) session.stopCapturing()
+    session.pushLocalProject(binding.project)
+    if (!group) session.stopCapturing()
+    lastCaptureGroupRef.current = group
+  }, [binding.project, binding.historyCaptureGroup])
+
+  useEffect(() => {
+    const boundary = binding.historyCaptureBoundary ?? 0
+    if (boundary === lastCaptureBoundaryRef.current) return
+    sessionRef.current?.stopCapturing()
+    lastCaptureBoundaryRef.current = boundary
+    lastCaptureGroupRef.current = null
+  }, [binding.historyCaptureBoundary])
 
   // Publish caret/selection via awareness for remote cursors.
   useEffect(() => {
@@ -219,6 +243,7 @@ export function useCollaboration(
 
   const undo = useCallback(() => sessionRef.current?.undo(), [])
   const redo = useCallback(() => sessionRef.current?.redo(), [])
+  const stopCapturing = useCallback(() => sessionRef.current?.stopCapturing(), [])
 
   if (!config) return INERT
   return {
@@ -230,5 +255,6 @@ export function useCollaboration(
     canRedo: undoState.canRedo,
     undo,
     redo,
+    stopCapturing,
   }
 }

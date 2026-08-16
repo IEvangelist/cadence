@@ -418,6 +418,28 @@ describe('useComposer — single-user undo/redo history (#156)', () => {
     expect(hook.result.current.project.tracks[0].notes).toHaveLength(0)
   })
 
+  it('coalesces continuous project and track name typing into one field edit', () => {
+    const { hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+    const originalProjectName = hook.result.current.project.name
+    const originalTrackName = hook.result.current.project.tracks[0].name
+
+    act(() => hook.result.current.setProjectName('L'))
+    act(() => hook.result.current.setProjectName('Le'))
+    act(() => hook.result.current.setProjectName('Lead'))
+    act(() => hook.result.current.stopHistoryCapture())
+    act(() => hook.result.current.renameTrack(trackId, 'B'))
+    act(() => hook.result.current.renameTrack(trackId, 'Ba'))
+    act(() => hook.result.current.renameTrack(trackId, 'Bass'))
+    act(() => hook.result.current.stopHistoryCapture())
+
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.tracks[0].name).toBe(originalTrackName)
+    expect(hook.result.current.project.name).toBe('Lead')
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.name).toBe(originalProjectName)
+  })
+
   it('preserves the current selection across undo/redo (document mutations only)', () => {
     const { hook } = setup()
     const trackId = hook.result.current.selectedTrackId

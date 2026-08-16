@@ -46,6 +46,17 @@ describe('useStudioCommandDispatcher', () => {
       )
     })
     expect(extension.runCommand).toHaveBeenCalledWith('plugin.chord')
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true }))
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, shiftKey: true }),
+      )
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '?', shiftKey: true }))
+    })
+    expect(core.undo).toHaveBeenCalledOnce()
+    expect(core.redo).toHaveBeenCalledOnce()
+    expect(core.openHelp).toHaveBeenCalledOnce()
   })
 
   it('lets native text undo and dialog-owned keys win', () => {
@@ -71,4 +82,3 @@ describe('useStudioCommandDispatcher', () => {
     expect(core.togglePlay).not.toHaveBeenCalled()
   })
 })
-
