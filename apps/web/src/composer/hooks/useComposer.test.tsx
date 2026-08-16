@@ -13,7 +13,11 @@ import {
 import { createEmptyProject, type Project } from '../model/project'
 import { projectToMidiBytes } from '../midi/midi'
 import { defaultPluginHost } from '../plugins/defaultHost'
-import { readProjectRecovery, writeProjectRecovery } from '../model/recovery'
+import {
+  newRecoveryLineageId,
+  readProjectRecovery,
+  writeProjectRecovery,
+} from '../model/recovery'
 
 class FakeEngine implements AudioEngine {
   state: TransportState = 'stopped'
@@ -1382,6 +1386,60 @@ describe('useComposer — project hydration and replacement', () => {
 
     expect(readProjectRecovery(recoveryStorage, 'local:anonymous')).toBeNull()
     expect(hook.result.current.saveState.status).toBe('saved')
+  })
+
+  it('adopts a recovered lineage and clears all of its crash ancestors on save', async () => {
+    const primaryStorage = new MemoryStorage()
+    const store = new LocalStorageProjectStore(primaryStorage)
+    const authoritative = createEmptyProject('lineage-project')
+    authoritative.name = 'Authoritative old'
+    await store.persist(authoritative)
+    const recoveryStorage = new MemoryStorage()
+    const lineage = newRecoveryLineageId()
+    writeProjectRecovery(
+      recoveryStorage,
+      'local:anonymous',
+      { ...authoritative, name: 'Recovered A' },
+      1,
+      lineage,
+    )
+    writeProjectRecovery(
+      recoveryStorage,
+      'local:anonymous',
+      { ...authoritative, name: 'Recovered B' },
+      2,
+      lineage,
+    )
+    const first = renderHook(() =>
+      useComposer({
+        createEngine: () => new FakeEngine(),
+        store,
+        recoveryStorage,
+        recoveryScope: 'local:anonymous',
+        autosaveDelay: 60_000,
+      }),
+    )
+    await waitFor(() => expect(first.result.current.project.name).toBe('Recovered B'))
+    await act(() => first.result.current.flushAutosave())
+    expect(
+      readProjectRecovery(recoveryStorage, 'local:anonymous', authoritative.id),
+    ).toBeNull()
+    first.unmount()
+
+    const second = renderHook(() =>
+      useComposer({
+        createEngine: () => new FakeEngine(),
+        store,
+        recoveryStorage,
+        recoveryScope: 'local:anonymous',
+        autosaveDelay: 60_000,
+      }),
+    )
+    await waitFor(() => expect(second.result.current.project.name).toBe('Recovered B'))
+    expect(second.result.current.hydration).toEqual({
+      status: 'ready-with-project',
+      source: 'last',
+    })
   })
 
   it('keeps a durable save clean when refreshing recents fails', async () => {

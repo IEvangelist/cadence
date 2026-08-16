@@ -59,8 +59,9 @@ import {
 } from '../model/projectLifecycle'
 import type { SongTemplate } from '../templates'
 import {
-  clearProjectRecovery,
+  clearProjectRecoveryLineage,
   defaultRecoveryStorage,
+  newRecoveryLineageId,
   readProjectRecovery,
   writeProjectRecovery,
 } from '../model/recovery'
@@ -361,6 +362,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   const failedRevisionRef = useRef<number | null>(null)
   const recoveryTokenRef = useRef<string | null>(null)
   const recoveryTokensRef = useRef(new Set<string>())
+  const recoveryLineageRef = useRef(newRecoveryLineageId())
   const skipNextProjectRevisionRef = useRef(false)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const flushPromiseRef = useRef<Promise<void> | null>(null)
@@ -377,7 +379,10 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     persistenceBarrierRef.current = false
     setPersistenceBarrier(false)
   }, [])
-  const resetPersistenceForProject = useCallback((persisted: boolean) => {
+  const resetPersistenceForProject = useCallback((
+    persisted: boolean,
+    lineageId = newRecoveryLineageId(),
+  ) => {
     persistenceGenerationRef.current += 1
     if (autosaveTimerRef.current !== null) {
       clearTimeout(autosaveTimerRef.current)
@@ -388,6 +393,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     failedRevisionRef.current = null
     recoveryTokenRef.current = null
     recoveryTokensRef.current.clear()
+    recoveryLineageRef.current = lineageId
     flushPromiseRef.current = null
     skipNextProjectRevisionRef.current = persisted
     setJoinedFailure(0)
@@ -559,7 +565,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
           : null
         if (recovery) {
           if (!isCurrent()) return
-          resetPersistenceForProject(false)
+          resetPersistenceForProject(false, recovery.lineageId)
           recoveryTokenRef.current = recovery.token
           recoveryTokensRef.current.add(recovery.token)
           dispatch({ type: 'load-project', project: recovery.project })
@@ -658,15 +664,13 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
             failedRevisionRef.current = null
           }
           if (options.recoveryScope) {
-            for (const token of recoveryTokens) {
-              clearProjectRecovery(
-                recoveryStorage,
-                options.recoveryScope,
-                project.id,
-                token,
-              )
-              recoveryTokensRef.current.delete(token)
-            }
+            clearProjectRecoveryLineage(
+              recoveryStorage,
+              options.recoveryScope,
+              project.id,
+              recoveryLineageRef.current,
+            )
+            for (const token of recoveryTokens) recoveryTokensRef.current.delete(token)
             if (
               recoveryTokenRef.current &&
               recoveryTokens.includes(recoveryTokenRef.current)
@@ -783,6 +787,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         options.recoveryScope,
         state.project,
         revisionRef.current,
+        recoveryLineageRef.current,
         previousToken,
       )
       if (token) {
@@ -1129,14 +1134,12 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     beginPersistenceTransition()
     await settleActivePersistence()
     if (options.recoveryScope) {
-      for (const token of recoveryTokensRef.current) {
-        clearProjectRecovery(
-          recoveryStorage,
-          options.recoveryScope,
-          projectRef.current.id,
-          token,
-        )
-      }
+      clearProjectRecoveryLineage(
+        recoveryStorage,
+        options.recoveryScope,
+        projectRef.current.id,
+        recoveryLineageRef.current,
+      )
       recoveryTokensRef.current.clear()
       recoveryTokenRef.current = null
     }
@@ -1171,14 +1174,12 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
 
   const discardAutosaveRecovery = useCallback(() => {
     if (!options.recoveryScope) return
-    for (const token of recoveryTokensRef.current) {
-      clearProjectRecovery(
-        recoveryStorage,
-        options.recoveryScope,
-        projectRef.current.id,
-        token,
-      )
-    }
+    clearProjectRecoveryLineage(
+      recoveryStorage,
+      options.recoveryScope,
+      projectRef.current.id,
+      recoveryLineageRef.current,
+    )
     recoveryTokensRef.current.clear()
     recoveryTokenRef.current = null
   }, [options.recoveryScope, recoveryStorage])

@@ -5,6 +5,8 @@ import {
   projectRecoveryKey,
   recoveryIndexKey,
   clearProjectRecovery,
+  clearProjectRecoveryLineage,
+  newRecoveryLineageId,
   readProjectRecovery,
   writeProjectRecovery,
 } from './recovery'
@@ -162,6 +164,46 @@ describe('project recovery', () => {
 
       expect(readProjectRecovery(storage, scope)?.token).toBe(firstToken)
       expect(readProjectRecovery(storage, scope)?.project.name).toBe('First')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('clears every crash ancestor in one recovered lineage after authoritative save', () => {
+    const storage = new MemoryStorage()
+    const lineage = newRecoveryLineageId()
+    const first = createEmptyProject('shared-project')
+    first.name = 'Lineage A'
+    const second = createEmptyProject('shared-project')
+    second.name = 'Lineage B'
+    writeProjectRecovery(storage, scope, first, 1, lineage)
+    writeProjectRecovery(storage, scope, second, 2, lineage)
+    expect(readProjectRecovery(storage, scope)?.project.name).toBe('Lineage B')
+
+    clearProjectRecoveryLineage(storage, scope, first.id, lineage)
+
+    expect(readProjectRecovery(storage, scope, first.id)).toBeNull()
+  })
+
+  it('preserves a competing lineage while clearing all selected-lineage ancestors', () => {
+    const storage = new MemoryStorage()
+    const selectedLineage = newRecoveryLineageId()
+    const competingLineage = newRecoveryLineageId()
+    const project = createEmptyProject('shared-project')
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date(1_000))
+      writeProjectRecovery(storage, scope, { ...project, name: 'Selected A' }, 1, selectedLineage)
+      vi.setSystemTime(new Date(2_000))
+      writeProjectRecovery(storage, scope, { ...project, name: 'Competitor C' }, 1, competingLineage)
+      vi.setSystemTime(new Date(3_000))
+      writeProjectRecovery(storage, scope, { ...project, name: 'Selected B' }, 2, selectedLineage)
+      expect(readProjectRecovery(storage, scope)?.project.name).toBe('Selected B')
+
+      clearProjectRecoveryLineage(storage, scope, project.id, selectedLineage)
+
+      expect(readProjectRecovery(storage, scope)?.project.name).toBe('Competitor C')
+      expect(readProjectRecovery(storage, scope)?.lineageId).toBe(competingLineage)
     } finally {
       vi.useRealTimers()
     }

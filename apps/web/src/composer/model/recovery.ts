@@ -18,11 +18,39 @@ interface ProjectRecoveryEnvelope {
   version: 1
   scope: string
   token: string
+  lineageId: string
   revision: number
   updatedAt: number
   order: number
   projectId: string
   project: string
+}
+
+export function clearProjectRecoveryLineage(
+  storage: SyncStorage | null,
+  scope: string,
+  projectId: string,
+  lineageId: string | null,
+): void {
+  if (!storage || !lineageId) return
+  const records = listRecoveryRecords(storage, scope, projectId)
+  const removedTokens = new Set<string>()
+  for (const record of records) {
+    if (record.lineageId !== lineageId) continue
+    storage.removeItem(projectRecoveryKey(scope, projectId, record.token))
+    removedTokens.add(record.token)
+  }
+  const pointer = readPointer(storage, scope)
+  if (
+    pointer?.projectId === projectId &&
+    removedTokens.has(pointer.token)
+  ) {
+    storage.removeItem(recoveryIndexKey(scope))
+    const remaining = discoverNewestRecord(storage, scope)
+    if (remaining) {
+      writePointer(storage, scope, remaining.project.id, remaining.token)
+    }
+  }
 }
 
 interface ProjectRecoveryPointer {
@@ -31,8 +59,13 @@ interface ProjectRecoveryPointer {
   token: string
 }
 
+export function newRecoveryLineageId(): string {
+  return newRecoveryToken()
+}
+
 export interface ProjectRecovery {
   token: string
+  lineageId: string
   revision: number
   updatedAt: number
   order: number
@@ -76,6 +109,7 @@ export function writeProjectRecovery(
   scope: string,
   project: Project,
   revision: number,
+  lineageId = newRecoveryLineageId(),
   previousToken?: string | null,
 ): string | null {
   if (!storage) return null
@@ -84,6 +118,7 @@ export function writeProjectRecovery(
     version: 1,
     scope,
     token,
+    lineageId,
     revision,
     updatedAt: Date.now(),
     order: newRecoveryOrder(),
@@ -150,6 +185,7 @@ function parseEnvelope(
       envelope.version !== 1 ||
       envelope.scope !== scope ||
       typeof envelope.token !== 'string' ||
+      typeof envelope.lineageId !== 'string' ||
       typeof envelope.revision !== 'number' ||
       typeof envelope.updatedAt !== 'number' ||
       typeof envelope.order !== 'number' ||
@@ -164,6 +200,7 @@ function parseEnvelope(
     if (project.id !== envelope.projectId) return null
     return {
       token: envelope.token,
+      lineageId: envelope.lineageId,
       revision: envelope.revision,
       updatedAt: envelope.updatedAt,
       order: envelope.order,
@@ -179,9 +216,20 @@ function discoverNewestRecord(
   scope: string,
   projectId?: string,
 ): ProjectRecovery | null {
-  if (typeof storage.length !== 'number' || !storage.key) return null
+  return listRecoveryRecords(storage, scope, projectId).reduce<ProjectRecovery | null>(
+    (newest, recovery) => newerRecovery(newest, recovery),
+    null,
+  )
+}
+
+function listRecoveryRecords(
+  storage: SyncStorage,
+  scope: string,
+  projectId?: string,
+): ProjectRecovery[] {
+  if (typeof storage.length !== 'number' || !storage.key) return []
   const prefix = `${PROJECT_RECOVERY_KEY_PREFIX}.${encodeURIComponent(scope)}.`
-  let newest: ProjectRecovery | null = null
+  const records: ProjectRecovery[] = []
   for (let index = 0; index < storage.length; index += 1) {
     const key = storage.key(index)
     if (!key?.startsWith(prefix) || key === recoveryIndexKey(scope)) continue
@@ -189,9 +237,9 @@ function discoverNewestRecord(
     if (!raw) continue
     const recovery = parseEnvelope(raw, scope)
     if (!recovery || (projectId && recovery.project.id !== projectId)) continue
-    newest = newerRecovery(newest, recovery)
+    records.push(recovery)
   }
-  return newest
+  return records
 }
 
 function newerRecovery(
