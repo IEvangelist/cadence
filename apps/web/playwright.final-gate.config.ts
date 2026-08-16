@@ -6,13 +6,16 @@ const PORT = 4260
 const RELAY_PORT = 4360
 const baseURL = `http://127.0.0.1:${PORT}`
 const collabUrl = `ws://127.0.0.1:${RELAY_PORT}`
-const servedHead = execFileSync('git', ['rev-parse', 'HEAD'], {
-  encoding: 'utf8',
-}).trim()
-const workingTreeDirty =
-  execFileSync('git', ['status', '--porcelain'], {
+const servedHead =
+  process.env.CADENCE_FINAL_GATE_SERVED_HEAD ??
+  execFileSync('git', ['rev-parse', 'HEAD'], {
     encoding: 'utf8',
-  }).trim().length > 0
+  }).trim()
+const workingTreeDirty = process.env.CADENCE_FINAL_GATE_WORKTREE_DIRTY
+  ? process.env.CADENCE_FINAL_GATE_WORKTREE_DIRTY === 'true'
+  : execFileSync('git', ['status', '--porcelain'], {
+      encoding: 'utf8',
+    }).trim().length > 0
 
 process.env.CADENCE_FINAL_GATE_SERVED_HEAD = servedHead
 process.env.CADENCE_FINAL_GATE_BASE_URL = baseURL
