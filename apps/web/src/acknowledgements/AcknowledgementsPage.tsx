@@ -17,6 +17,7 @@
  * discernible accessible names.
  */
 import { useId } from 'react'
+import { RoutedPage } from '../ui/RoutedPage'
 import './acknowledgements.css'
 
 interface AcknowledgementsPageProps {
@@ -113,55 +114,56 @@ const COMPONENTS: ThirdPartyComponent[] = [
 ]
 
 export function AcknowledgementsPage({ onClose }: AcknowledgementsPageProps) {
-  const headingId = useId()
   const lameHeadingId = useId()
   const licensesHeadingId = useId()
   const textsHeadingId = useId()
 
   return (
-    <section className="acknowledgements" aria-labelledby={headingId}>
-      <div className="acknowledgements-head">
-        <div>
-          <h2 id={headingId}>Acknowledgements &amp; third-party licenses</h2>
-          <p className="acknowledgements-sub">
-            Cadence is{' '}
-            <a
-              href={REPO_LICENSE_URL}
-              target="_blank"
-              rel="noreferrer"
-              data-interaction="licenses.external-link"
-            >
-              open-source software (MIT)
-            </a>
-            . It also builds on third-party open-source projects that it
-            redistributes as part of the app. This page credits those projects and
-            points to their licenses; the authoritative, complete list — with full
-            license texts — lives in{' '}
-            <a
-              href={THIRD_PARTY_NOTICES_URL}
-              target="_blank"
-              rel="noreferrer"
-              data-interaction="licenses.external-link"
-            >
-              THIRD-PARTY-NOTICES.md
-            </a>
-            .
-          </p>
-        </div>
-        {onClose && (
+    <RoutedPage
+      title="Acknowledgements & third-party licenses"
+      width="content"
+      className="acknowledgements"
+      actions={
+        onClose ? (
           <button
             type="button"
-            className="acknowledgements-btn"
+            className="btn"
             data-interaction="licenses.close"
             onClick={onClose}
           >
             Back to composer
           </button>
-        )}
-      </div>
+        ) : null
+      }
+      description={
+        <p>
+          Cadence is{' '}
+          <a
+            href={REPO_LICENSE_URL}
+            target="_blank"
+            rel="noreferrer"
+            data-interaction="licenses.external-link"
+          >
+            open-source software (MIT)
+          </a>
+          . It also builds on third-party open-source projects that it redistributes as
+          part of the app. This page credits those projects and points to their licenses;
+          the authoritative, complete list, including full license texts, lives in{' '}
+          <a
+            href={THIRD_PARTY_NOTICES_URL}
+            target="_blank"
+            rel="noreferrer"
+            data-interaction="licenses.external-link"
+          >
+            THIRD-PARTY-NOTICES.md
+          </a>
+          .
+        </p>
+      }
+    >
 
       <div className="acknowledgements-section" aria-labelledby={lameHeadingId}>
-        <h3 id={lameHeadingId}>MP3 export — the LAME encoder</h3>
+        <h3 id={lameHeadingId}>MP3 export: the LAME encoder</h3>
         <p>
           Cadence&rsquo;s <strong>MP3 export</strong> is powered by the{' '}
           <strong>LAME</strong> MP3 encoder, via{' '}
@@ -173,7 +175,7 @@ export function AcknowledgementsPage({ onClose }: AcknowledgementsPageProps) {
           >
             @breezystack/lamejs
           </a>{' '}
-          (version 1.2.7) — a pure-JavaScript port of LAME. It is used{' '}
+          (version 1.2.7), a pure-JavaScript port of LAME. It is used{' '}
           <strong>unmodified</strong> and is <strong>dynamically imported</strong> on
           demand, only when you export an MP3.
         </p>
@@ -205,8 +207,8 @@ export function AcknowledgementsPage({ onClose }: AcknowledgementsPageProps) {
                 data-interaction="licenses.external-link"
               >
                 @breezystack/lamejs on npm
-              </a>{' '}
-              — a fork of the original{' '}
+              </a>
+              , a fork of the original{' '}
               <a
                 href={LAMEJS_UPSTREAM_URL}
                 target="_blank"
@@ -228,38 +230,46 @@ export function AcknowledgementsPage({ onClose }: AcknowledgementsPageProps) {
 
       <div className="acknowledgements-section" aria-labelledby={licensesHeadingId}>
         <h3 id={licensesHeadingId}>Third-party components</h3>
-        <table className="acknowledgements-table">
-          <caption className="acknowledgements-caption">
-            Third-party components Cadence redistributes
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">Component</th>
-              <th scope="col">Version</th>
-              <th scope="col">License</th>
-            </tr>
-          </thead>
-          <tbody>
-            {COMPONENTS.map((component) => (
-              <tr key={component.name}>
-                <td>
-                  <a
-                    href={component.packageUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    data-interaction="licenses.external-link"
-                  >
-                    {component.name}
-                  </a>
-                </td>
-                <td>{component.version}</td>
-                <td>{component.license}</td>
+        <div
+          className="acknowledgements-table-scroll"
+          role="region"
+          aria-label="Scrollable third-party components table"
+          tabIndex={0}
+        >
+          <table className="acknowledgements-table">
+            <caption className="acknowledgements-caption">
+              Third-party components Cadence redistributes
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Component</th>
+                <th scope="col">Version</th>
+                <th scope="col">License</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {COMPONENTS.map((component) => (
+                <tr key={component.name}>
+                  <td>
+                    <a
+                      href={component.packageUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      data-interaction="licenses.external-link"
+                    >
+                      {component.name}
+                    </a>
+                  </td>
+                  <td>{component.version}</td>
+                  <td>{component.license}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <p>
-          Radix Dialog provides Cadence&rsquo;s accessible project/replacement dialogs.
+          Radix Dialog provides Cadence&rsquo;s accessible project, replacement, and
+          authentication dialogs.
         </p>
       </div>
 
@@ -317,7 +327,7 @@ export function AcknowledgementsPage({ onClose }: AcknowledgementsPageProps) {
           are distributed with the app.
         </p>
       </div>
-    </section>
+    </RoutedPage>
   )
 }
 

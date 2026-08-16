@@ -104,7 +104,7 @@ test.describe('pwa', () => {
     const routes = [
       ['/stems', 'Stem separation'],
       ['/pricing', 'Plans & pricing'],
-      ['/profile', 'Sign in to view your profile'],
+      ['/profile', 'Sign in to Cadence'],
       ['/licenses', 'Acknowledgements & third-party licenses'],
     ] as const
 

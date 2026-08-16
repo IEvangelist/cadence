@@ -325,6 +325,12 @@ test.describe('production interaction contract', () => {
     expect(observed.has('studio.midi.quantize')).toBe(true)
     await page.keyboard.press('Escape')
 
+    await page.goto('/?auth=error&reason=link-required')
+    await expect(page.getByRole('alert')).toBeVisible()
+    await assertInteractionContract(page, 'auth callback error', observed)
+    await page.getByRole('button', { name: 'Dismiss authentication status' }).click()
+    await page.goto('/')
+
     await page.getByRole('button', { name: 'Choose theme' }).click()
     await assertInteractionContract(page, 'theme menu', observed)
     await page.getByRole('menuitemradio', { name: 'System theme' }).click()
@@ -561,6 +567,33 @@ test.describe('production interaction contract', () => {
     await expect(authenticatedPage.getByLabel('bass stem preview')).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'stems pro results', observed)
     await authenticatedContext.close()
+
+    for (const retryCase of [
+      { path: '/pricing', failedApi: '/api/entitlements', state: 'pricing load error' },
+      { path: '/profile', failedApi: '/api/profile', state: 'profile load error' },
+      { path: '/stems', failedApi: '/api/stems/jobs', state: 'stems load error' },
+    ]) {
+      const retryContext = await browser.newContext({
+        baseURL: origin,
+        storageState: returningStorage,
+      })
+      const retryPage = await retryContext.newPage()
+      await retryPage.route('**/api/**', (route) => {
+        const path = new URL(route.request().url()).pathname
+        if (path === retryCase.failedApi) {
+          return route.fulfill({
+            status: 500,
+            contentType: 'application/json',
+            body: '{}',
+          })
+        }
+        return mockApi(route, true)
+      })
+      await retryPage.goto(retryCase.path)
+      await expect(retryPage.getByRole('button', { name: 'Retry' })).toBeVisible()
+      await assertInteractionContract(retryPage, retryCase.state, observed)
+      await retryContext.close()
+    }
 
     const failingSaveContext = await browser.newContext({
       baseURL: origin,

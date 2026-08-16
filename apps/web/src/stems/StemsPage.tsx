@@ -13,7 +13,9 @@
  */
 import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { Download } from 'lucide-react'
+import { FormField } from '../ui/FormField'
 import { Icon } from '../ui/Icon'
+import { RoutedPage, RouteState } from '../ui/RoutedPage'
 import { StemsClient, StemsError, type StemJob } from './stemsClient'
 import './stems.css'
 
@@ -58,12 +60,15 @@ export function StemsPage({
   client,
   pollIntervalMs = 2000,
 }: StemsPageProps) {
-  const headingId = useId()
   const fileInputId = useId()
   const resolvedClient = useMemo(() => client ?? new StemsClient(), [client])
 
   const [file, setFile] = useState<File | null>(null)
   const [jobs, setJobs] = useState<StemJob[]>([])
+  const [jobsStatus, setJobsStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>(
+    'idle',
+  )
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const canSeparate = authenticated && entitled
@@ -80,18 +85,22 @@ export function StemsPage({
     if (!canSeparate) return
     let cancelled = false
     void (async () => {
+      setJobsStatus('loading')
       try {
         const summaries = await resolvedClient.listJobs()
         const details = await Promise.all(summaries.map((s) => resolvedClient.getJob(s.id)))
-        if (!cancelled) setJobs(details)
+        if (!cancelled) {
+          setJobs(details)
+          setJobsStatus('ready')
+        }
       } catch {
-        if (!cancelled) setError('We couldn’t load your previous separations.')
+        if (!cancelled) setJobsStatus('error')
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [canSeparate, resolvedClient])
+  }, [canSeparate, loadAttempt, resolvedClient])
 
   // Poll in-flight jobs until they reach a terminal state.
   const activeIds = jobs.filter(isActive).map((job) => job.id).join(',')
@@ -131,48 +140,50 @@ export function StemsPage({
   }
 
   return (
-    <section className="stems" aria-labelledby={headingId}>
-      <div className="stems-head">
-        <div>
-          <h2 id={headingId}>Stem separation</h2>
-          <p className="stems-sub">
-            Upload a mix and split it into isolated stems — bass, drums, vocals, guitar,
-            keys, synth, and everything else.
-          </p>
-        </div>
-        {onClose && (
+    <RoutedPage
+      title="Stem separation"
+      description="Upload a mix and split it into isolated stems: bass, drums, vocals, guitar, keys, synth, and everything else."
+      className="stems"
+      actions={
+        onClose ? (
           <button
             type="button"
-            className="stems-btn"
+            className="btn"
             data-interaction="stems.close"
             onClick={onClose}
           >
             Back to composer
           </button>
-        )}
-      </div>
+        ) : null
+      }
+    >
 
       {!authenticated ? (
-        <p role="status" className="stems-gate">
-          Sign in to separate a mix into stems.
-        </p>
+        <RouteState
+          kind="info"
+          label="Sign in required"
+          title="Sign in to separate stems"
+          message="Your mixes and generated stems stay connected to your account."
+        />
       ) : !entitled ? (
-        <div role="status" className="stems-upsell">
-          <h3>Stem separation is a Pro feature</h3>
-          <p>
-            Upgrade to Pro to split your mixes into isolated, downloadable stems.
-          </p>
-          {onUpgrade && (
-            <button
-              type="button"
-              className="stems-btn stems-btn-primary"
-              data-interaction="stems.upgrade"
-              onClick={onUpgrade}
-            >
-              See Pro plans
-            </button>
-          )}
-        </div>
+        <RouteState
+          kind="info"
+          label="Pro plan required"
+          title="Stem separation is a Pro feature"
+          message="Upgrade to Pro to split your mixes into isolated, downloadable stems."
+          action={
+            onUpgrade ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                data-interaction="stems.upgrade"
+                onClick={onUpgrade}
+              >
+                See Pro plans
+              </button>
+            ) : null
+          }
+        />
       ) : (
         <>
           <form
@@ -182,23 +193,29 @@ export function StemsPage({
               void separate()
             }}
           >
-            <label className="stems-field" htmlFor={fileInputId}>
-              Choose a mix to separate
-            </label>
-            <input
-              id={fileInputId}
-              className="stems-file"
-              type="file"
-              data-interaction="stems.upload.file"
-              accept="audio/*"
-              onChange={(event) => {
-                setFile(event.target.files?.[0] ?? null)
-                setError(null)
-              }}
-            />
+            <FormField
+              label="Choose a mix to separate"
+              htmlFor={fileInputId}
+              hint="Choose an audio file supported by your browser."
+            >
+              {(controlProps) => (
+                <input
+                  {...controlProps}
+                  id={fileInputId}
+                  className="stems-file"
+                  type="file"
+                  data-interaction="stems.upload.file"
+                  accept="audio/*"
+                  onChange={(event) => {
+                    setFile(event.target.files?.[0] ?? null)
+                    setError(null)
+                  }}
+                />
+              )}
+            </FormField>
             <button
               type="submit"
-              className="stems-btn stems-btn-primary"
+              className="btn btn-primary"
               data-interaction="stems.separate"
               disabled={!file || busy}
             >
@@ -207,15 +224,43 @@ export function StemsPage({
           </form>
 
           {error && (
-            <p role="alert" className="stems-error">
-              {error}
-            </p>
+            <RouteState kind="error" label={error} message={error} />
           )}
 
           <div aria-live="polite" className="stems-jobs">
-            {jobs.length === 0 ? (
-              <p className="stems-empty">No separations yet. Upload a mix to get started.</p>
-            ) : (
+            {jobsStatus === 'loading' ? (
+              <RouteState kind="loading" label="Loading your previous separations" />
+            ) : null}
+            {jobsStatus === 'error' ? (
+              <RouteState
+                kind="error"
+                label="Previous separations could not be loaded"
+                title="Your separations are unavailable"
+                message="We couldn’t load your previous separations. The source files and retained stems have not been changed."
+                action={
+                  <button
+                    type="button"
+                    className="btn"
+                    data-interaction="stems.retry"
+                    onClick={() => {
+                      setJobsStatus('loading')
+                      setLoadAttempt((attempt) => attempt + 1)
+                    }}
+                  >
+                    Retry
+                  </button>
+                }
+              />
+            ) : null}
+            {jobsStatus === 'ready' && jobs.length === 0 ? (
+              <RouteState
+                kind="empty"
+                label="No separations yet"
+                title="No separations yet"
+                message="Upload a mix above to create your first set of stems."
+              />
+            ) : null}
+            {jobsStatus !== 'loading' && jobs.length > 0 ? (
               <ul className="stems-job-list" role="list">
                 {jobs.map((job) => (
                   <li key={job.id} className="stems-job">
@@ -269,10 +314,10 @@ export function StemsPage({
                   </li>
                 ))}
               </ul>
-            )}
+            ) : null}
           </div>
         </>
       )}
-    </section>
+    </RoutedPage>
   )
 }

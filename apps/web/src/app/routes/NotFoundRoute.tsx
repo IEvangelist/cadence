@@ -1,11 +1,15 @@
 import { useLocation, useNavigate } from 'react-router-dom'
+import { RoutedPage } from '../../ui/RoutedPage'
 
 export function NotFoundRoute() {
   const navigate = useNavigate()
   const location = useLocation()
   return (
-    <section className="route-page" aria-labelledby="not-found-title">
-      <h2 id="not-found-title">Page not found</h2>
+    <RoutedPage
+      title="Page not found"
+      description="That Cadence page does not exist."
+      width="content"
+    >
       <button
         type="button"
         className="btn btn-primary"
@@ -19,6 +23,6 @@ export function NotFoundRoute() {
       >
         Return to Studio
       </button>
-    </section>
+    </RoutedPage>
   )
 }

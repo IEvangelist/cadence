@@ -71,6 +71,8 @@ const licenses = traced(
   'e2e/acknowledgements.spec.ts',
 )
 const auth = traced('src/auth/AuthBar.test.tsx', 'e2e/auth.spec.ts')
+const authDialog = traced('src/auth/AuthDialog.test.tsx', 'e2e/auth.spec.ts')
+const authCallback = traced('src/app/AuthCallbackEffect.test.tsx', 'e2e/auth.spec.ts')
 const profile = traced('src/auth/ProfilePage.test.tsx', 'e2e/auth.spec.ts')
 const pricing = traced('src/billing/PricingPage.test.tsx', 'e2e/pricing.spec.ts')
 const aiStudio = traced('src/composer/components/AiStudioPanel.test.tsx', 'e2e/assistant.spec.ts')
@@ -199,7 +201,6 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'Back to composer',
     'Returns from licenses and acknowledgements to the composer.',
   ),
-
   auth(
     'auth.profile.open',
     'auth',
@@ -212,59 +213,66 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'auth.panel.toggle',
     'auth',
     'button',
-    '/Sign in|Close/',
-    'Expands or collapses the sign-in panel and updates aria-expanded.',
+    'Sign in',
+    'Opens the shared sign-in Dialog.',
   ),
-  auth(
+  authDialog(
+    'auth.dialog.close',
+    'auth',
+    'button',
+    'Close',
+    'Closes the sign-in Dialog and restores focus to its launcher.',
+  ),
+  authDialog(
     'auth.registration.display-name',
     'auth',
     'textbox',
     'Display name',
     'Updates the pending registration display name.',
   ),
-  auth(
+  authDialog(
     'auth.credentials.email',
     'auth',
     'textbox',
     'Email',
     'Updates the credentials email and clears stale registration success.',
   ),
-  auth(
+  authDialog(
     'auth.credentials.password',
     'auth',
     'input',
     'Password',
     'Updates the credentials password submitted for sign-in or registration.',
   ),
-  auth(
+  authDialog(
     'auth.credentials.submit',
     'auth',
     'button',
     '/Sign in|Signing in\\.\\.\\.|Create account/',
     'Submits credentials and exposes authenticated, success, or error state.',
   ),
-  auth(
+  authDialog(
     'auth.mode.toggle',
     'auth',
     'button',
     '/Create an account|Already have an account/',
     'Switches between sign-in and registration fields and copy.',
   ),
-  auth(
+  authDialog(
     'auth.magic-link.email',
     'auth',
     'textbox',
     'Or get a magic sign-in link',
     'Updates the passwordless sign-in email and clears stale success.',
   ),
-  auth(
+  authDialog(
     'auth.magic-link.submit',
     'auth',
     'button',
     'Email me a link',
     'Requests a magic link and exposes success or error state.',
   ),
-  auth(
+  authDialog(
     'auth.provider.sign-in',
     'auth',
     'link',
@@ -273,6 +281,13 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'repeated',
     'Native link behavior.',
   ),
+  authCallback(
+    'auth.callback.dismiss',
+    'auth',
+    'button',
+    'Dismiss authentication status',
+    'Dismisses the one-shot authentication callback status.',
+  ),
 
   profile(
     'profile.close',
@@ -280,6 +295,13 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'button',
     'Back to composer',
     'Returns from the profile editor to the composer.',
+  ),
+  profile(
+    'profile.retry',
+    'profile',
+    'button',
+    'Retry',
+    'Retries a failed profile load without leaving the guarded route.',
   ),
   profile(
     'profile.display-name',
@@ -316,6 +338,13 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'button',
     'Back to composer',
     'Returns from pricing to the composer.',
+  ),
+  pricing(
+    'pricing.retry',
+    'pricing',
+    'button',
+    'Retry',
+    'Retries loading the current server-authoritative plan.',
   ),
   pricing(
     'pricing.upgrade',
@@ -1389,6 +1418,13 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'button',
     'Back to composer',
     'Returns from stems to the composer.',
+  ),
+  stems(
+    'stems.retry',
+    'stems',
+    'button',
+    'Retry',
+    'Retries loading retained stem-separation jobs.',
   ),
   stems(
     'stems.upgrade',

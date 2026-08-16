@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { AuthDialogProvider } from '../auth/AuthDialog'
 import { AuthProvider } from '../auth/AuthProvider'
 import type { ProjectStore } from '../composer/model/storage'
 import { handleAuthChange, projectStore } from '../appStores'
@@ -14,7 +15,9 @@ export function AppProviders({ children, store = projectStore }: AppProvidersPro
   return (
     <ThemeProvider>
       <AuthProvider onAuthChange={handleAuthChange}>
-        <ProjectStoreContext value={store}>{children}</ProjectStoreContext>
+        <AuthDialogProvider>
+          <ProjectStoreContext value={store}>{children}</ProjectStoreContext>
+        </AuthDialogProvider>
       </AuthProvider>
     </ThemeProvider>
   )

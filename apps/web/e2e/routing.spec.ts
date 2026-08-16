@@ -101,7 +101,8 @@ test.describe('browser-history routes', () => {
     await openStudioDestination(page, 'Pricing')
     await expect(page).toHaveURL(/\/pricing\?collab=room&role=viewer&share=token#project=invalid$/)
     await expect(page).toHaveTitle('Pricing | Cadence')
-    await expect(main).toBeFocused()
+    await expect(page.getByRole('heading', { name: 'Plans & pricing' })).toBeFocused()
+    await expect(main).not.toBeFocused()
 
     await page.goBack()
     await expect(page).toHaveURL(/\/\?collab=room&role=viewer&share=token#project=invalid$/)

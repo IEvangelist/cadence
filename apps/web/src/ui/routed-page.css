@@ -1,0 +1,208 @@
+.route-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  width: 100%;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.route-page--content {
+  max-width: 52rem;
+}
+
+.route-page--wide {
+  max-width: 72rem;
+}
+
+.route-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.route-page__heading {
+  min-width: 0;
+}
+
+.route-page__heading h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-size: clamp(var(--font-size-2xl), 5vw, var(--font-size-3xl));
+  line-height: var(--line-height-tight);
+}
+
+.route-page__heading h2:focus {
+  outline: none;
+}
+
+.route-page__description {
+  max-width: 48rem;
+  margin-top: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-relaxed);
+}
+
+.route-page__description > :first-child {
+  margin-top: 0;
+}
+
+.route-page__description > :last-child {
+  margin-bottom: 0;
+}
+
+.route-page__actions {
+  flex: 0 0 auto;
+}
+
+.route-page__actions .btn {
+  min-height: 2.5rem;
+}
+
+.route-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.route-state--error {
+  color: var(--color-danger);
+  border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-border));
+}
+
+.route-state--success {
+  color: var(--color-success);
+  border-color: color-mix(in srgb, var(--color-success) 45%, var(--color-border));
+}
+
+.route-state__title {
+  margin: 0;
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+}
+
+.route-state__message,
+.route-state__message p {
+  margin: 0;
+  color: inherit;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+.route-state__skeleton,
+.route-page-skeleton__header,
+.route-page-skeleton__body {
+  display: grid;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.route-state__skeleton span,
+.route-page-skeleton span {
+  display: block;
+  min-height: 0.8rem;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-sunken) 25%,
+    var(--color-border) 50%,
+    var(--color-surface-sunken) 75%
+  );
+  background-size: 200% 100%;
+  animation: route-skeleton-shimmer 1.4s var(--ease-standard) infinite;
+}
+
+.route-state__skeleton span:nth-child(1) {
+  width: min(16rem, 55%);
+}
+
+.route-state__skeleton span:nth-child(2) {
+  width: min(30rem, 90%);
+}
+
+.route-state__skeleton span:nth-child(3) {
+  width: min(24rem, 72%);
+}
+
+.route-page-skeleton__header span:first-child {
+  width: min(22rem, 58%);
+  min-height: 2.25rem;
+}
+
+.route-page-skeleton__header span:last-child {
+  width: min(34rem, 86%);
+}
+
+.route-page-skeleton__body {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.route-page-skeleton__body span {
+  min-height: 16rem;
+  border-radius: var(--radius-lg);
+}
+
+.form-field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.form-field__label {
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.form-field__hint {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-relaxed);
+}
+
+.form-field__error {
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+}
+
+@keyframes route-skeleton-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (max-width: 40rem) {
+  .route-page__header {
+    flex-direction: column;
+  }
+
+  .route-page__actions,
+  .route-page__actions .btn {
+    width: 100%;
+  }
+
+  .route-page-skeleton__body {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-state__skeleton span,
+  .route-page-skeleton span {
+    animation: none;
+  }
+}
