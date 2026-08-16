@@ -1,4 +1,4 @@
-import { type ReactNode, useId } from 'react'
+import { type ReactNode, useEffect, useId, useRef } from 'react'
 import './StudioFrame.css'
 
 export type StudioView = 'write' | 'mix'
@@ -43,6 +43,11 @@ export function StudioFrame({
   inspectorLabel = 'Inspector',
 }: StudioFrameProps) {
   const inspectorId = useId()
+  const editorRef = useRef<HTMLElement>(null)
+  const viewScroll = useRef<Record<StudioView, { left: number; top: number }>>({
+    write: { left: 0, top: 0 },
+    mix: { left: 0, top: 0 },
+  })
   const hasInspector = Boolean(inspector && inspectorOpen)
   const className = [
     'studio-frame',
@@ -51,6 +56,24 @@ export function StudioFrame({
   ]
     .filter(Boolean)
     .join(' ')
+  const changeView = (nextView: StudioView) => {
+    const viewport = editorRef.current
+    if (viewport) {
+      viewScroll.current[view] = {
+        left: viewport.scrollLeft,
+        top: viewport.scrollTop,
+      }
+    }
+    onViewChange(nextView)
+  }
+  useEffect(() => {
+    const viewport = editorRef.current
+    const scroll = viewScroll.current[view]
+    if (viewport) {
+      viewport.scrollLeft = scroll.left
+      viewport.scrollTop = scroll.top
+    }
+  }, [view])
 
   return (
     <section
@@ -77,6 +100,7 @@ export function StudioFrame({
       ) : null}
 
       <section
+        ref={editorRef}
         className="studio-frame__editor"
         id="studio-editor"
         aria-label="Workspace"
@@ -108,7 +132,7 @@ export function StudioFrame({
             className="studio-frame__view-button"
             data-interaction="studio.view.write"
             aria-pressed={view === 'write'}
-            onClick={() => onViewChange('write')}
+            onClick={() => changeView('write')}
           >
             Write
           </button>
@@ -117,7 +141,7 @@ export function StudioFrame({
             className="studio-frame__view-button"
             data-interaction="studio.view.mix"
             aria-pressed={view === 'mix'}
-            onClick={() => onViewChange('mix')}
+            onClick={() => changeView('mix')}
           >
             Mix
           </button>

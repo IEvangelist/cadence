@@ -295,32 +295,108 @@ test.describe('professional Studio frame', () => {
     })
   }
 
-  test('preserves Write zoom, selection, and scroll state across Mix', async ({ page }) => {
+  test('preserves Write editing state across repeated Mix switches', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 600 })
     await page.goto('/')
+    await page.getByRole('button', { name: 'Inspector' }).click()
+    await page.getByRole('tab', { name: 'Track', exact: true }).click()
+    const showAllTracks = page.locator('[data-interaction="studio.track.visibility-all"]')
+    await showAllTracks.click()
+    await expect(showAllTracks).toHaveAttribute('aria-pressed', 'true')
+    await page.getByRole('button', { name: 'Inspector' }).click()
+
     const roll = page.locator('.pr-scroll')
-    const note = page.locator('.pr-note').first()
+    const editorViewport = page.locator('[data-studio-scroll="editor"]')
+    const grid = page.getByRole('application', { name: /Note grid/ })
+    const note = page.locator('.pr-note:not(.is-ghost)').first()
     await note.click()
-    await page.getByRole('button', { name: 'Zoom in horizontally (time)' }).click()
+    const velocity = page.locator('.pr-vel-bar').first()
+    const velocityBefore = await velocity.getAttribute('aria-label')
+    await velocity.focus()
+    await page.keyboard.press('ArrowDown')
+    const velocityAfter = await velocity.getAttribute('aria-label')
+    expect(velocityAfter).not.toBe(velocityBefore)
+
+    await grid.focus()
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowUp')
+    const caret = page.locator('.pr-caret')
+    await note.click()
+    await expect(note).toHaveClass(/is-selected/)
+
+    for (let step = 0; step < 3; step += 1) {
+      await page.getByRole('button', { name: 'Zoom in horizontally (time)' }).click()
+    }
+    for (let step = 0; step < 8; step += 1) {
+      await page.getByRole('button', { name: 'Zoom in vertically (pitch)' }).click()
+    }
+    const caretStyle = await caret.getAttribute('style')
     const zoom = await page.locator('.pr-zoom-readout').textContent()
-    await roll.evaluate((element) => {
-      element.scrollLeft = 80
-      element.scrollTop = 40
-    })
-    const scroll = await roll.evaluate((element) => ({
-      left: element.scrollLeft,
-      top: element.scrollTop,
+    const horizontalExtent = await roll.evaluate((element) => ({
+      client: element.clientWidth,
+      scroll: element.scrollWidth,
     }))
+    const verticalExtent = await editorViewport.evaluate((element) => ({
+      client: element.clientHeight,
+      scroll: element.scrollHeight,
+    }))
+    expect(horizontalExtent.scroll).toBeGreaterThan(horizontalExtent.client + 20)
+    expect(verticalExtent.scroll).toBeGreaterThan(verticalExtent.client + 20)
+    await roll.evaluate((element) => {
+      element.scrollLeft = 240
+    })
+    await editorViewport.evaluate((element) => {
+      element.scrollTop = 500
+    })
+    const horizontalScroll = await roll.evaluate((element) => element.scrollLeft)
+    const verticalScroll = await editorViewport.evaluate((element) => element.scrollTop)
+    expect(horizontalScroll).toBeGreaterThan(20)
+    expect(
+      verticalScroll,
+      'editor viewport did not establish substantive vertical scroll',
+    ).toBeGreaterThan(20)
+
+    const writeSurface = page.locator('[data-studio-surface="write"]')
+    const mixSurface = page.locator('[data-studio-surface="mix"]')
 
     for (let pass = 0; pass < 2; pass += 1) {
       await page.getByRole('button', { name: 'Mix', exact: true }).click()
-      await expect(page.getByRole('region', { name: 'Mixer' })).toBeVisible()
+      const mixer = page.getByRole('region', { name: 'Mixer' })
+      await expect(mixer).toBeVisible()
+      await expect(writeSurface).toBeHidden()
+      await expect(writeSurface).toHaveAttribute('inert', '')
+      await expect(mixSurface).not.toHaveAttribute('inert')
+      const mixControl = mixer.getByRole('slider').first()
+      await mixControl.focus()
+      await expect(mixControl).toBeFocused()
+      await page.getByRole('button', { name: 'Mix', exact: true }).focus()
+      await page.keyboard.press('Tab')
+      expect(
+        await page.evaluate(() =>
+          Boolean(document.activeElement?.closest('[data-studio-surface="write"]')),
+        ),
+      ).toBe(false)
       await page.getByRole('button', { name: 'Write', exact: true }).click()
+      await expect(writeSurface).toBeVisible()
+      await expect(writeSurface).not.toHaveAttribute('inert')
+      await expect(mixSurface).toHaveAttribute('inert', '')
     }
 
     await expect(page.locator('.pr-zoom-readout')).toHaveText(zoom ?? '')
     await expect(note).toHaveClass(/is-selected/)
-    await expect.poll(() => roll.evaluate((element) => element.scrollLeft)).toBe(scroll.left)
-    await expect.poll(() => roll.evaluate((element) => element.scrollTop)).toBe(scroll.top)
+    await expect(velocity).toHaveAttribute('aria-label', velocityAfter ?? '')
+    await expect(caret).toHaveAttribute('style', caretStyle ?? '')
+    await expect.poll(() => roll.evaluate((element) => element.scrollLeft)).toBe(horizontalScroll)
+    await expect.poll(() => editorViewport.evaluate((element) => element.scrollTop)).toBe(
+      verticalScroll,
+    )
+    await page.getByRole('button', { name: 'Inspector' }).click()
+    await page.getByRole('tab', { name: 'Track', exact: true }).click()
+    await expect(page.locator('[data-interaction="studio.track.visibility-all"]')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
   })
 
   test('keeps the informational footer off Studio and available on routed pages', async ({

@@ -270,17 +270,53 @@ test.describe('production interaction contract', () => {
     baseURL,
   }) => {
     const observed = new Set<string>()
+    await page.addInitScript(() => {
+      const inputs = [
+        { id: 'contract-a', name: 'Contract Keys', onmidimessage: null },
+        { id: 'contract-b', name: 'Contract Pads', onmidimessage: null },
+      ]
+      const access = {
+        inputs: new Map(inputs.map((input) => [input.id, input])),
+        outputs: new Map(),
+        onstatechange: null,
+        sysexEnabled: false,
+      }
+      let resolveAccess: ((value: typeof access) => void) | undefined
+      const pending = new Promise<typeof access>((resolve) => {
+        resolveAccess = resolve
+      })
+      Object.defineProperty(navigator, 'requestMIDIAccess', {
+        configurable: true,
+        value: () => pending,
+      })
+      ;(window as unknown as { __resolveContractMidi?: () => void }).__resolveContractMidi =
+        () => resolveAccess?.(access)
+    })
     await page.route('**/api/**', (route) => mockApi(route, false))
     await page.goto('/')
 
     await assertInteractionContract(page, 'studio', observed)
+    expect(observed.has('studio.midi.device')).toBe(false)
+    expect(observed.has('studio.midi.quantize')).toBe(false)
 
     const midiSettings = page.getByRole('button', { name: 'MIDI', exact: true })
-    if (await midiSettings.isVisible().catch(() => false)) {
-      await midiSettings.click()
-      await assertInteractionContract(page, 'MIDI settings', observed)
-      await page.keyboard.press('Escape')
-    }
+    await expect(midiSettings).toBeVisible({ timeout: 10_000 })
+    await midiSettings.click()
+    const midiDevice = page.getByRole('combobox', { name: 'MIDI device' })
+    await expect(midiDevice).toBeDisabled()
+    await page.evaluate(() => {
+      ;(window as unknown as { __resolveContractMidi?: () => void }).__resolveContractMidi?.()
+    })
+    await expect(midiDevice).toBeEnabled()
+    await expect(midiDevice).toHaveValue('contract-a')
+    await midiDevice.selectOption('contract-b')
+    await expect(midiDevice).toHaveValue('contract-b')
+    await page.getByRole('checkbox', { name: 'Quantize while recording' }).check()
+    await expect(page.getByRole('checkbox', { name: 'Quantize while recording' })).toBeChecked()
+    await assertInteractionContract(page, 'MIDI settings', observed)
+    expect(observed.has('studio.midi.device')).toBe(true)
+    expect(observed.has('studio.midi.quantize')).toBe(true)
+    await page.keyboard.press('Escape')
 
     await page.getByRole('button', { name: 'Choose theme' }).click()
     await assertInteractionContract(page, 'theme menu', observed)
@@ -454,6 +490,7 @@ test.describe('production interaction contract', () => {
 
     await authenticatedPage.getByRole('button', { name: 'Profile' }).click()
     await expect(authenticatedPage.getByRole('heading', { name: 'Your profile' })).toBeVisible()
+    await expect(authenticatedPage.getByRole('textbox', { name: 'Display name' })).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'profile', observed)
 
     await authenticatedPage.getByRole('button', { name: 'Back to composer' }).click()
