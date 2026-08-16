@@ -39,6 +39,7 @@ test.describe('composer', () => {
     await page.goto('/')
     const rail = page.getByRole('complementary', { name: 'Track rail' })
     const deletes = rail.locator('[data-interaction="studio.track.delete"]')
+    await expect(deletes.first()).toBeVisible()
     const before = await deletes.count()
     await rail.getByRole('button', { name: 'Add track' }).click()
     await expect(deletes).toHaveCount(before + 1)
