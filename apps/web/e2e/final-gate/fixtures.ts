@@ -355,3 +355,23 @@ export async function installFinalGateFixture(
   )
   return state
 }
+
+export async function openDeterministicProject(page: Page): Promise<void> {
+  const projectName = page.getByLabel('Project name')
+  if (
+    (await projectName.isVisible().catch(() => false)) &&
+    (await projectName.inputValue()) === 'Final Gate Fixture'
+  ) {
+    return
+  }
+
+  const recentProject = page.getByRole('button', {
+    name: /Final Gate Fixture/,
+  })
+  if ((await recentProject.count()) > 0) {
+    await recentProject.click()
+  } else {
+    await page.getByLabel('Open project').selectOption('final-gate-project')
+  }
+  await projectName.waitFor({ state: 'visible' })
+}

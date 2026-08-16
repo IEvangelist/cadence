@@ -4,7 +4,10 @@ import {
   buildInteractionCoverageReport,
   writeInteractionCoverageReport,
 } from './interaction-report'
-import { installFinalGateFixture } from './fixtures'
+import {
+  installFinalGateFixture,
+  openDeterministicProject,
+} from './fixtures'
 import {
   activateFocused,
   expectVisibleFocusIndicator,
@@ -20,14 +23,7 @@ test.describe('final-gate infrastructure', () => {
     await page.goto('/')
     await waitForStableCapture(page)
 
-    const recentProject = page.getByRole('button', {
-      name: /Final Gate Fixture/,
-    })
-    if ((await recentProject.count()) > 0) {
-      await recentProject.click()
-    } else {
-      await page.getByLabel('Open project').selectOption('final-gate-project')
-    }
+    await openDeterministicProject(page)
     await expect(page.getByLabel('Project name')).toHaveValue(
       'Final Gate Fixture',
     )
