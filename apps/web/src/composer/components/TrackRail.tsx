@@ -3,6 +3,7 @@ import type { ComposerController } from '../hooks/useComposer'
 import type { Track } from '../model/project'
 import { getInstrument } from '../instruments/registry'
 import { trackRequiresDeleteConfirmation } from './trackRailModel'
+import { DialogSurface } from '../../ui/Dialog'
 import './EditorWorkspace.css'
 
 interface TrackRailProps {
@@ -23,11 +24,9 @@ export function TrackRail({
     removeTrack,
     visibleTrackIds,
     toggleTrackVisibility,
-    setAllTracksVisible,
   } = controller
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const visible = new Set(visibleTrackIds)
-  const allVisible = project.tracks.every((track) => visible.has(track.id))
   const pendingTrack = project.tracks.find((track) => track.id === pendingDeleteId)
 
   const requestDelete = (track: Track): void => {
@@ -120,10 +119,18 @@ export function TrackRail({
         })}
       </ol>
 
-      {pendingTrack ? (
-        <div className="track-delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="track-delete-title">
-          <h2 id="track-delete-title">Delete {pendingTrack.name}?</h2>
-          <p>This removes its notes, automation, and mix settings.</p>
+      <DialogSurface
+        open={pendingTrack !== undefined}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteId(null)
+        }}
+        title={<h2>Delete {pendingTrack?.name}?</h2>}
+        description={<p>This removes its notes, automation, and mix settings.</p>}
+        contentClassName="track-delete-dialog"
+        role="alertdialog"
+      >
+        {pendingTrack ? (
+          <>
           <div>
             <button
               type="button"
@@ -145,8 +152,9 @@ export function TrackRail({
               Cancel
             </button>
           </div>
-        </div>
-      ) : null}
+          </>
+        ) : null}
+      </DialogSurface>
     </section>
   )
 }
