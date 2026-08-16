@@ -35,6 +35,9 @@ function HistoryHarness() {
       <button type="button" onClick={controller.undo} disabled={!controller.canUndo}>
         Undo history
       </button>
+      <button type="button" onClick={controller.redo} disabled={!controller.canRedo}>
+        Redo history
+      </button>
       <output aria-label="Note state">
         {note ? `${note.start}:${note.pitch}:${note.velocity}` : 'none'}
       </output>
@@ -221,6 +224,10 @@ describe('<PianoRoll />', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Undo history' }))
     expect(screen.getByRole('status', { name: 'Note state' })).toHaveTextContent(
       `0:${initialPitch}:0.8`,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Redo history' }))
+    expect(screen.getByRole('status', { name: 'Note state' })).toHaveTextContent(
+      `0:${initialPitch}:0.4`,
     )
   })
 

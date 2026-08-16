@@ -115,6 +115,12 @@ export interface NoteRevealRequest {
   token: number
 }
 
+export interface ProjectTransition {
+  project: Project
+  group: string | null
+  boundary: number
+}
+
 /**
  * Live MIDI hardware input surface (#111). INTERNAL — the frozen public
  * {@link ComposerPublicApi} intentionally excludes it.
@@ -216,6 +222,10 @@ export interface ComposerController {
   historyCaptureBoundary: number
   /** Finish the current local/collaborative gesture capture group. */
   stopHistoryCapture: () => void
+  /** Subscribe to every local document transition before React can batch renders. */
+  subscribeProjectTransitions: (
+    listener: (transition: ProjectTransition) => void,
+  ) => () => void
 
   play: () => void
   pause: () => void
@@ -486,6 +496,10 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   // `Y.UndoManager` (see `setHistoryEnabled`) — see the interface doc on
   // `ComposerController.setHistoryEnabled`.
   const historyEnabledRef = useRef(true)
+  const historyCaptureBoundaryRef = useRef(0)
+  const projectTransitionListenersRef = useRef(
+    new Set<(transition: ProjectTransition) => void>(),
+  )
   // Mirrors `historyRef`'s `canUndo()`/`canRedo()` into real React state —
   // reading a ref's `.current` during render (e.g. inline in the returned
   // object) is not safe, so every mutation point below explicitly syncs these
@@ -508,9 +522,10 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
       // Applying an undo/redo snapshot must never itself become a new entry.
     } else if (HISTORY_RESET_ACTIONS.has(action.type)) {
       historyRef.current!.clear()
-      setHistoryCapture((current) => ({
+      historyCaptureBoundaryRef.current += 1
+      setHistoryCapture(() => ({
         group: null,
-        boundary: current.boundary + 1,
+        boundary: historyCaptureBoundaryRef.current,
       }))
       syncHistoryFlags()
     } else if (!HISTORY_IGNORED_ACTIONS.has(action.type)) {
@@ -525,6 +540,16 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
       ) {
         historyRef.current!.push(beforeState.project, nextState.project, groupKey)
         syncHistoryFlags()
+      }
+      if (nextState.project !== beforeState.project) {
+        const transition: ProjectTransition = {
+          project: nextState.project,
+          group: groupKey ?? null,
+          boundary: historyCaptureBoundaryRef.current,
+        }
+        for (const listener of projectTransitionListenersRef.current) {
+          listener(transition)
+        }
       }
     }
     rawDispatch(action)
@@ -552,11 +577,19 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   )
   const stopHistoryCapture = useCallback(() => {
     historyRef.current!.stopCapturing()
-    setHistoryCapture((current) => ({
+    historyCaptureBoundaryRef.current += 1
+    setHistoryCapture(() => ({
       group: null,
-      boundary: current.boundary + 1,
+      boundary: historyCaptureBoundaryRef.current,
     }))
   }, [])
+  const subscribeProjectTransitions = useCallback(
+    (listener: (transition: ProjectTransition) => void) => {
+      projectTransitionListenersRef.current.add(listener)
+      return () => projectTransitionListenersRef.current.delete(listener)
+    },
+    [],
+  )
   const [snap, setSnap] = useState(0.25)
   const [transportState, setTransportState] = useState<TransportState>('stopped')
   const [positionBeats, setPositionBeats] = useState(0)
@@ -1696,6 +1729,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     historyCaptureGroup: historyCapture.group,
     historyCaptureBoundary: historyCapture.boundary,
     stopHistoryCapture,
+    subscribeProjectTransitions,
     play,
     pause,
     stop,

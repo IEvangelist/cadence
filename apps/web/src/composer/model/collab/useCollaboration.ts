@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type * as Y from 'yjs'
 import type { Awareness } from 'y-protocols/awareness'
 import type { Project } from './../project'
+import type { ProjectTransition } from '../../hooks/useComposer'
 import {
   type CollabPresence,
   type CollabUser,
@@ -60,6 +61,10 @@ export interface CollabBinding {
   historyCaptureGroup?: string | null
   /** Explicit pointer/field boundary; changes seal the current Yjs capture item. */
   historyCaptureBoundary?: number
+  /** Per-dispatch local transitions, preventing React batching from merging commands. */
+  subscribeProjectTransitions?: (
+    listener: (transition: ProjectTransition) => void,
+  ) => () => void
 }
 
 export interface CollaborationState {
@@ -125,6 +130,27 @@ export function useCollaboration(
   const userId = config?.user.id
   const userName = config?.user.name
   const userColor = config?.user.color
+  const subscribeProjectTransitions = binding.subscribeProjectTransitions
+
+  const pushTransition = useCallback(
+    (
+      session: ReturnType<typeof createCollabSession>,
+      transition: ProjectTransition,
+    ) => {
+      if (transition.boundary !== lastCaptureBoundaryRef.current) {
+        session.stopCapturing()
+        lastCaptureBoundaryRef.current = transition.boundary
+        lastCaptureGroupRef.current = null
+      }
+      if (!transition.group || transition.group !== lastCaptureGroupRef.current) {
+        session.stopCapturing()
+      }
+      session.pushLocalProject(transition.project)
+      if (!transition.group) session.stopCapturing()
+      lastCaptureGroupRef.current = transition.group
+    },
+    [],
+  )
 
   // Reset happens via the previous run's cleanup; the hook returns INERT while
   // config is null, so no state writes are needed here (and none should run
@@ -169,6 +195,10 @@ export function useCollaboration(
       setUndoState({ canUndo: session.canUndo(), canRedo: session.canRedo() }),
     )
     const offStatus = provider.onStatus?.((isConnected) => setConnected(isConnected))
+    const offProjectTransitions = subscribeProjectTransitions?.((transition) => {
+      if (!mirrorReadyRef.current) return
+      pushTransition(session, transition)
+    })
     const offSynced = provider.onSynced?.(() => {
       // First client seeds the empty doc; joiners no-op and adopt via sync.
       session.seedIfEmpty(bindingRef.current.project)
@@ -191,6 +221,7 @@ export function useCollaboration(
       offPresence()
       offUndoStack()
       offStatus?.()
+      offProjectTransitions?.()
       offSynced?.()
       session.destroy()
       provider.destroy()
@@ -210,20 +241,29 @@ export function useCollaboration(
     userName,
     userColor,
     providerFactory,
+    pushTransition,
+    subscribeProjectTransitions,
   ])
 
   // Mirror local project edits into the shared doc (echo-safe; viewers no-op).
   // Skipped until the initial sync so a joiner never duplicates the seed.
   useEffect(() => {
+    if (subscribeProjectTransitions) return
     if (!mirrorReadyRef.current) return
     const session = sessionRef.current
     if (!session) return
-    const group = binding.historyCaptureGroup ?? null
-    if (!group || group !== lastCaptureGroupRef.current) session.stopCapturing()
-    session.pushLocalProject(binding.project)
-    if (!group) session.stopCapturing()
-    lastCaptureGroupRef.current = group
-  }, [binding.project, binding.historyCaptureGroup])
+    pushTransition(session, {
+      project: binding.project,
+      group: binding.historyCaptureGroup ?? null,
+      boundary: binding.historyCaptureBoundary ?? 0,
+    })
+  }, [
+    binding.historyCaptureBoundary,
+    binding.historyCaptureGroup,
+    binding.project,
+    pushTransition,
+    subscribeProjectTransitions,
+  ])
 
   useEffect(() => {
     const boundary = binding.historyCaptureBoundary ?? 0

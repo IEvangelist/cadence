@@ -1,8 +1,12 @@
+import { useEffect } from 'react'
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as Y from 'yjs'
 import { Awareness } from 'y-protocols/awareness'
 import { createEmptyProject, createNote, createTrack, type Project } from './../project'
+import { SilentAudioEngine } from '../../audio/engine'
+import { useComposer } from '../../hooks/useComposer'
+import { LocalStorageProjectStore, MemoryStorage } from '../storage'
 import { readProject, reconcileDoc } from './crdt'
 import {
   type CollabBinding,
@@ -432,13 +436,22 @@ describe('useCollaboration — collaborative undo/redo (#156)', () => {
         initialProps: {
           ...binding,
           historyCaptureGroup: null,
-          historyCaptureBoundary: 1,
+          historyCaptureBoundary: 0,
         } as CollabBinding,
       },
     )
 
-    let edited = project
-    for (const velocity of [0.6, 0.4, 0.2]) {
+    let edited = structuredClone(project)
+    edited.tracks[0].notes[0].velocity = 0.6
+    act(() =>
+      rerender({
+        ...binding,
+        project: edited,
+        historyCaptureGroup: 'update-note:track_a:n1',
+        historyCaptureBoundary: 1,
+      }),
+    )
+    for (const velocity of [0.4, 0.2]) {
       edited = structuredClone(edited)
       edited.tracks[0].notes[0].velocity = velocity
       act(() =>
@@ -462,6 +475,9 @@ describe('useCollaboration — collaborative undo/redo (#156)', () => {
     act(() => result.current.undo())
     expect(readProject(providers[0].doc).tracks[0].notes[0].velocity).toBe(0.8)
     expect(result.current.canUndo).toBe(false)
+    expect(result.current.canRedo).toBe(true)
+    act(() => result.current.redo())
+    expect(readProject(providers[0].doc).tracks[0].notes[0].velocity).toBe(0.2)
   })
 
   it('uses a pointercancel boundary to separate two gestures on the same note', () => {
@@ -515,5 +531,58 @@ describe('useCollaboration — collaborative undo/redo (#156)', () => {
     expect(readProject(providers[0].doc).tracks[0].notes[0].start).toBe(0.2)
     act(() => result.current.undo())
     expect(readProject(providers[0].doc).tracks[0].notes[0].start).toBe(0)
+  })
+
+  it('keeps two synchronously batched controller commands as separate Yjs undo items', () => {
+    const initialProject = seedProject()
+    const store = new LocalStorageProjectStore(new MemoryStorage())
+
+    const { result } = renderHook(() => {
+      const controller = useComposer({
+        createEngine: () => new SilentAudioEngine(),
+        store,
+        initialProject,
+        autosaveDelay: 0,
+      })
+      const collaboration = useCollaboration(
+        {
+          project: controller.project,
+          selectedTrackId: controller.selectedTrackId,
+          selectedNoteIds: controller.state.selectedNoteIds,
+          applyRemoteProject: controller.applyRemoteProject,
+          historyCaptureGroup: controller.historyCaptureGroup,
+          historyCaptureBoundary: controller.historyCaptureBoundary,
+          subscribeProjectTransitions: controller.subscribeProjectTransitions,
+        },
+        config,
+        factory,
+      )
+      const setHistoryEnabled = controller.setHistoryEnabled
+      useEffect(() => {
+        setHistoryEnabled(!collaboration.active)
+      }, [collaboration.active, setHistoryEnabled])
+      return { collaboration, controller }
+    })
+
+    const trackId = result.current.controller.selectedTrackId
+    act(() => {
+      result.current.controller.addNoteAt(trackId, 64, 1)
+      result.current.controller.addNoteAt(trackId, 67, 2)
+    })
+    expect(readProject(providers[0].doc).tracks[0].notes).toHaveLength(3)
+
+    const remote = readProject(providers[0].doc)
+    remote.tracks[0].notes.push(createNote({ pitch: 72, start: 4 }, 'remote-batch'))
+    act(() => reconcileDoc(providers[0].doc, remote, 'remote-peer'))
+
+    act(() => result.current.collaboration.undo())
+    let notes = readProject(providers[0].doc).tracks[0].notes
+    expect(notes).toHaveLength(3)
+    expect(notes.map((note) => note.id)).toContain('remote-batch')
+
+    act(() => result.current.collaboration.undo())
+    notes = readProject(providers[0].doc).tracks[0].notes
+    expect(notes).toHaveLength(2)
+    expect(notes.map((note) => note.id)).toContain('remote-batch')
   })
 })
