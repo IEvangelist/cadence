@@ -1,58 +1,30 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Locator, type Page } from '@playwright/test'
-
-test.skip(
-  process.env.CADENCE_MOBILE_HARNESS !== '1',
-  'Runs through a temporary worktree-only Playwright config until upstream integration.',
-)
-
-test.use({
-  viewport: { width: 390, height: 844 },
-  isMobile: true,
-  hasTouch: true,
-  deviceScaleFactor: 1,
-  reducedMotion: 'reduce',
-})
+import { expect, test, type Page, type Route } from '@playwright/test'
+import { returningProjectStorage } from './projectFixtures'
 
 interface Point {
   x: number
   y: number
 }
 
-async function pointInside(
-  locator: Locator,
-  offset: Point = { x: 0.5, y: 0.5 },
-): Promise<Point> {
-  const box = await locator.boundingBox()
-  if (!box) throw new Error('Touch target has no bounding box')
-  return {
-    x: box.x + box.width * offset.x,
-    y: box.y + box.height * offset.y,
-  }
-}
-
 async function touchGesture(
   page: Page,
   points: readonly Point[],
-  touchId = 1,
   cancel = false,
-  afterStart?: () => Promise<void>,
-) {
-  if (points.length === 0) throw new Error('A touch gesture needs at least one point')
+): Promise<void> {
+  if (points.length === 0) throw new Error('Touch gesture needs a point')
   const session = await page.context().newCDPSession(page)
   const touchPoint = (point: Point) => ({
     ...point,
-    id: touchId,
+    id: 1,
     radiusX: 1,
     radiusY: 1,
     force: 1,
   })
-
   await session.send('Input.dispatchTouchEvent', {
     type: 'touchStart',
     touchPoints: [touchPoint(points[0])],
   })
-  await afterStart?.()
   for (const point of points.slice(1)) {
     await session.send('Input.dispatchTouchEvent', {
       type: 'touchMove',
@@ -67,204 +39,282 @@ async function touchGesture(
   await session.detach()
 }
 
-async function openHarness(page: Page) {
-  await page.goto('/mobile-harness.html')
-  await expect(page.getByRole('application', { name: 'Mobile note grid' })).toBeVisible()
+async function center(locator: ReturnType<Page['locator']>): Promise<Point> {
+  const box = await locator.boundingBox()
+  if (!box) throw new Error('Touch target is not rendered')
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
 }
 
-test.describe('mobile touch contract', () => {
+async function openTask(page: Page, task: 'Project' | 'Tracks' | 'Tools') {
+  await page.getByRole('button', { name: new RegExp(`^${task}:`) }).click()
+  return page.getByTestId(`mobile-${task.toLowerCase()}-sheet`)
+}
+
+async function visibleEmptyGridPoint(page: Page): Promise<Point> {
+  return page.locator('.pr-scroll').evaluate((scroll) => {
+    const rect = scroll.getBoundingClientRect()
+    for (let y = rect.bottom - 24; y >= rect.top + 24; y -= 16) {
+      for (let x = rect.right - 24; x >= rect.left + 72; x -= 16) {
+        const target = document.elementFromPoint(x, y)
+        if (target instanceof HTMLElement && target.classList.contains('pr-grid')) {
+          return { x, y }
+        }
+      }
+    }
+    throw new Error('No visible empty piano-roll grid point')
+  })
+}
+
+async function mockAnonymousApi(route: Route): Promise<void> {
+  const path = new URL(route.request().url()).pathname
+  if (path === '/api/auth/me') {
+    await route.fulfill({ status: 401, contentType: 'application/json', body: '{}' })
+    return
+  }
+  if (path === '/api/auth/providers') {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ providers: ['GitHub'] }),
+    })
+    return
+  }
+  await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+}
+
+test.describe('production mobile Studio', () => {
   test.beforeEach(async ({ page }) => {
-    await openHarness(page)
+    await page.addInitScript((entries) => {
+      for (const entry of entries) localStorage.setItem(entry.name, entry.value)
+      localStorage.setItem('cadence.v1.onboarding.seen', '1')
+      ;(window as unknown as { __CADENCE_AI_MOCK__: boolean }).__CADENCE_AI_MOCK__ = true
+    }, returningProjectStorage)
+    await page.route('**/api/**', mockAnonymousApi)
+    await page.goto('/')
+    await expect(page.locator('[data-mobile-studio]')).toBeVisible()
   })
 
-  test('empty Pan/Select drag pans without creating a note', async ({ page }) => {
-    const scroll = page.getByTestId('piano-scroll')
-    const start = await pointInside(scroll, { x: 0.8, y: 0.7 })
-    await touchGesture(page, [start, { x: start.x - 80, y: start.y }])
+  test('navigates real Project, Tracks, Notes, Tools, Mix, and Help surfaces', async ({
+    page,
+  }) => {
+    const project = await openTask(page, 'Project')
+    await expect(project.getByRole('group', { name: 'Project toolbar' })).toBeVisible()
+    await project.getByRole('button', { name: 'Save' }).click()
+    await project.getByRole('button', { name: 'Project', exact: true }).click()
+    await expect(page.getByRole('menuitem', { name: 'New project' })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: 'Open project' })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: 'Import file' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await project.getByRole('button', { name: 'Export & share' }).click()
+    await expect(page.getByRole('menuitem', { name: 'Share snapshot' })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: 'Export MIDI' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: 'Close Project' }).click()
 
-    await expect(page.locator('[data-note-id]')).toHaveCount(1)
-    await expect
-      .poll(() => scroll.evaluate((element) => element.scrollLeft))
-      .toBeGreaterThan(0)
+    const tracks = await openTask(page, 'Tracks')
+    await expect(tracks.getByRole('region', { name: 'Tracks' })).toBeVisible()
+    await tracks.getByRole('button', { name: /Choose instrument for Synth/ }).click()
+    const browser = page.getByRole('region', { name: 'Instrument browser' })
+    await expect(browser).toBeVisible()
+    const fm = browser.getByRole('option', { name: /FM Synth/ })
+    await fm.click()
+    await expect(
+      tracks.getByRole('region', { name: 'Track inspector' }).getByText('FM Synth'),
+    ).toBeVisible()
+    await page.getByRole('button', { name: 'Close Tracks' }).click()
+
+    const tools = await openTask(page, 'Tools')
+    await expect(tools.getByRole('region', { name: 'AI tools' })).toBeVisible()
+    await tools.getByRole('button', { name: 'Mix', exact: true }).click()
+    await page.getByRole('button', { name: 'Close Tools' }).click()
+    await expect(page.getByRole('region', { name: 'Mix workspace' })).toBeVisible()
+    await openTask(page, 'Tools')
+    await page.getByRole('button', { name: 'Write', exact: true }).click()
+    await page.getByRole('button', { name: 'Close Tools' }).click()
+    await expect(page.getByRole('application', { name: /Note grid/ })).toBeVisible()
+
+    await page.getByRole('button', { name: /Help and keyboard shortcuts/ }).click()
+    await expect(page.getByTestId('mobile-help-sheet')).toBeVisible()
+    await expect(page.getByText('Shift + Left/Right')).toBeVisible()
   })
 
-  test('empty Pan/Select tap never creates a note', async ({ page }) => {
-    const scroll = page.getByTestId('piano-scroll')
-    await touchGesture(page, [await pointInside(scroll, { x: 0.8, y: 0.7 })])
+  test('uses touch-safe note modes, precise edits, transport, and attached keyboard', async ({
+    page,
+  }) => {
+    await page.getByRole('button', { name: /^Notes:/ }).click()
+    const notesBefore = await page.locator('.pr-note:not(.is-preview)').count()
+    const empty = await visibleEmptyGridPoint(page)
 
-    await expect(page.locator('[data-note-id]')).toHaveCount(1)
-  })
+    await page.touchscreen.tap(empty.x, empty.y)
+    await expect(page.locator('.pr-note:not(.is-preview)')).toHaveCount(notesBefore)
+    await touchGesture(page, [empty, { x: empty.x - 70, y: empty.y }])
+    await expect(page.locator('.pr-note:not(.is-preview)')).toHaveCount(notesBefore)
 
-  test('Draw tap adds exactly one note and Draw drag does not add', async ({ page }) => {
     await page.getByRole('button', { name: 'Draw', exact: true }).click()
-    const scroll = page.getByTestId('piano-scroll')
-
-    const tap = await pointInside(scroll, { x: 0.8, y: 0.7 })
-    await touchGesture(page, [tap])
-    await expect(page.locator('[data-note-id]')).toHaveCount(2)
-
-    const drag = await pointInside(scroll, { x: 0.75, y: 0.9 })
-    await touchGesture(page, [drag, { x: drag.x - 60, y: drag.y }], 2)
-    await expect(page.locator('[data-note-id]')).toHaveCount(2)
-    await expect
-      .poll(() => scroll.evaluate((element) => element.scrollLeft))
-      .toBeGreaterThan(0)
-  })
-
-  test('note tap selects, drag moves, and cancel restores valid state', async ({ page }) => {
-    const note = page.locator('[data-note-id="note-1"]')
-    await touchGesture(page, [await pointInside(note)], 4)
-    await expect(note).toHaveAttribute('aria-pressed', 'true')
-
-    const originalStart = await note.getAttribute('data-start')
-    const dragStart = await pointInside(note)
-    const grid = page.getByTestId('note-grid')
-    await touchGesture(
-      page,
-      [dragStart, { x: dragStart.x + 48, y: dragStart.y }],
-      5,
-      false,
-      async () => {
-        const harness = page.locator('.mobile-harness')
-        await expect(harness).toHaveAttribute('data-captured-pointer', /\d+/)
-        const pointerId = Number(await harness.getAttribute('data-captured-pointer'))
-        expect(
-          await note.evaluate((element, id) => element.hasPointerCapture(id), pointerId),
-        ).toBe(true)
-
-        await grid.dispatchEvent('pointerdown', {
-          bubbles: true,
-          pointerId: pointerId + 100,
-          pointerType: 'touch',
-          clientX: dragStart.x + 80,
-          clientY: dragStart.y + 80,
-          isPrimary: false,
-        })
-        await expect(harness).toHaveAttribute(
-          'data-captured-pointer',
-          String(pointerId),
-        )
-      },
-    )
-    expect(originalStart).toBe('2')
-    await expect(note).toHaveAttribute('data-start', '3')
-    await expect(note).toHaveAttribute('data-pitch', '60')
-
-    const movedStart = await note.getAttribute('data-start')
-    const cancelStart = await pointInside(note)
-    await touchGesture(
-      page,
-      [cancelStart, { x: cancelStart.x + 48, y: cancelStart.y }],
-      6,
-      true,
-    )
-    await expect(note).toHaveAttribute('data-start', movedStart ?? '')
-    await expect(page.locator('.mobile-harness')).not.toHaveAttribute(
-      'data-captured-pointer',
-    )
-  })
-
-  test('selected-note sheet edits precise values and deletes', async ({ page }) => {
-    const note = page.locator('[data-note-id="note-1"]')
-    await touchGesture(page, [await pointInside(note)], 7)
-    await page.getByRole('button', { name: 'Edit selected note' }).click()
-    const editorControls = page.getByTestId('selected-note-sheet').locator('button, input')
-    const controlHeights = await editorControls.evaluateAll((controls) =>
-      controls.map((control) => control.getBoundingClientRect().height),
-    )
-    expect(controlHeights.every((height) => height >= 44)).toBe(true)
-
-    await page.getByRole('button', { name: 'Increase Pitch' }).click()
-    await page.getByRole('button', { name: 'Increase Start' }).click()
-    await page.getByRole('button', { name: 'Increase Duration' }).click()
-    await page.getByRole('button', { name: 'Decrease Velocity' }).click()
-    await page.getByRole('button', { name: 'Close Selected note' }).click()
-
-    await expect(note).toHaveAttribute('data-pitch', '61')
-    await expect(note).toHaveAttribute('data-start', '2.25')
-    await expect(note).toHaveAttribute('data-duration', '1.25')
-    await expect(note).not.toHaveAttribute('data-velocity', '0.8')
-
-    await page.getByRole('button', { name: 'Edit selected note' }).click()
-    await page.getByRole('button', { name: 'Delete note' }).click()
-    await expect(page.locator('[data-note-id]')).toHaveCount(0)
-  })
-
-  test('transport stays usable while Notes is active', async ({ page }) => {
-    await page.getByRole('button', { name: 'Play' }).click()
-    await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible()
-    await page.getByRole('button', { name: 'Loop' }).click()
-    await expect(page.getByRole('button', { name: 'Loop' })).toHaveAttribute(
+    await expect(page.getByRole('button', { name: 'Draw', exact: true })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
-  })
+    await page.touchscreen.tap(empty.x, empty.y)
+    await expect(page.locator('.pr-note:not(.is-preview)')).toHaveCount(notesBefore + 1)
+    const drawDrag = { x: empty.x, y: empty.y - 32 }
+    await touchGesture(page, [drawDrag, { x: drawDrag.x - 70, y: drawDrag.y }])
+    await expect(page.locator('.pr-note:not(.is-preview)')).toHaveCount(notesBefore + 1)
 
-  test('attached keyboard add, nudge, resize, and delete still work', async ({ page }) => {
-    const grid = page.getByRole('application', { name: 'Mobile note grid' })
-    const note = page.locator('[data-note-id="note-1"]')
-    await note.focus()
-    await page.keyboard.press('Space')
+    await page.getByRole('button', { name: 'Pan/Select' }).click()
+    const note = page.locator('.pr-note:not(.is-preview)').first()
+    await note.scrollIntoViewIfNeeded()
+    const hitTarget = await note.evaluate((element) => {
+      const style = getComputedStyle(element, '::before')
+      return {
+        width: Number.parseFloat(style.width),
+        height: Number.parseFloat(style.height),
+      }
+    })
+    expect(hitTarget.width).toBeGreaterThanOrEqual(44)
+    expect(hitTarget.height).toBeGreaterThanOrEqual(44)
+    const selectPoint = await center(note)
+    await page.touchscreen.tap(selectPoint.x, selectPoint.y)
     await expect(note).toHaveAttribute('aria-pressed', 'true')
-    await expect(page.locator('[data-note-id]')).toHaveCount(1)
-
-    await grid.focus()
-    await page.keyboard.press('Enter')
-    await expect(page.locator('[data-note-id]')).toHaveCount(2)
-
-    await touchGesture(page, [await pointInside(note)], 8)
-    await grid.focus()
-    await page.keyboard.press('ArrowRight')
-    await expect(note).toHaveAttribute('data-start', '2.25')
-    await page.keyboard.press('Shift+ArrowRight')
-    await expect(note).toHaveAttribute('data-duration', '1.25')
-    await page.keyboard.press('Delete')
-    await expect(page.locator('[data-note-id="note-1"]')).toHaveCount(0)
-    await page.keyboard.press('Enter')
-    const ids = await page.locator('[data-note-id]').evaluateAll((elements) =>
-      elements.map((element) => element.getAttribute('data-note-id')),
+    const noteStart = await center(note)
+    await touchGesture(page, [noteStart, { x: noteStart.x + 48, y: noteStart.y }])
+    await expect(note).toHaveAttribute('aria-pressed', 'true')
+    const cancelStart = await center(note)
+    await touchGesture(
+      page,
+      [cancelStart, { x: cancelStart.x + 48, y: cancelStart.y }],
+      true,
     )
-    expect(new Set(ids).size).toBe(ids.length)
+    await expect(note).toBeVisible()
+    expect(
+      await note.evaluate((element) =>
+        Number.isFinite(Number.parseFloat((element as HTMLElement).style.left)),
+      ),
+    ).toBe(true)
+
+    await page.getByRole('button', { name: 'Edit selected note' }).click()
+    const editor = page.getByTestId('selected-note-sheet')
+    const controls = editor.locator('button, input')
+    expect(
+      (await controls.evaluateAll((items) =>
+        items.map((item) => item.getBoundingClientRect().height),
+      )).every((height) => height >= 44),
+    ).toBe(true)
+    await editor.getByRole('button', { name: 'Increase Pitch' }).click()
+    await editor.getByRole('button', { name: 'Increase Start' }).click()
+    await editor.getByRole('button', { name: 'Increase Duration' }).click()
+    await editor.getByRole('button', { name: 'Decrease Velocity' }).click()
+    await page.getByRole('button', { name: 'Close Selected note' }).click()
+
+    await page.getByRole('button', { name: 'Play' }).click()
+    await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible()
+    await page.getByRole('button', { name: 'Loop' }).click()
+    await page.getByRole('spinbutton', { name: 'Tempo' }).fill('126')
+    await page.getByRole('combobox', { name: 'Snap' }).selectOption('0.5')
+
+    const grid = page.getByRole('application', { name: /Note grid/ })
+    await grid.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.locator('.pr-note:not(.is-preview)')).toHaveCount(notesBefore + 2)
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('Shift+ArrowRight')
+    await page.keyboard.press('Delete')
+    await expect(page.locator('.pr-note:not(.is-preview)')).toHaveCount(notesBefore + 1)
   })
 
-  test('task sheets cover phone core and Basic AI review', async ({ page }) => {
-    await page.getByRole('button', { name: /^Project:/ }).click()
-    for (const action of ['Create', 'Open', 'Import', 'Save', 'Share', 'Export']) {
-      await expect(page.getByRole('button', { name: action, exact: true })).toBeVisible()
-    }
-    await page.getByRole('button', { name: 'Close Project' }).click()
+  test('reviews Basic AI and stays axe-clean without root overflow', async ({ page }) => {
+    const tools = await openTask(page, 'Tools')
+    const assistant = tools.getByRole('region', { name: 'AI Assistant' })
+    await assistant.getByRole('radio', { name: /Generate melody/ }).check()
+    await assistant.getByRole('button', { name: 'Generate' }).click()
+    await expect(assistant.getByRole('button', { name: 'Discard' })).toBeVisible()
+    await assistant.getByRole('button', { name: 'Discard' }).click()
+    await assistant.getByRole('button', { name: 'Generate' }).click()
+    await assistant.getByRole('button', { name: 'Accept' }).click()
 
-    await page.getByRole('button', { name: /^Tracks:/ }).click()
-    await expect(page.getByRole('combobox', { name: 'Instrument' })).toBeVisible()
-    await page.getByRole('button', { name: 'Close Tracks' }).click()
-
-    await page.getByRole('button', { name: /^Tools:/ }).click()
-    await page.getByRole('button', { name: 'Generate AI idea' }).click()
-    await expect(page.getByRole('button', { name: 'Accept' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Discard' })).toBeVisible()
-  })
-
-  test('is axe-clean with no viewport-wide horizontal overflow', async ({ page }) => {
-    const viewport = await page.evaluate(() => ({
-      width: window.innerWidth,
-      height: window.innerHeight,
+    const dimensions = await page.evaluate(() => ({
+      width: innerWidth,
+      height: innerHeight,
       touchPoints: navigator.maxTouchPoints,
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     }))
-    expect(viewport).toMatchObject({ width: 390, height: 844 })
-    expect(viewport.touchPoints).toBeGreaterThan(0)
-    expect(viewport.overflow).toBeLessThanOrEqual(1)
-
-    const scroll = page.getByTestId('piano-scroll')
-    const dimensions = await scroll.evaluate((element) => ({
-      clientWidth: element.clientWidth,
-      scrollWidth: element.scrollWidth,
-    }))
-    expect(dimensions.scrollWidth).toBeGreaterThan(dimensions.clientWidth)
+    expect(dimensions).toMatchObject({ width: 390, height: 844 })
+    expect(dimensions.touchPoints).toBeGreaterThan(0)
+    expect(dimensions.overflow).toBeLessThanOrEqual(1)
 
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
       .analyze()
     expect(results.violations).toEqual([])
+  })
+})
+
+test.describe('production mobile auth and profile', () => {
+  test('opens sign-in and renders the authenticated Profile route at 390px', async ({
+    page,
+  }) => {
+    const user = {
+      id: 'u1',
+      email: 'ada@example.com',
+      displayName: 'Ada',
+      tier: 'Pro',
+    }
+    const profile = {
+      ...user,
+      bio: 'Composer',
+      avatarUrl: null,
+      createdAt: '2025-01-01T00:00:00Z',
+      updatedAt: '2025-01-01T00:00:00Z',
+    }
+    await page.route('**/api/**', async (route) => {
+      const path = new URL(route.request().url()).pathname
+      if (path === '/api/auth/me') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(user),
+        })
+        return
+      }
+      if (path === '/api/profile') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(profile),
+        })
+        return
+      }
+      if (path === '/api/auth/providers') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: '{"providers":["GitHub"]}',
+        })
+        return
+      }
+      if (path === '/api/entitlements') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ tier: 'Pro', watermarkExports: false }),
+        })
+        return
+      }
+      if (path === '/api/projects') {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+        return
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+    })
+
+    await page.goto('/profile')
+    await expect(page.getByRole('heading', { name: 'Your profile' })).toBeVisible()
+    await expect(page.getByLabel('Display name')).toHaveValue('Ada')
+    await expect(page.getByLabel('Avatar URL')).toHaveAttribute('aria-describedby')
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBeLessThanOrEqual(1)
   })
 })

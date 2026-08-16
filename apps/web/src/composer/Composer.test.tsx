@@ -50,6 +50,67 @@ afterEach(() => {
 })
 
 describe('<Composer />', () => {
+  it('renders the focused production mobile workspace and real task surfaces', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: true,
+        media: '(max-width: 40rem), (pointer: coarse)',
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    )
+
+    render(<Composer options={options()} canShare />)
+
+    expect(screen.getByRole('navigation', { name: 'Composer tasks' })).toBeVisible()
+    expect(screen.getByRole('group', { name: 'Transport controls' })).toBeVisible()
+    expect(screen.getByRole('application', { name: /Note grid/ })).toBeVisible()
+    expect(screen.queryByTestId('onboarding-tour-root')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^Project:/ }))
+    expect(screen.getByTestId('mobile-project-sheet')).toBeVisible()
+    expect(screen.getByText('Your project lives here')).toBeVisible()
+    expect(
+      within(screen.getByTestId('mobile-project-sheet')).getByRole('group', {
+        name: 'Project toolbar',
+      }),
+    ).toBeVisible()
+    expect(
+      within(screen.getByTestId('mobile-project-sheet')).getByRole('button', {
+        name: 'Share',
+      }),
+    ).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Close Project' }))
+
+    await user.click(screen.getByRole('button', { name: /^Tracks:/ }))
+    expect(screen.getByTestId('mobile-tracks-sheet')).toBeVisible()
+    expect(
+      within(screen.getByTestId('mobile-tracks-sheet')).getByRole('region', {
+        name: 'Tracks',
+      }),
+    ).toBeVisible()
+    expect(
+      within(screen.getByTestId('mobile-tracks-sheet')).getByRole('region', {
+        name: 'Track inspector',
+      }),
+    ).toBeVisible()
+    await user.click(screen.getByRole('button', { name: 'Close Tracks' }))
+
+    await user.click(screen.getByRole('button', { name: /^Tools:/ }))
+    expect(screen.getByTestId('mobile-tools-sheet')).toBeVisible()
+    expect(
+      within(screen.getByTestId('mobile-tools-sheet')).getByRole('region', {
+        name: 'AI tools',
+      }),
+    ).toBeVisible()
+  })
+
   it('shows the empty state and dismisses it after loading the demo', async () => {
     coversInteractions('studio.empty.load-demo')
     render(<Composer options={options()} />)

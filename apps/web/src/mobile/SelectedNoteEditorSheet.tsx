@@ -128,7 +128,7 @@ export function SelectedNoteEditorSheet({
           <NoteField
             label="Velocity"
             value={Math.round(note.velocity * 127)}
-            min={1}
+            min={0}
             max={127}
             step={1}
             onChange={(velocity) => onChange({ velocity: velocity / 127 })}

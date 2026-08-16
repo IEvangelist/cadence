@@ -117,28 +117,24 @@ test.describe('professional Studio frame', () => {
     expect(await documentHeight(page)).toBe(heightBeforeInspector)
   })
 
-  test('keeps the piano roll reachable through mobile document scrolling', async ({ page }) => {
+  test('uses the focused mobile workspace without document overflow', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await page.goto('/')
-    await expect(page.locator('[data-studio-workbench]')).toBeVisible()
+    await expect(page.locator('[data-mobile-studio]')).toBeVisible()
 
     const dimensions = await page.evaluate(() => ({
       innerHeight,
       scrollHeight: document.documentElement.scrollHeight,
-      overflow: getComputedStyle(document.querySelector('.app--composer')!).overflow,
+      scrollWidth: document.documentElement.scrollWidth,
+      innerWidth,
     }))
-    expect(dimensions.scrollHeight).toBeGreaterThan(dimensions.innerHeight)
-    expect(dimensions.overflow).toBe('visible')
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      ),
-    ).toBeLessThanOrEqual(1)
+    expect(dimensions.scrollHeight).toBeLessThanOrEqual(dimensions.innerHeight + 1)
+    expect(dimensions.scrollWidth - dimensions.innerWidth).toBeLessThanOrEqual(1)
 
-    await expect(page.getByRole('button', { name: 'Project', exact: true })).toBeInViewport()
+    await expect(page.getByRole('navigation', { name: 'Composer tasks' })).toBeInViewport()
+    await expect(page.getByRole('group', { name: 'Transport controls' })).toBeInViewport()
 
     const roll = page.locator('.piano-roll')
-    await roll.scrollIntoViewIfNeeded()
     await expect(roll).toBeInViewport()
   })
 

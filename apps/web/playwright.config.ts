@@ -42,7 +42,20 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testIgnore: 'mobile-contract.spec.ts',
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'mobile-chromium',
+      testMatch: 'mobile-contract.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        isMobile: true,
+        hasTouch: true,
+        deviceScaleFactor: 1,
+        reducedMotion: 'reduce',
+      },
     },
   ],
   webServer: [

@@ -20,6 +20,16 @@ function Harness() {
   return <PianoRoll controller={controller} />
 }
 
+function TouchHarness({ mode = 'pan-select' }: { mode?: 'pan-select' | 'draw' }) {
+  const controller = useComposer({
+    createEngine: () => new SilentAudioEngine(),
+    store: new LocalStorageProjectStore(new MemoryStorage()),
+    initialProject: createEmptyProject('p'),
+    autosaveDelay: 0,
+  })
+  return <PianoRoll controller={controller} mobileNoteMode={mode} />
+}
+
 function HistoryHarness() {
   const controller = useComposer({
     createEngine: () => new SilentAudioEngine(),
@@ -101,6 +111,127 @@ describe('<PianoRoll />', () => {
     expect(notes()).toHaveLength(0)
   })
 
+  it('keeps touch Pan/Select empty taps and drags note-free', () => {
+    mockGridRect()
+    render(<TouchHarness />)
+    const grid = screen.getByRole('application')
+
+    fireEvent.pointerDown(grid, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 96,
+      clientY: 80,
+    })
+    fireEvent.pointerUp(grid, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 96,
+      clientY: 80,
+    })
+    fireEvent.pointerDown(grid, {
+      pointerId: 2,
+      pointerType: 'touch',
+      clientX: 96,
+      clientY: 80,
+    })
+    fireEvent.pointerMove(grid, {
+      pointerId: 2,
+      pointerType: 'touch',
+      clientX: 140,
+      clientY: 80,
+    })
+    fireEvent.pointerUp(grid, {
+      pointerId: 2,
+      pointerType: 'touch',
+      clientX: 140,
+      clientY: 80,
+    })
+
+    expect(screen.queryAllByRole('button').filter((button) =>
+      button.className.includes('pr-note'),
+    )).toHaveLength(0)
+  })
+
+  it('adds one note on a Draw touch tap but not a Draw drag', () => {
+    mockGridRect()
+    render(<TouchHarness mode="draw" />)
+    const grid = screen.getByRole('application')
+
+    fireEvent.pointerDown(grid, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 96,
+      clientY: 80,
+    })
+
+    fireEvent.pointerUp(grid, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 96,
+      clientY: 80,
+    })
+    fireEvent.pointerDown(grid, {
+      pointerId: 2,
+      pointerType: 'touch',
+      clientX: 160,
+      clientY: 80,
+    })
+    fireEvent.pointerMove(grid, {
+      pointerId: 2,
+      pointerType: 'touch',
+      clientX: 200,
+      clientY: 80,
+    })
+    fireEvent.pointerUp(grid, {
+      pointerId: 2,
+      pointerType: 'touch',
+      clientX: 200,
+      clientY: 80,
+    })
+
+    expect(screen.queryAllByRole('button').filter((button) =>
+      button.className.includes('pr-note'),
+    )).toHaveLength(1)
+  })
+
+  it('keeps the first empty-grid touch as the only Draw gesture owner', () => {
+    mockGridRect()
+    render(<TouchHarness mode="draw" />)
+    const grid = screen.getByRole('application')
+
+    fireEvent.pointerDown(grid, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 96,
+      clientY: 80,
+    })
+    fireEvent.pointerDown(grid, {
+      pointerId: 2,
+      pointerType: 'touch',
+      clientX: 160,
+      clientY: 80,
+    })
+    fireEvent.pointerUp(grid, {
+      pointerId: 2,
+      pointerType: 'touch',
+      clientX: 160,
+      clientY: 80,
+    })
+    expect(screen.queryAllByRole('button').filter((button) =>
+      button.className.includes('pr-note'),
+    )).toHaveLength(0)
+
+    fireEvent.pointerUp(grid, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 96,
+      clientY: 80,
+    })
+    expect(screen.queryAllByRole('button').filter((button) =>
+      button.className.includes('pr-note'),
+    )).toHaveLength(1)
+  })
+
   it('edits a note velocity from the velocity lane by keyboard', () => {
     coversInteractions('studio.piano-roll.velocity.note')
     mockGridRect()
@@ -129,6 +260,47 @@ describe('<PianoRoll />', () => {
 
     const moved = screen.getAllByRole('button').find((b) => b.className.includes('pr-note'))!
     expect(moved.style.left).not.toBe(beforeLeft)
+  })
+
+  it('keeps a captured touch gesture owned by its initiating pointer', () => {
+    mockGridRect()
+    render(<Harness />)
+    const grid = screen.getByRole('application')
+    fireEvent.pointerDown(grid, { clientX: 0, clientY: 80 })
+    const note = screen.getAllByRole('button').find((button) =>
+      button.className.includes('pr-note'),
+    )!
+    Object.defineProperties(note, {
+      setPointerCapture: { configurable: true, value: vi.fn() },
+      hasPointerCapture: { configurable: true, value: vi.fn(() => true) },
+      releasePointerCapture: { configurable: true, value: vi.fn() },
+    })
+    const beforeLeft = note.style.left
+
+    fireEvent.pointerDown(note, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 0,
+      clientY: 80,
+    })
+    fireEvent.pointerMove(window, {
+      pointerId: 2,
+      pointerType: 'touch',
+      clientX: DEFAULT_LAYOUT.beatWidth * 2,
+      clientY: 80,
+    })
+    fireEvent.pointerUp(window, { pointerId: 2, pointerType: 'touch' })
+    expect(note.style.left).toBe(beforeLeft)
+
+    fireEvent.pointerMove(window, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: DEFAULT_LAYOUT.beatWidth * 2,
+      clientY: 80,
+    })
+    expect(note.style.left).not.toBe(beforeLeft)
+    fireEvent.pointerUp(window, { pointerId: 1, pointerType: 'touch' })
+    expect(note.releasePointerCapture).toHaveBeenCalledWith(1)
   })
 
   it('finalizes a drag on pointercancel so later pointer moves cannot mutate it', () => {
