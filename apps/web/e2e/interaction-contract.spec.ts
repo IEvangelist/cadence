@@ -391,12 +391,41 @@ test.describe('production interaction contract', () => {
     await expect(authenticatedPage.locator('#composer-main')).toBeFocused()
     await assertInteractionContract(authenticatedPage, 'authenticated studio', observed)
 
+    await authenticatedPage
+      .getByRole('button', { name: /Choose instrument for/ })
+      .click()
+    await expect(
+      authenticatedPage.getByRole('region', { name: 'Instrument browser' }),
+    ).toBeVisible()
+    await assertInteractionContract(authenticatedPage, 'instrument browser', observed)
+    await authenticatedPage
+      .locator('[data-interaction="studio.instrument-browser.close"]')
+      .click()
+
+    await authenticatedPage.getByRole('button', { name: 'Shortcuts' }).click()
+    await expect(
+      authenticatedPage.getByRole('dialog', { name: 'Keyboard shortcuts' }),
+    ).toBeVisible()
+    await assertInteractionContract(authenticatedPage, 'shortcut help', observed)
+    await authenticatedPage
+      .locator('[data-interaction="studio.shortcuts.close"]')
+      .click()
+
     const note = authenticatedPage.locator('[data-interaction="studio.piano-roll.note"]').first()
     await note.click()
     await expect(
       authenticatedPage.locator('[data-interaction="studio.piano-roll.velocity.selected"]'),
     ).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'selected piano note', observed)
+
+    await authenticatedPage.getByRole('button', { name: 'Add track' }).click()
+    await authenticatedPage.getByRole('button', { name: 'Select Synth' }).click()
+    await authenticatedPage.getByRole('button', { name: 'Delete Synth' }).click()
+    await expect(
+      authenticatedPage.getByRole('alertdialog', { name: /Delete Synth/ }),
+    ).toBeVisible()
+    await assertInteractionContract(authenticatedPage, 'track delete confirmation', observed)
+    await authenticatedPage.getByRole('button', { name: 'Cancel' }).click()
 
     const shareToggle = authenticatedPage.locator('[data-interaction="studio.share.toggle"]')
     await shareToggle.click()
