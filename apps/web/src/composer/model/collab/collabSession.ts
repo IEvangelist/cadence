@@ -18,6 +18,8 @@ import {
   seedProjectDoc,
 } from './crdt'
 
+const REPLACEMENT_ORIGIN = Symbol('cadence-collab-replacement')
+
 /** A collaborator identity surfaced in the presence UI. */
 export interface CollabUser {
   id: string
@@ -61,6 +63,8 @@ export interface CollabSession {
   readonly localOrigin: symbol
   /** Reconcile the shared doc to `project` (echo-safe; no-op for viewers). */
   pushLocalProject: (project: Project) => void
+  /** Replace the shared project without making the replacement itself undoable. */
+  replaceLocalProject: (project: Project) => void
   /**
    * Seed the shared doc from `project` only if it is still empty. Used by the
    * networked hook after the initial sync so exactly one client (the one that
@@ -177,6 +181,12 @@ export function createCollabSession(options: CollabSessionOptions): CollabSessio
     pushLocalProject(project: Project) {
       if (!canWrite) return
       reconcileDoc(doc, project, LOCAL_ORIGIN)
+    },
+    replaceLocalProject(project: Project) {
+      if (!canWrite) return
+      undoManager?.clear()
+      undoManager?.stopCapturing()
+      reconcileDoc(doc, project, REPLACEMENT_ORIGIN)
     },
     seedIfEmpty(project: Project) {
       if (!canWrite) return

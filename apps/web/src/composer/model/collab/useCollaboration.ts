@@ -142,6 +142,12 @@ export function useCollaboration(
         lastCaptureBoundaryRef.current = transition.boundary
         lastCaptureGroupRef.current = null
       }
+      if (transition.kind === 'replacement') {
+        session.replaceLocalProject(transition.project)
+        session.stopCapturing()
+        lastCaptureGroupRef.current = null
+        return
+      }
       if (!transition.group || transition.group !== lastCaptureGroupRef.current) {
         session.stopCapturing()
       }
@@ -256,6 +262,7 @@ export function useCollaboration(
       project: binding.project,
       group: binding.historyCaptureGroup ?? null,
       boundary: binding.historyCaptureBoundary ?? 0,
+      kind: 'mutation',
     })
   }, [
     binding.historyCaptureBoundary,

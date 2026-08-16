@@ -387,9 +387,31 @@ describe('createCollabSession — collaborative undo/redo (#156)', () => {
       initialProject: seedProject(),
       onRemoteProject: () => {},
     })
+
     freshSession.enableUndo()
     expect(freshSession.canUndo()).toBe(false)
     freshSession.destroy()
+  })
+
+  it('replaces the shared project without retaining or creating undo history', () => {
+    const a = makePeer('A', seedProject())
+    a.session.enableUndo()
+    const edit = structuredClone(a.project)
+    edit.tracks[0].notes.push(createNote({ pitch: 64, start: 1 }, 'stale-local'))
+    a.project = edit
+    a.session.pushLocalProject(edit)
+    expect(a.session.canUndo()).toBe(true)
+
+    const replacement = createEmptyProject('replacement')
+    replacement.name = 'Replacement'
+    a.session.replaceLocalProject(replacement)
+    expect(a.project.id).toBe('replacement')
+    expect(a.session.canUndo()).toBe(false)
+    expect(a.session.canRedo()).toBe(false)
+
+    a.session.undo()
+    expect(a.project.id).toBe('replacement')
+    expect(a.project.tracks[0].notes).toHaveLength(0)
   })
 
   it('coalesces rapid same-origin updates into one undo step, with stopCapturing separating discrete commands', () => {
