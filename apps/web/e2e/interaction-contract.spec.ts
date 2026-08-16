@@ -8,6 +8,7 @@ import {
   defaultProjectSummaryDto,
 } from './projectFixtures'
 import {
+  openAiInspectorMode,
   openInspectorPanel,
   openMixWorkspace,
   openStudioDestination,
@@ -471,7 +472,7 @@ test.describe('production interaction contract', () => {
     ).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'track inspector', observed)
 
-    const aiStudioHost = await openInspectorPanel(authenticatedPage, 'AI Studio')
+    const aiStudioHost = await openAiInspectorMode(authenticatedPage, 'Advanced')
     const aiStudio = aiStudioHost.getByRole('region', { name: 'AI Studio' })
     await expect(aiStudio.getByText('Pro · on-device')).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'AI Studio text to motif', observed)
@@ -525,7 +526,7 @@ test.describe('production interaction contract', () => {
     await expect(authenticatedPage.getByText('Your canvas is empty.')).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'empty project', observed)
 
-    const assistantHost = await openInspectorPanel(authenticatedPage, 'Assistant')
+    const assistantHost = await openAiInspectorMode(authenticatedPage, 'Basic')
     const assistant = assistantHost.getByRole('region', { name: 'AI Assistant' })
     await assistant.getByRole('radio', { name: /Generate melody/ }).check()
     await assistant.getByRole('button', { name: 'Generate' }).click()

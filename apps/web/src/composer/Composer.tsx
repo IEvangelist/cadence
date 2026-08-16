@@ -15,9 +15,9 @@ import { TrackRail } from './components/TrackRail'
 import { TrackInspector } from './components/TrackInspector'
 import { ShortcutHelpDialog } from './components/ShortcutHelpDialog'
 import { EditorDetailLane } from './components/EditorDetailLane'
-import { AssistantPanel } from './components/AssistantPanel'
-import { AiStudioPanel } from './components/AiStudioPanel'
-import { MixerPanel } from './components/MixerPanel'
+import { AiInspector } from './components/AiInspector'
+import { MixWorkspace } from './components/MixWorkspace'
+import { PluginToolHost } from './components/PluginToolHost'
 import { PluginsPanel } from './components/PluginsPanel'
 import { PianoRoll } from './components/PianoRoll'
 import { PresenceBar } from './components/PresenceBar'
@@ -305,14 +305,9 @@ function ComposerWorkspace({
       content: <TrackInspector controller={controller} />,
     },
     {
-      id: 'assistant',
-      label: 'Assistant',
-      content: <AssistantPanel assistant={assistant} />,
-    },
-    {
-      id: 'aiStudio',
-      label: 'AI Studio',
-      content: <AiStudioPanel studio={aiStudio} />,
+      id: 'ai',
+      label: 'AI',
+      content: <AiInspector assistant={assistant} studio={aiStudio} />,
     },
     {
       id: 'extensions',
@@ -320,17 +315,34 @@ function ComposerWorkspace({
       content: (
         <>
           <PluginsPanel plugins={plugins} />
-          {plugins.visiblePanels.map((panel) => (
-            <section key={panel.id} className="plugin-surface" aria-label={panel.title}>
-              {panel.render(plugins.panelContext)}
-            </section>
-          ))}
+          <PluginToolHost panels={plugins.visiblePanels} context={plugins.panelContext} />
         </>
       ),
     },
   ]
 
-  const compactRail = <TrackRail controller={controller} />
+  const mixTrackById = new Map(mixer.tracks.map((track) => [track.id, track]))
+  const compactRail = (
+    <TrackRail
+      controller={controller}
+      renderTrailing={(track) => {
+        const mixTrack = mixTrackById.get(track.id)
+        const solo = mixTrack?.solo ?? false
+        return (
+          <button
+            type="button"
+            className={`btn btn-sm${solo ? ' is-active' : ''}`}
+            data-interaction="studio.track.solo"
+            aria-pressed={solo}
+            aria-label={`${solo ? 'Unsolo' : 'Solo'} ${track.name}`}
+            onClick={() => mixer.toggleSolo(track.id)}
+          >
+            S
+          </button>
+        )
+      }}
+    />
+  )
 
   const writeSurface = (
     <div className="studio-write-surface">
@@ -412,7 +424,7 @@ function ComposerWorkspace({
         }
         rail={compactRail}
         editor={writeSurface}
-        mix={<div className="studio-mix-surface"><MixerPanel mixer={mixer} /></div>}
+        mix={<MixWorkspace mixer={mixer} />}
         inspector={
           <StudioInspectorPanels
             panels={inspectorPanels}

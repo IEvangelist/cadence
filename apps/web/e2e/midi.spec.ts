@@ -100,9 +100,9 @@ test.describe('composer live MIDI input (#111)', () => {
 
     await expect(page.getByRole('button', { name: 'Record' })).toBeVisible()
     await expect(page.getByRole('combobox', { name: 'MIDI device' })).toHaveCount(0)
-    await page.getByRole('button', { name: 'MIDI settings' }).click()
+    await page.getByRole('button', { name: 'MIDI', exact: true }).click()
 
-    const settings = page.getByRole('dialog', { name: 'MIDI settings' })
+    const settings = page.locator('.midi-settings')
     await expect(settings.getByRole('combobox', { name: 'MIDI device' })).toHaveValue('mock-in')
     await expect(settings.getByRole('option', { name: 'Mock Controller' })).toBeAttached()
     await settings.getByRole('checkbox', { name: /Quantize/ }).check()
@@ -203,6 +203,6 @@ test.describe('composer live MIDI input (#111)', () => {
 
     await expect(page.getByText('MIDI input is not supported in this browser')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Record' })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'MIDI settings' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'MIDI', exact: true })).toHaveCount(0)
   })
 })

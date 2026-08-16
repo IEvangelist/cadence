@@ -705,7 +705,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   )
   useEffect(
     () => defaultPluginHost.subscribe(() => setFormats(defaultPluginHost.formats())),
-    [],
+    [dispatch],
   )
 
   const [engine] = useState<AudioEngine>(() => (options.createEngine ?? createAudioEngine)())
@@ -724,7 +724,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         if (autosaveTimerRef.current !== null) clearTimeout(autosaveTimerRef.current)
       }
     },
-    [],
+    [dispatch],
   )
 
   // --- Live MIDI input (#111) -------------------------------------------------
@@ -1321,7 +1321,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
       trackId: string,
       changes: Partial<Pick<ProjectTrackMix, 'gainDb' | 'pan' | 'solo'>>,
     ) => dispatch({ type: 'set-track-mix', trackId, changes }),
-    [],
+    [dispatch],
   )
   const addMixInsert = useCallback(
     (trackId: string, effectId: string) =>
@@ -1330,21 +1330,21 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         trackId,
         insert: { id: newId('insert'), effectId, enabled: true, params: {} },
       }),
-    [],
+    [dispatch],
   )
   const removeMixInsert = useCallback(
     (trackId: string, insertId: string) =>
       dispatch({ type: 'remove-mix-insert', trackId, insertId }),
-    [],
+    [dispatch],
   )
   const setMixInsertEnabled = useCallback(
     (trackId: string, insertId: string, enabled: boolean) =>
       dispatch({ type: 'set-mix-insert-enabled', trackId, insertId, enabled }),
-    [],
+    [dispatch],
   )
   const setMasterMix = useCallback(
     (changes: Partial<ProjectMasterMix>) => dispatch({ type: 'set-master-mix', changes }),
-    [],
+    [dispatch],
   )
 
   const setProjectName = useCallback(

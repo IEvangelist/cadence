@@ -568,13 +568,6 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'Opens device selection and recording quantize settings.',
   ),
   midi(
-    'studio.midi.settings.open',
-    'studio',
-    'button',
-    'MIDI settings',
-    'Opens device and quantize configuration while record state remains visible.',
-  ),
-  midi(
     'studio.midi.device',
     'studio',
     'combobox',
@@ -1174,6 +1167,14 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'Filters core and extension commands in keyboard shortcut help.',
   ),
   trackRail('studio.track.add', 'studio', 'button', '/Add track/', 'Adds and selects a new track.'),
+  composer(
+    'studio.track.solo',
+    'studio',
+    'button',
+    '/Solo|Unsolo/',
+    'Toggles the persisted solo state for a repeated track from the compact rail.',
+    'repeated',
+  ),
   trackRail(
     'studio.track.select',
     'studio',
@@ -1289,7 +1290,7 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'studio.inspector.panel',
     'studio',
     'tab',
-    '/Track|Assistant|AI Studio|Extensions/',
+    '/Track|AI|Extensions/',
     'Switches the inspector to one mounted contextual panel.',
     'repeated',
   ),

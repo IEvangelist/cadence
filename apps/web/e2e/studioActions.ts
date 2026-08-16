@@ -10,7 +10,7 @@ export async function openStudioDestination(
 
 export async function openInspectorPanel(
   page: Page,
-  tabName: 'Track' | 'Assistant' | 'AI Studio' | 'Extensions',
+  tabName: 'Track' | 'AI' | 'Extensions',
 ): Promise<Locator> {
   const inspector = page.getByRole('button', { name: 'Inspector' })
   if ((await inspector.getAttribute('aria-expanded')) !== 'true') await inspector.click()
@@ -20,6 +20,15 @@ export async function openInspectorPanel(
   if (!panelId) throw new Error(`${tabName} tab does not identify its panel`)
   const panel = page.locator(`[id="${panelId}"]`)
   await expect(panel).toBeVisible()
+  return panel
+}
+
+export async function openAiInspectorMode(
+  page: Page,
+  mode: 'Basic' | 'Advanced',
+): Promise<Locator> {
+  const panel = await openInspectorPanel(page, 'AI')
+  await panel.getByRole('tab', { name: mode, exact: true }).click()
   return panel
 }
 
