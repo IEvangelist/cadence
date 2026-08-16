@@ -6,6 +6,7 @@ import { coversInteractions } from '../test/coversInteractions'
 import type { AuthClient, Me } from '../auth/authClient'
 import { AuthContext, type AuthContextValue, type AuthStatus } from '../auth/authContext'
 import {
+  readAuthReturnTarget,
   saveAuthReturnTarget,
   takeAuthReturnTarget,
 } from '../auth/authReturnTarget'
@@ -93,6 +94,7 @@ describe('AuthCallbackEffect', () => {
   })
 
   it('shows neutral linking guidance, stays anonymous, and preserves other inputs', async () => {
+    saveAuthReturnTarget('/profile?collab=p1&share=t#project=x')
     const refresh = vi.fn(async () => true)
     render(
       <MemoryRouter
@@ -112,6 +114,7 @@ describe('AuthCallbackEffect', () => {
     expect(screen.getByTestId('location')).not.toHaveTextContent('auth=')
     expect(screen.getByTestId('location')).not.toHaveTextContent('reason=')
     expect(refresh).not.toHaveBeenCalled()
+    expect(readAuthReturnTarget()).toBe('/profile?collab=p1&share=t#project=x')
   })
 
   it('retains the safe target when callback session refresh is transiently anonymous', async () => {

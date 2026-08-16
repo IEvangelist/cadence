@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { appName, tagline } from '../appInfo'
 import { AuthBar } from '../auth/AuthBar'
@@ -10,6 +10,7 @@ import { ThemeMenu } from '../theme/ThemeMenu'
 import type { AppRouteContext } from './routeContext'
 import { RouteEffects } from './RouteEffects'
 import { AuthCallbackEffect } from './AuthCallbackEffect'
+import { clearAuthReturnTarget } from '../auth/authReturnTarget'
 
 function destination(pathname: string, location: ReturnType<typeof useLocation>) {
   return { pathname, search: location.search, hash: location.hash }
@@ -21,11 +22,13 @@ export function AppFrame() {
   const location = useLocation()
   const navigate = useNavigate()
   const mainRef = useRef<HTMLElement>(null)
+  const [signingOut, setSigningOut] = useState(false)
   const authenticated = auth.status === 'authenticated'
   const entitlements = useEntitlements(authenticated)
   const studio = location.pathname === '/'
   const routeContext: AppRouteContext = {
     authenticated,
+    signingOut,
     entitlements,
     watermarkExports: watermarkExportsFor(entitlements),
   }
@@ -61,11 +64,21 @@ export function AppFrame() {
               onShowSignIn={() => authDialog.openAuth()}
               onShowProfile={() => void navigate(destination('/profile', location))}
               profileActive={location.pathname === '/profile'}
+              signingOut={signingOut}
               onSignOut={async () => {
-                if (location.pathname === '/profile') {
-                  void navigate(destination('/', location), { replace: true })
+                setSigningOut(true)
+                try {
+                  await auth.signOut()
+                } catch (error) {
+                  console.warn('The server sign-out request failed after local sign-out.', error)
+                } finally {
+                  clearAuthReturnTarget()
+                  if (location.pathname === '/profile') {
+                    authDialog.closeAuth()
+                    void navigate(destination('/', location), { replace: true })
+                  }
+                  setSigningOut(false)
                 }
-                await auth.signOut()
               }}
             />
             <nav className="app-nav" aria-label="Primary">

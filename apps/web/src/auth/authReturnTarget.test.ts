@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   consumeAuthCallback,
   mergeAuthReturnLocation,
+  readAuthReturnTarget,
   safeAuthReturnTarget,
   saveAuthReturnTarget,
   takeAuthReturnTarget,
@@ -83,5 +84,13 @@ describe('auth return targets', () => {
       search: '?from=account&collab=p1&role=editor&share=t',
       hash: '#project=x',
     })
+  })
+
+  it('clears a corrupted stored target instead of retaining it', () => {
+    const storage = memoryStorage()
+    storage.setItem('cadence.v1.auth.return-target', 'https://evil.test/profile')
+
+    expect(readAuthReturnTarget(storage, 'https://cadence.test')).toBeNull()
+    expect(storage.getItem('cadence.v1.auth.return-target')).toBeNull()
   })
 })

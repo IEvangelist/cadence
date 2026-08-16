@@ -1,10 +1,11 @@
 import { useCallback, useEffect } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useOutletContext } from 'react-router-dom'
 import { useAuthDialog } from '../../auth/authDialogContext'
 import { ProfilePage } from '../../auth/ProfilePage'
 import { routeLocationToString } from '../../auth/authReturnTarget'
 import { useAuth } from '../../auth/authContext'
 import { RoutedPageSkeleton } from '../../ui/RoutedPage'
+import type { AppRouteContext } from '../routeContext'
 
 export function ProfileRoute() {
   const auth = useAuth()
@@ -12,6 +13,7 @@ export function ProfileRoute() {
   const { openAuth } = useAuthDialog()
   const navigate = useNavigate()
   const location = useLocation()
+  const { signingOut } = useOutletContext<AppRouteContext>()
 
   const returnTarget = routeLocationToString(location)
   const dismissTo = routeLocationToString({
@@ -21,9 +23,9 @@ export function ProfileRoute() {
   })
 
   useEffect(() => {
-    if (auth.status !== 'anonymous') return
+    if (auth.status !== 'anonymous' || signingOut) return
     openAuth({ returnTarget, dismissTo })
-  }, [auth.status, dismissTo, openAuth, returnTarget])
+  }, [auth.status, dismissTo, openAuth, returnTarget, signingOut])
 
   const handleUnauthorized = useCallback(() => {
     void refreshAuth()

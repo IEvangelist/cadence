@@ -208,7 +208,13 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'Profile',
     'Opens the authenticated profile editor and updates the pressed state.',
   ),
-  auth('auth.sign-out', 'auth', 'button', 'Sign out', 'Signs out and restores anonymous auth controls.'),
+  auth(
+    'auth.sign-out',
+    'auth',
+    'button',
+    '/Sign out|Signing out/',
+    'Waits for the local project-store transition, then signs out and applies route navigation.',
+  ),
   auth(
     'auth.panel.toggle',
     'auth',

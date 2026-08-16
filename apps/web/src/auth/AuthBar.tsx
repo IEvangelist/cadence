@@ -13,6 +13,8 @@ interface AuthBarProps {
   onShowProfile: () => void
   /** Whether the profile view is currently open (for aria-pressed). */
   profileActive: boolean
+  /** Whether logout and the project-store transition are still pending. */
+  signingOut: boolean
   /** Sign out and apply route-specific navigation. */
   onSignOut: () => void | Promise<void>
 }
@@ -21,6 +23,7 @@ export function AuthBar({
   onShowSignIn,
   onShowProfile,
   profileActive,
+  signingOut,
   onSignOut,
 }: AuthBarProps) {
   const auth = useAuth()
@@ -40,6 +43,7 @@ export function AuthBar({
           className="btn btn-sm"
           data-interaction="auth.profile.open"
           aria-pressed={profileActive}
+          disabled={signingOut}
           onClick={onShowProfile}
         >
           Profile
@@ -48,9 +52,10 @@ export function AuthBar({
           type="button"
           className="btn btn-sm"
           data-interaction="auth.sign-out"
+          disabled={signingOut}
           onClick={() => void onSignOut()}
         >
-          Sign out
+          {signingOut ? 'Signing out…' : 'Sign out'}
         </button>
       </div>
     )

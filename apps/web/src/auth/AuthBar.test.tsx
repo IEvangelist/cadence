@@ -26,6 +26,7 @@ const renderBar = (
   value: AuthContextValue,
   {
     profileActive = false,
+    signingOut = false,
     onShowProfile = vi.fn(),
     onShowSignIn = vi.fn(),
     onSignOut = vi.fn(async () => undefined),
@@ -37,6 +38,7 @@ const renderBar = (
         onShowSignIn={onShowSignIn}
         onShowProfile={onShowProfile}
         profileActive={profileActive}
+        signingOut={signingOut}
         onSignOut={onSignOut}
       />
     </AuthContext>,
@@ -67,6 +69,19 @@ describe('AuthBar', () => {
 
     await user.click(screen.getByRole('button', { name: 'Sign out' }))
     expect(onSignOut).toHaveBeenCalled()
+  })
+
+  it('disables account actions while sign-out is pending', () => {
+    renderBar(
+      makeValue({
+        status: 'authenticated',
+        user: { id: '1', email: 'a@b.com', displayName: 'Ada', tier: 'Free' },
+      }),
+      { signingOut: true },
+    )
+
+    expect(screen.getByRole('button', { name: 'Signing out…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Profile' })).toBeDisabled()
   })
 
   it('opens the shared sign-in Dialog', async () => {

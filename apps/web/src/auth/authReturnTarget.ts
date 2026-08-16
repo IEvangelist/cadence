@@ -12,19 +12,26 @@ export function routeLocationToString(location: RouteLocation): string {
   return `${location.pathname}${location.search}${location.hash}`
 }
 
+function normalizeAuthReturnTarget(
+  value: string | null | undefined,
+  origin = window.location.origin,
+): string | null {
+  if (!value) return null
+
+  try {
+    const parsed = new URL(value, origin)
+    if (parsed.origin !== origin || !parsed.pathname.startsWith('/')) return null
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`
+  } catch {
+    return null
+  }
+}
+
 export function safeAuthReturnTarget(
   value: string | null | undefined,
   origin = window.location.origin,
 ): string {
-  if (!value) return '/'
-
-  try {
-    const parsed = new URL(value, origin)
-    if (parsed.origin !== origin || !parsed.pathname.startsWith('/')) return '/'
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`
-  } catch {
-    return '/'
-  }
+  return normalizeAuthReturnTarget(value, origin) ?? '/'
 }
 
 export function saveAuthReturnTarget(
@@ -51,7 +58,10 @@ export function readAuthReturnTarget(
   origin = window.location.origin,
 ): string | null {
   const stored = storage.getItem(AUTH_RETURN_TARGET_KEY)
-  return stored === null ? null : safeAuthReturnTarget(stored, origin)
+  if (stored === null) return null
+  const safe = normalizeAuthReturnTarget(stored, origin)
+  if (safe === null) storage.removeItem(AUTH_RETURN_TARGET_KEY)
+  return safe
 }
 
 export function clearAuthReturnTarget(

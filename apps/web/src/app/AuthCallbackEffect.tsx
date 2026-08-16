@@ -40,7 +40,6 @@ export function AuthCallbackEffect() {
     void navigate(callback.cleanLocation, { replace: true })
 
     if (callback.outcome === 'error') {
-      clearAuthReturnTarget()
       queueMicrotask(() => {
         setNotice({
           kind: 'error',
@@ -79,6 +78,11 @@ export function AuthCallbackEffect() {
     }
     queueMicrotask(() => setPending(null))
   }, [auth.status, navigate, pending, refreshComplete])
+
+  useEffect(() => {
+    if (auth.status !== 'authenticated' || notice?.kind !== 'error') return
+    queueMicrotask(() => setNotice(null))
+  }, [auth.status, notice?.kind])
 
   if (!notice) return null
 

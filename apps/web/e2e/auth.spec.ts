@@ -235,17 +235,60 @@ test.describe('auth', () => {
   test('shows neutral link-required guidance and preserves anonymous callback inputs', async ({
     page,
   }) => {
-    await page.route('**/api/**', (route) => mockApi(route, () => {}))
+    let authenticated = false
+    await page.route('**/api/**', async (route) => {
+      const request = route.request()
+      const path = new URL(request.url()).pathname
+      const method = request.method()
+      const json = (body: unknown, status = 200) =>
+        route.fulfill({
+          status,
+          contentType: 'application/json',
+          body: JSON.stringify(body),
+        })
+      if (path === '/api/auth/me') return authenticated ? json(me) : json({}, 401)
+      if (path === '/api/auth/providers') return json({ providers: [] })
+      if (path === '/api/auth/login' && method === 'POST') {
+        authenticated = true
+        return json(me)
+      }
+      if (path === '/api/profile') return json(profile)
+      return json({}, method === 'GET' ? 200 : 204)
+    })
+    await page.goto('/')
+    const returnTarget = '/profile?collab=p1&role=editor&share=t#project=x'
+    await page.evaluate((target) => {
+      sessionStorage.setItem('cadence.v1.auth.return-target', target)
+    }, returnTarget)
 
-    await page.goto('/?auth=error&reason=link-required&share=t#project=x')
+    await page.goto('/?auth=error&reason=link-required')
 
     await expect(page.getByRole('alert')).toContainText(
       'Sign in with your existing method first',
     )
-    await expect(page).toHaveURL(/\/\?share=t#project=x$/)
+    await expect(page).toHaveURL(/\/$/)
+    await expect
+      .poll(() =>
+        page.evaluate(() => sessionStorage.getItem('cadence.v1.auth.return-target')),
+      )
+      .toBe(returnTarget)
     await expect(
       page.locator('[data-interaction="auth.panel.toggle"]'),
     ).toBeVisible()
+
+    await page.locator('[data-interaction="auth.panel.toggle"]').click()
+    await page.getByLabel('Email').fill('ada@example.com')
+    await page.getByLabel('Password').fill('correct horse battery')
+    await page
+      .getByRole('dialog', { name: 'Sign in to Cadence' })
+      .getByRole('button', { name: 'Sign in' })
+      .click()
+
+    await expect(page).toHaveURL(
+      /\/profile\?collab=p1&role=editor&share=t#project=x$/,
+    )
+    await expect(page.getByLabel('Display name')).toHaveValue('Ada')
+    await expect(page.getByText(/Sign in with your existing method first/)).toHaveCount(0)
   })
 
   test('keeps registration and magic-link requests neutral', async ({ page }) => {
@@ -291,6 +334,12 @@ test.describe('auth', () => {
   }) => {
     let authenticated = true
     let signOuts = 0
+    let remoteProjectReads = 0
+    let holdLogout = true
+    let releaseLogout!: () => void
+    const logoutGate = new Promise<void>((resolve) => {
+      releaseLogout = resolve
+    })
     await page.route('**/api/**', async (route) => {
       const request = route.request()
       const path = new URL(request.url()).pathname
@@ -304,21 +353,46 @@ test.describe('auth', () => {
       if (path === '/api/auth/providers') return json({ providers: [] })
       if (path === '/api/profile') return json(profile)
       if (path === '/api/auth/logout') {
+        if (holdLogout) await logoutGate
         authenticated = false
         signOuts += 1
         return route.fulfill({ status: 204 })
+      }
+      if (path === '/api/projects' && request.method() === 'GET') {
+        remoteProjectReads += 1
+        return json([
+          {
+            id: 'remote-only',
+            name: 'Remote only',
+            schemaVersion: 1,
+            data: '{}',
+            createdAt: '2025-01-01T00:00:00Z',
+            updatedAt: '2025-01-01T00:00:00Z',
+          },
+        ])
       }
       return json({}, request.method() === 'GET' ? 200 : 204)
     })
 
     await page.goto('/profile')
+    await expect(page.getByLabel('Display name')).toHaveValue('Ada')
+    const readsBeforeSignOut = remoteProjectReads
     await page.getByRole('button', { name: 'Sign out' }).click()
+    await expect(page.getByRole('button', { name: 'Signing out…' })).toBeDisabled()
+    await expect(page).toHaveURL(/\/profile$/)
+    releaseLogout()
     await expect(page).toHaveURL(/\/$/)
     await expect(
       page.locator('[data-interaction="auth.panel.toggle"]'),
     ).toBeVisible()
+    await page.waitForLoadState('networkidle')
+    expect(remoteProjectReads).toBe(readsBeforeSignOut)
+    expect(
+      await page.evaluate(() => JSON.stringify({ ...localStorage })),
+    ).not.toContain('Remote only')
 
     authenticated = true
+    holdLogout = false
     await page.reload()
     await page.getByRole('button', { name: 'Sign out' }).click()
     await expect(page).toHaveURL(/\/$/)
