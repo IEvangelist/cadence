@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { test, expect, type Route } from '@playwright/test'
+import { openStudioDestination } from './studioActions'
 
 // Pricing page e2e against the production build. There is no backend in e2e, so
 // every `/api/**` call is mocked with `page.route`. We prove:
@@ -39,7 +40,7 @@ test.describe('pricing', () => {
     await page.route('**/api/**', mockApi)
     await page.goto('/')
 
-    await page.getByRole('button', { name: 'Pricing' }).click()
+    await openStudioDestination(page, 'Pricing')
 
     await expect(page.getByRole('heading', { name: 'Plans & pricing' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Free' })).toBeVisible()
@@ -56,7 +57,7 @@ test.describe('pricing', () => {
     await page.route('**/api/**', mockApi)
     await page.goto('/')
 
-    await page.getByRole('button', { name: 'Pricing' }).click()
+    await openStudioDestination(page, 'Pricing')
     await expect(page.getByRole('button', { name: 'Upgrade to Pro' })).toBeVisible()
 
     const [request] = await Promise.all([

@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { test, expect, type Browser, type Route } from '@playwright/test'
+import { openStudioDestination } from './studioActions'
 
 // Live-collaboration e2e. Two authenticated browser contexts open the SAME
 // project through a share link and sync over the standalone Yjs relay
@@ -113,7 +114,7 @@ async function openCollaborator(
   await page.getByLabel('Email').fill(user.email)
   await page.getByLabel('Password').fill('correct horse battery')
   await page.getByRole('button', { name: 'Sign in' }).click()
-  await expect(page.locator('.app-header').getByText(user.displayName, { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Profile' })).toBeVisible()
 
   // Collaboration activates only once signed in + a share link is present.
   const roster = page.getByRole('region', { name: 'Collaborators' })
@@ -259,7 +260,7 @@ test.describe('live collaboration', () => {
       )
       .toMatchObject({ created: 1, closed: 0 })
 
-    await collaborator.page.getByRole('button', { name: 'Pricing' }).click()
+    await openStudioDestination(collaborator.page, 'Pricing')
     await expect(collaborator.page.getByRole('heading', { name: 'Plans & pricing' })).toBeVisible()
     await expect
       .poll(() =>

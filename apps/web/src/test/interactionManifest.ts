@@ -82,7 +82,6 @@ const automation = traced(
   'src/composer/components/AutomationLane.test.tsx',
   'e2e/automation.spec.ts',
 )
-const panels = traced('src/composer/components/CollapsiblePanel.test.tsx', 'e2e/composer.spec.ts')
 const instrument = traced('src/composer/components/InstrumentPicker.test.tsx')
 const midi = traced('src/composer/components/MidiControls.test.tsx', 'e2e/midi.spec.ts')
 const mixer = traced('src/composer/components/MixerPanel.test.tsx', 'e2e/automation.spec.ts')
@@ -105,6 +104,12 @@ const share = traced(
 const track = traced('src/composer/components/TrackPanel.test.tsx', 'e2e/multitrack.spec.ts')
 const transport = traced('src/composer/components/TransportBar.test.tsx', 'e2e/audio.spec.ts')
 const composer = traced('src/composer/Composer.test.tsx', 'e2e/composer.spec.ts')
+const studioFrame = traced('src/studio/StudioFrame.test.tsx', 'e2e/studio-frame.spec.ts')
+const studioInspector = traced(
+  'src/studio/StudioInspectorPanels.test.tsx',
+  'e2e/studio-frame.spec.ts',
+)
+const studioHelp = traced('src/studio/StudioHelpMenu.test.tsx', 'e2e/studio-frame.spec.ts')
 const examplePlugin = traced(
   'src/composer/plugins/examples/helloPlugin.test.tsx',
   'e2e/plugins.spec.ts',
@@ -478,14 +483,6 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'repeated',
   ),
 
-  panels(
-    'studio.panel.toggle',
-    'studio',
-    'button',
-    '/Tracks|Quick starts|AI Assistant|AI Studio|Mixer|Extensions/',
-    'Expands or collapses the selected composer panel and updates aria-expanded.',
-    'repeated',
-  ),
   instrument(
     'studio.track.instrument',
     'studio',
@@ -493,6 +490,13 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     '/Instrument for .+/',
     'Changes the repeated track family instrument assignment.',
     'repeated',
+  ),
+  midi(
+    'studio.midi.settings',
+    'studio',
+    'button',
+    'MIDI',
+    'Opens device selection and recording quantize settings.',
   ),
   midi(
     'studio.midi.device',
@@ -512,7 +516,7 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'studio.midi.quantize',
     'studio',
     'checkbox',
-    'Quantize',
+    'Quantize while recording',
     'Enables or disables quantization for recorded MIDI notes.',
   ),
 
@@ -1098,6 +1102,49 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'button',
     'Load a demo pattern',
     'Loads the demo pattern from the empty composer state.',
+  ),
+  studioFrame(
+    'studio.view.write',
+    'studio',
+    'button',
+    'Write',
+    'Switches the primary workspace to the persistent writing surface.',
+  ),
+  studioFrame(
+    'studio.view.mix',
+    'studio',
+    'button',
+    'Mix',
+    'Switches the primary workspace to the mixer without resetting transport state.',
+  ),
+  studioFrame(
+    'studio.rail.toggle',
+    'studio',
+    'button',
+    'Tracks',
+    'Collapses or restores the persistent track rail and reallocates editor space.',
+  ),
+  studioFrame(
+    'studio.inspector.toggle',
+    'studio',
+    'button',
+    'Inspector',
+    'Mounts or removes the contextual inspector and updates aria-expanded.',
+  ),
+  studioInspector(
+    'studio.inspector.panel',
+    'studio',
+    'tab',
+    '/Track|Assistant|AI Studio|Extensions/',
+    'Switches the inspector to one mounted contextual panel.',
+    'repeated',
+  ),
+  studioHelp(
+    'studio.help.toggle',
+    'studio',
+    'button',
+    'Help',
+    'Opens the Studio help menu and exposes secondary routed destinations.',
   ),
   traced('src/app/StudioNavigationGuard.test.tsx', 'e2e/routing.spec.ts')(
     'studio.autosave.retry',

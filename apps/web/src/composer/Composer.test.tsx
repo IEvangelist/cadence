@@ -72,7 +72,7 @@ describe('<Composer />', () => {
     expect(screen.getByRole('group', { name: 'Transport controls' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Tracks' })).toBeInTheDocument()
     expect(screen.getByRole('application', { name: /Note grid/ })).toBeInTheDocument()
-    expect(within(screen.getByRole('complementary', { name: 'Panels' })).queryByText(
+    expect(within(screen.getByRole('complementary', { name: 'Track rail' })).queryByText(
       'Quick Starts',
     )).not.toBeInTheDocument()
   })

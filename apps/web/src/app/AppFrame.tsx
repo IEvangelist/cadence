@@ -44,7 +44,7 @@ export function AppFrame() {
             Skip to editor
           </a>
         ) : null}
-        <header className="app-header">
+        {!studio ? <header className="app-header">
           <div className="app-header__brand">
             <div className="brand">
               <img className="brand-mark" src="/favicon.svg" alt="" aria-hidden="true" />
@@ -79,12 +79,12 @@ export function AppFrame() {
             </nav>
             <ThemeMenu />
           </div>
-        </header>
+        </header> : null}
 
         <Outlet context={routeContext} />
       </main>
 
-      <footer className="app-footer">
+      {!studio ? <footer className="app-footer">
         <p className="app-footer__note">Cadence is open-source software.</p>
         <nav className="app-footer__nav" aria-label="About Cadence">
           <button
@@ -97,7 +97,7 @@ export function AppFrame() {
             Third-party licenses
           </button>
         </nav>
-      </footer>
+      </footer> : null}
     </>
   )
 }

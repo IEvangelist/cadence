@@ -7,6 +7,19 @@
 
 .app--composer {
   max-width: none;
+  width: 100%;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 47.9375rem) {
+  .app--composer {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
 }
 
 .skip-link {

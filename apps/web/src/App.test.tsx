@@ -45,7 +45,8 @@ describe('<App />', () => {
     coversInteractions('app.nav.pricing')
     const user = userEvent.setup()
     renderApp()
-    await user.click(await screen.findByRole('button', { name: 'Pricing' }))
+    await user.click(await screen.findByRole('button', { name: 'Help' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Pricing' }))
     expect(
       await screen.findByRole('heading', { name: 'Plans & pricing' }, { timeout: 5_000 }),
     ).toBeInTheDocument()
@@ -56,18 +57,20 @@ describe('<App />', () => {
     coversInteractions('app.nav.stems')
     const user = userEvent.setup()
     renderApp()
-    await user.click(await screen.findByRole('button', { name: 'Stems' }))
+    await user.click(await screen.findByRole('button', { name: 'Help' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Stems' }))
     expect(
       await screen.findByRole('heading', { name: 'Stem separation' }, { timeout: 5_000 }),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Back to composer' })).toBeInTheDocument()
   })
 
-  it('opens the third-party licenses surface from the footer', async () => {
+  it('opens the third-party licenses surface from Studio Help', async () => {
     coversInteractions('app.nav.licenses')
     const user = userEvent.setup()
     renderApp()
-    await user.click(await screen.findByRole('button', { name: 'Third-party licenses' }))
+    await user.click(await screen.findByRole('button', { name: 'Help' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Third-party licenses' }))
     expect(
       await screen.findByRole('heading', {
         name: /acknowledgements & third-party licenses/i,

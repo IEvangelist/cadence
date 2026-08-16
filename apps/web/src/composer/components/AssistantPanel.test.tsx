@@ -40,6 +40,11 @@ function renderComposer(
 }
 
 function assistantRegion() {
+  const inspector = screen.getByRole('button', { name: 'Inspector' })
+  if (inspector.getAttribute('aria-expanded') === 'false') {
+    fireEvent.click(inspector)
+  }
+  fireEvent.click(screen.getByRole('tab', { name: 'Assistant' }))
   return screen.getByRole('region', { name: 'AI Assistant' })
 }
 

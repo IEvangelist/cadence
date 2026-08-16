@@ -1,0 +1,199 @@
+import { type ReactNode, useEffect, useId, useRef } from 'react'
+import './StudioFrame.css'
+
+export type StudioView = 'write' | 'mix'
+
+export interface StudioFrameProps {
+  projectControls: ReactNode
+  transportControls: ReactNode
+  rail: ReactNode
+  editor: ReactNode
+  mix: ReactNode
+  inspector?: ReactNode
+  collaborationControls?: ReactNode
+  utilityControls?: ReactNode
+  view: StudioView
+  onViewChange(view: StudioView): void
+  railOpen?: boolean
+  onRailToggle?(): void
+  inspectorOpen?: boolean
+  onInspectorToggle?(): void
+  inspectorLabel?: string
+}
+
+/**
+ * Fixed-height Studio workbench. The frame owns geometry and visibility while
+ * feature lanes own the controls rendered into each slot.
+ */
+export function StudioFrame({
+  projectControls,
+  transportControls,
+  rail,
+  editor,
+  inspector,
+  mix,
+  collaborationControls,
+  utilityControls,
+  view,
+  onViewChange,
+  railOpen = true,
+  onRailToggle,
+  inspectorOpen = false,
+  onInspectorToggle,
+  inspectorLabel = 'Inspector',
+}: StudioFrameProps) {
+  const inspectorId = useId()
+  const editorRef = useRef<HTMLElement>(null)
+  const viewScroll = useRef<Record<StudioView, { left: number; top: number }>>({
+    write: { left: 0, top: 0 },
+    mix: { left: 0, top: 0 },
+  })
+  const hasInspector = Boolean(inspector && inspectorOpen)
+  const className = [
+    'studio-frame',
+    railOpen ? 'studio-frame--rail-open' : '',
+    hasInspector ? 'studio-frame--inspector-open' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+  const changeView = (nextView: StudioView) => {
+    const viewport = editorRef.current
+    if (viewport) {
+      viewScroll.current[view] = {
+        left: viewport.scrollLeft,
+        top: viewport.scrollTop,
+      }
+    }
+    onViewChange(nextView)
+  }
+  useEffect(() => {
+    const viewport = editorRef.current
+    const scroll = viewScroll.current[view]
+    if (viewport) {
+      viewport.scrollLeft = scroll.left
+      viewport.scrollTop = scroll.top
+    }
+  }, [view])
+
+  return (
+    <section
+      className={className}
+      id="composer-main"
+      aria-label="Composer"
+      tabIndex={-1}
+      data-studio-workbench
+      data-studio-view={view}
+    >
+      <header className="studio-frame__app-bar" aria-label="Project and transport">
+        <div className="studio-frame__project" data-studio-cluster="project">
+          {projectControls}
+        </div>
+        <div className="studio-frame__transport" data-studio-cluster="transport">
+          {transportControls}
+        </div>
+      </header>
+
+      {railOpen ? (
+        <aside className="studio-frame__rail" aria-label="Track rail" data-studio-scroll="rail">
+          {rail}
+        </aside>
+      ) : null}
+
+      <section
+        ref={editorRef}
+        className="studio-frame__editor"
+        id="studio-editor"
+        aria-label="Workspace"
+        data-studio-scroll="editor"
+      >
+        <div
+          className="studio-frame__surface"
+          data-studio-surface="write"
+          hidden={view !== 'write'}
+          inert={view !== 'write'}
+        >
+          {editor}
+        </div>
+        <div
+          className="studio-frame__surface"
+          data-studio-surface="mix"
+          hidden={view !== 'mix'}
+          inert={view !== 'mix'}
+        >
+          {mix}
+        </div>
+      </section>
+
+      {/* Painted in the app bar but kept after the editor in DOM focus order. */}
+      <div className="studio-frame__utilities">
+        <div className="studio-frame__view-switch" role="group" aria-label="Workspace view">
+          <button
+            type="button"
+            className="studio-frame__view-button"
+            data-interaction="studio.view.write"
+            aria-pressed={view === 'write'}
+            onClick={() => changeView('write')}
+          >
+            Write
+          </button>
+          <button
+            type="button"
+            className="studio-frame__view-button"
+            data-interaction="studio.view.mix"
+            aria-pressed={view === 'mix'}
+            onClick={() => changeView('mix')}
+          >
+            Mix
+          </button>
+        </div>
+
+        {onRailToggle ? (
+          <button
+            type="button"
+            className="studio-frame__utility-button"
+            data-interaction="studio.rail.toggle"
+            aria-expanded={railOpen}
+            onClick={onRailToggle}
+          >
+            Tracks
+          </button>
+        ) : null}
+
+        {inspector && onInspectorToggle ? (
+          <button
+            type="button"
+            className="studio-frame__utility-button"
+            data-interaction="studio.inspector.toggle"
+            aria-controls={hasInspector ? inspectorId : undefined}
+            aria-expanded={hasInspector}
+            onClick={onInspectorToggle}
+          >
+            {inspectorLabel}
+          </button>
+        ) : null}
+
+        {collaborationControls ? (
+          <div className="studio-frame__collaboration" data-studio-cluster="collaboration">
+            {collaborationControls}
+          </div>
+        ) : null}
+        {utilityControls ? (
+          <div className="studio-frame__utility-cluster" data-studio-cluster="utility">
+            {utilityControls}
+          </div>
+        ) : null}
+      </div>
+
+      {hasInspector ? (
+        <aside
+          className="studio-frame__inspector"
+          id={inspectorId}
+          aria-label={inspectorLabel}
+          data-studio-scroll="inspector"
+        >
+          {inspector}
+        </aside>
+      ) : null}
+    </section>
+  )
+}
