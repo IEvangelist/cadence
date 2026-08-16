@@ -182,6 +182,39 @@ test.describe('professional Studio frame', () => {
     }
   })
 
+  test('keeps transport and utility controls separated at 1280px', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto('/')
+    const transport = page.locator('[data-studio-cluster="transport"]')
+    const utilities = page.locator('.studio-frame__utilities')
+    const transportBox = await transport.boundingBox()
+    const utilityBox = await utilities.boundingBox()
+    const transportWidths = await transport.evaluate((element) => ({
+      client: element.clientWidth,
+      scroll: element.scrollWidth,
+    }))
+    expect(transportBox).not.toBeNull()
+    expect(utilityBox).not.toBeNull()
+    expect(transportBox!.x + transportBox!.width).toBeLessThanOrEqual(utilityBox!.x)
+    expect(
+      transportWidths.scroll,
+      `transport scroll width ${transportWidths.scroll} exceeds ${transportWidths.client}`,
+    ).toBeLessThanOrEqual(transportWidths.client)
+
+    for (const name of ['Mix', 'Tracks', 'Inspector', 'Help']) {
+      const control = page.getByRole('button', { name, exact: true })
+      const hitIsControl = await control.evaluate((element) => {
+        const box = element.getBoundingClientRect()
+        const hit = document.elementFromPoint(
+          box.left + box.width / 2,
+          box.top + box.height / 2,
+        )
+        return hit === element || element.contains(hit)
+      })
+      expect(hitIsControl, `${name} is not hit-testable at 1280px`).toBe(true)
+    }
+  })
+
   test('keeps the informational footer off Studio and available on routed pages', async ({
     page,
   }) => {

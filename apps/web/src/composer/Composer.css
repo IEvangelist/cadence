@@ -112,6 +112,10 @@
   min-width: 0;
 }
 
+.studio-persistent-transport {
+  overflow: hidden;
+}
+
 .studio-frame .toolbar,
 .studio-frame .transport {
   flex-wrap: nowrap;
@@ -294,6 +298,32 @@
   height: 1px;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
+}
+
+.studio-frame__utility-cluster [data-interaction='auth.sign-out'] {
+  display: none;
+}
+
+@media (min-width: 75rem) and (max-width: 85.3125rem) {
+  .studio-identity--compact .studio-identity__mark {
+    display: none;
+  }
+
+  .studio-identity--compact h1 {
+    font-size: var(--font-size-sm);
+  }
+
+  .studio-frame .transport .btn {
+    padding-inline: var(--space-1);
+  }
+
+  .studio-frame .tempo-input {
+    width: 3rem;
+  }
+
+  .studio-frame .snap-select {
+    max-width: 4rem;
+  }
 }
 
 /* ---- Toolbar + transport ---- */

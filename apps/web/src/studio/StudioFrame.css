@@ -2,6 +2,7 @@
   --studio-bar-height: 3.75rem;
   --studio-rail-width: clamp(15rem, 18vw, 17.5rem);
   --studio-inspector-width: clamp(18.75rem, 22vw, 21.25rem);
+  --studio-utility-width: 29rem;
   position: relative;
   display: grid;
   grid-template-rows: var(--studio-bar-height) minmax(0, 1fr);
@@ -34,12 +35,13 @@
   grid-row: 1;
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(28rem, 1fr) auto minmax(22rem, 1fr);
+  grid-template-columns: minmax(28rem, 1fr) minmax(0, auto);
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
   min-height: 0;
   padding: var(--space-2) var(--space-3);
+  padding-right: calc(var(--studio-utility-width) + var(--space-3));
   overflow: hidden;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border-strong);
@@ -59,6 +61,7 @@
 
 .studio-frame__transport {
   grid-column: 2;
+  overflow: hidden;
 }
 
 .studio-frame__rail,
@@ -97,6 +100,7 @@
 }
 
 .studio-frame__utilities {
+  box-sizing: border-box;
   position: absolute;
   top: 0;
   right: 0;
@@ -105,13 +109,16 @@
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-2);
-  max-width: min(35rem, 42vw);
   height: var(--studio-bar-height);
+  width: var(--studio-utility-width);
   padding: var(--space-2) var(--space-3);
   overflow: hidden;
 }
 
 .studio-frame__view-switch {
+  position: sticky;
+  left: 0;
+  z-index: 1;
   display: inline-flex;
   flex: none;
   padding: 2px;
@@ -210,6 +217,21 @@
   .studio-frame {
     --studio-rail-width: clamp(10.5rem, 20vw, 13rem);
     --studio-bar-height: 4.5rem;
+    --studio-utility-width: min(24rem, 48vw);
+  }
+
+  @media (min-width: 75rem) and (max-width: 85.3125rem) {
+    .studio-frame__app-bar {
+      grid-template-columns: minmax(24rem, 1fr) minmax(0, auto);
+      gap: var(--space-1);
+    }
+
+    .studio-frame__utilities {
+      justify-content: flex-start;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: none;
+    }
   }
 
   .studio-frame--inspector-open,
@@ -222,7 +244,8 @@
   }
 
   .studio-frame__app-bar {
-    grid-template-columns: minmax(12rem, 1fr) auto minmax(12rem, 1fr);
+    grid-template-columns: minmax(12rem, 1fr) minmax(0, auto);
+    padding-right: calc(var(--studio-utility-width) + var(--space-3));
   }
 
   .studio-frame__inspector,
@@ -238,7 +261,7 @@
   }
 
   .studio-frame__utilities {
-    max-width: min(24rem, 48vw);
+    min-width: 0;
   }
 }
 
@@ -270,6 +293,7 @@
     grid-row: 2;
     grid-column: 1;
     max-width: none;
+    width: auto;
     height: auto;
     justify-content: flex-start;
     overflow-x: auto;

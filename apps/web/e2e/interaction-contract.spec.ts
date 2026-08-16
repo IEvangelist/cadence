@@ -411,7 +411,26 @@ test.describe('production interaction contract', () => {
     await authenticatedPage.getByRole('button', { name: 'Project', exact: true }).click()
     await authenticatedPage.getByRole('menuitem', { name: 'New project' }).click()
     await authenticatedPage.getByRole('button', { name: /Blank project/ }).click()
-    await authenticatedPage.getByRole('button', { name: 'Write', exact: true }).click()
+    const write = authenticatedPage.getByRole('button', { name: 'Write', exact: true })
+    const writeHit = await write.evaluate((element) => {
+      const rect = element.getBoundingClientRect()
+      const utility = element.closest('.studio-frame__utilities')?.getBoundingClientRect()
+      const transport = document
+        .querySelector('[data-studio-cluster="transport"]')
+        ?.getBoundingClientRect()
+      const hit = document.elementFromPoint(
+        rect.left + rect.width / 2,
+        rect.top + rect.height / 2,
+      )
+      return {
+        hit: hit === element || element.contains(hit),
+        rect: { left: rect.left, right: rect.right },
+        utility: utility ? { left: utility.left, right: utility.right } : null,
+        transport: transport ? { left: transport.left, right: transport.right } : null,
+      }
+    })
+    expect(writeHit.hit, JSON.stringify(writeHit)).toBe(true)
+    await write.click()
     await expect(authenticatedPage.getByText('Your canvas is empty.')).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'empty project', observed)
 
