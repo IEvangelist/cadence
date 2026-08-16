@@ -34,6 +34,7 @@ export type ComposerAction =
   | { type: 'set-project-name'; name: string }
   | { type: 'set-tempo'; tempo: number }
   | { type: 'set-loop'; loop: Partial<LoopRegion> }
+  | { type: 'toggle-loop' }
   | { type: 'set-length'; lengthBeats: number }
   | { type: 'add-track'; track: Track }
   | { type: 'remove-track'; trackId: string }
@@ -178,6 +179,16 @@ export function composerReducer(
       const loop = { ...state.project.loop, ...action.loop }
       if (loop.end < loop.start) loop.end = loop.start
       return { ...state, project: { ...state.project, loop } }
+    }
+
+    case 'toggle-loop': {
+      return {
+        ...state,
+        project: {
+          ...state.project,
+          loop: { ...state.project.loop, enabled: !state.project.loop.enabled },
+        },
+      }
     }
 
     case 'set-length': {

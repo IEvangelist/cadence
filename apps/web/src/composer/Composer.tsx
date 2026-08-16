@@ -188,10 +188,20 @@ function ComposerWorkspace({
   const shortcutsReturnFocusRef = useRef<HTMLElement | null>(null)
   const [detailLane, setDetailLane] = useState('velocity')
   const openShortcuts = useCallback((): void => {
-    shortcutsReturnFocusRef.current =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : shortcutsTriggerRef.current
+    const activeElement =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const isStableInvoker =
+      activeElement !== null &&
+      activeElement.isConnected &&
+      activeElement !== document.body &&
+      activeElement !== document.documentElement &&
+      activeElement.matches(
+        'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"]), [contenteditable]:not([contenteditable="false"])',
+      ) &&
+      activeElement.closest('[inert]') === null
+    shortcutsReturnFocusRef.current = isStableInvoker
+      ? activeElement
+      : shortcutsTriggerRef.current
     setShortcutsOpen(true)
   }, [])
   const { project, audioReady, loadDemo } = controller

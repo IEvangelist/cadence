@@ -523,16 +523,15 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
       // Applying an undo/redo snapshot must never itself become a new entry.
     } else if (HISTORY_RESET_ACTIONS.has(action.type)) {
       historyRef.current!.clear()
-      historyCaptureBoundaryRef.current += 1
-      setHistoryCapture(() => ({
-        group: null,
-        boundary: historyCaptureBoundaryRef.current,
-      }))
       syncHistoryFlags()
-      if (
-        action.type === 'load-project' &&
-        nextState.project !== beforeState.project
-      ) {
+      if (action.type === 'load-project') {
+        historyCaptureBoundaryRef.current += 1
+        setHistoryCapture(() => ({
+          group: null,
+          boundary: historyCaptureBoundaryRef.current,
+        }))
+      }
+      if (action.type === 'load-project' && nextState.project !== beforeState.project) {
         const transition: ProjectTransition = {
           project: nextState.project,
           group: null,
@@ -1109,7 +1108,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
 
   const setTempo = useCallback((bpm: number) => dispatch({ type: 'set-tempo', tempo: bpm }), [dispatch])
   const toggleLoop = useCallback(() => {
-    dispatch({ type: 'set-loop', loop: { enabled: !projectRef.current.loop.enabled } })
+    dispatch({ type: 'toggle-loop' })
   }, [dispatch])
 
   const addNoteAt = useCallback(

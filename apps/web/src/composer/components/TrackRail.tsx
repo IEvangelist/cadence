@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import type { ComposerController } from '../hooks/useComposer'
 import type { Track } from '../model/project'
 import { getInstrument } from '../instruments/registry'
@@ -30,10 +30,18 @@ export function TrackRail({
   const deleteTriggerRef = useRef<HTMLButtonElement | null>(null)
   const cancelRef = useRef<HTMLButtonElement | null>(null)
   const railHeadingRef = useRef<HTMLHeadingElement | null>(null)
+  const trackSelectRefs = useRef(new Map<string, HTMLButtonElement>())
+  const immediateFocusTrackIdRef = useRef<string | null>(null)
   const deleteCloseReasonRef = useRef<'cancel' | 'confirm'>('cancel')
   const visible = new Set(visibleTrackIds)
   const allVisible = project.tracks.every((track) => visible.has(track.id))
   const pendingTrack = project.tracks.find((track) => track.id === pendingDeleteId)
+  useEffect(() => {
+    const focusTrackId = immediateFocusTrackIdRef.current
+    if (!focusTrackId) return
+    immediateFocusTrackIdRef.current = null
+    trackSelectRefs.current.get(focusTrackId)?.focus()
+  }, [project.tracks])
   const requestDelete = (track: Track, trigger: HTMLButtonElement): void => {
     if (trackRequiresDeleteConfirmation(controller, track)) {
       deleteTriggerRef.current = trigger
@@ -41,6 +49,9 @@ export function TrackRail({
       setPendingDeleteId(track.id)
       return
     }
+    const index = project.tracks.findIndex((candidate) => candidate.id === track.id)
+    immediateFocusTrackIdRef.current =
+      project.tracks[index + 1]?.id ?? project.tracks[index - 1]?.id ?? null
     removeTrack(track.id)
   }
 
@@ -51,6 +62,10 @@ export function TrackRail({
         <div className="track-rail__header-actions">
           {project.tracks.length > 1 ? (
             <button
+              ref={(element) => {
+                if (element) trackSelectRefs.current.set(track.id, element)
+                else trackSelectRefs.current.delete(track.id)
+              }}
               type="button"
               className={`btn btn-sm${allVisible ? ' is-active' : ''}`}
               data-interaction="studio.track.visibility-all"
