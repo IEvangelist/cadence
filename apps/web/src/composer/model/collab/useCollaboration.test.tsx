@@ -422,4 +422,98 @@ describe('useCollaboration — collaborative undo/redo (#156)', () => {
     expect(readProject(providers[0].doc).tracks[0].notes.map((note) => note.id))
       .not.toContain('drag')
   })
+
+  it('keeps the initial velocity pointerdown and its drag updates in one undo item', () => {
+    const project = seedProject()
+    const binding = makeBinding(project)
+    const { result, rerender } = renderHook(
+      (props: CollabBinding) => useCollaboration(props, config, factory),
+      {
+        initialProps: {
+          ...binding,
+          historyCaptureGroup: null,
+          historyCaptureBoundary: 1,
+        } as CollabBinding,
+      },
+    )
+
+    let edited = project
+    for (const velocity of [0.6, 0.4, 0.2]) {
+      edited = structuredClone(edited)
+      edited.tracks[0].notes[0].velocity = velocity
+      act(() =>
+        rerender({
+          ...binding,
+          project: edited,
+          historyCaptureGroup: 'update-note:track_a:n1',
+          historyCaptureBoundary: 1,
+        }),
+      )
+    }
+    act(() =>
+      rerender({
+        ...binding,
+        project: edited,
+        historyCaptureGroup: null,
+        historyCaptureBoundary: 2,
+      }),
+    )
+
+    act(() => result.current.undo())
+    expect(readProject(providers[0].doc).tracks[0].notes[0].velocity).toBe(0.8)
+    expect(result.current.canUndo).toBe(false)
+  })
+
+  it('uses a pointercancel boundary to separate two gestures on the same note', () => {
+    const project = seedProject()
+    const binding = makeBinding(project)
+    const { result, rerender } = renderHook(
+      (props: CollabBinding) => useCollaboration(props, config, factory),
+      {
+        initialProps: {
+          ...binding,
+          historyCaptureGroup: null,
+          historyCaptureBoundary: 0,
+        } as CollabBinding,
+      },
+    )
+
+    let edited = project
+    for (const start of [0.1, 0.2]) {
+      edited = structuredClone(edited)
+      edited.tracks[0].notes[0].start = start
+      act(() =>
+        rerender({
+          ...binding,
+          project: edited,
+          historyCaptureGroup: 'update-note:track_a:n1',
+          historyCaptureBoundary: 0,
+        }),
+      )
+    }
+    act(() =>
+      rerender({
+        ...binding,
+        project: edited,
+        historyCaptureGroup: null,
+        historyCaptureBoundary: 1,
+      }),
+    )
+
+    const secondGesture = structuredClone(edited)
+    secondGesture.tracks[0].notes[0].start = 0.4
+    act(() =>
+      rerender({
+        ...binding,
+        project: secondGesture,
+        historyCaptureGroup: 'update-note:track_a:n1',
+        historyCaptureBoundary: 1,
+      }),
+    )
+
+    act(() => result.current.undo())
+    expect(readProject(providers[0].doc).tracks[0].notes[0].start).toBe(0.2)
+    act(() => result.current.undo())
+    expect(readProject(providers[0].doc).tracks[0].notes[0].start).toBe(0)
+  })
 })
