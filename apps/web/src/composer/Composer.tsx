@@ -249,6 +249,7 @@ function ComposerWorkspace({
                 className={`studio-track-rail__track${selected ? ' is-selected' : ''}`}
                 data-interaction="studio.track.select"
                 aria-pressed={selected}
+                aria-label={`${selected ? 'Selected: ' : 'Select '}${track.name}`}
                 onClick={() => controller.selectTrack(track.id)}
               >
                 <span

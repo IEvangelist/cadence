@@ -376,6 +376,10 @@ test.describe('production interaction contract', () => {
     await assertInteractionContract(authenticatedPage, 'export and share menu open', observed)
     await authenticatedPage.keyboard.press('Escape')
 
+    const trackInspector = await openInspectorPanel(authenticatedPage, 'Track')
+    await expect(trackInspector.getByRole('region', { name: 'Tracks' })).toBeVisible()
+    await assertInteractionContract(authenticatedPage, 'track inspector', observed)
+
     const aiStudioHost = await openInspectorPanel(authenticatedPage, 'AI Studio')
     const aiStudio = aiStudioHost.getByRole('region', { name: 'AI Studio' })
     await expect(aiStudio.getByText('Pro · on-device')).toBeVisible()
@@ -407,6 +411,7 @@ test.describe('production interaction contract', () => {
     await authenticatedPage.getByRole('button', { name: 'Project', exact: true }).click()
     await authenticatedPage.getByRole('menuitem', { name: 'New project' }).click()
     await authenticatedPage.getByRole('button', { name: /Blank project/ }).click()
+    await authenticatedPage.getByRole('button', { name: 'Write', exact: true }).click()
     await expect(authenticatedPage.getByText('Your canvas is empty.')).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'empty project', observed)
 

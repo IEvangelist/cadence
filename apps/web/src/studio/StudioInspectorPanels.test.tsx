@@ -10,6 +10,7 @@ function InspectorHarness() {
   return (
     <StudioInspectorPanels
       panels={[
+        { id: 'track', label: 'Track', content: <button type="button">Rename</button> },
         { id: 'assistant', label: 'Assistant', content: <button type="button">Generate</button> },
         { id: 'ai', label: 'AI Studio', content: <button type="button">Humanize</button> },
         { id: 'extensions', label: 'Extensions', content: <button type="button">Enable</button> },
@@ -40,6 +41,20 @@ describe('<StudioInspectorPanels />', () => {
     )
   })
 
+  it('exposes the reachable Track inspector surface', async () => {
+    coversInteractions('studio.inspector.panel')
+    const user = userEvent.setup()
+    render(<InspectorHarness />)
+
+    await user.click(screen.getByRole('tab', { name: 'Track' }))
+
+    expect(screen.getByRole('button', { name: 'Rename' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Track' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+  })
+
   it('falls back to the first panel when the requested panel is unavailable', () => {
     render(
       <StudioInspectorPanels
@@ -60,8 +75,8 @@ describe('<StudioInspectorPanels />', () => {
     const user = userEvent.setup()
     render(<InspectorHarness />)
 
-    const assistant = screen.getByRole('tab', { name: 'Assistant' })
-    assistant.focus()
+    const track = screen.getByRole('tab', { name: 'Track' })
+    track.focus()
     await user.keyboard('{ArrowLeft}')
 
     expect(screen.getByRole('tab', { name: 'Extensions' })).toHaveFocus()

@@ -82,7 +82,6 @@ const automation = traced(
   'src/composer/components/AutomationLane.test.tsx',
   'e2e/automation.spec.ts',
 )
-const panels = traced('src/composer/components/CollapsiblePanel.test.tsx', 'e2e/composer.spec.ts')
 const instrument = traced('src/composer/components/InstrumentPicker.test.tsx')
 const midi = traced('src/composer/components/MidiControls.test.tsx', 'e2e/midi.spec.ts')
 const mixer = traced('src/composer/components/MixerPanel.test.tsx', 'e2e/automation.spec.ts')
@@ -484,14 +483,6 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'repeated',
   ),
 
-  panels(
-    'studio.panel.toggle',
-    'studio',
-    'button',
-    '/Tracks|Quick starts|AI Assistant|AI Studio|Mixer|Extensions/',
-    'Expands or collapses the selected composer panel and updates aria-expanded.',
-    'repeated',
-  ),
   instrument(
     'studio.track.instrument',
     'studio',

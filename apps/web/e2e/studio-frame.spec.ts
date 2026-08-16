@@ -148,19 +148,38 @@ test.describe('professional Studio frame', () => {
   test('keeps Project controls above the transport hit target at 1440px', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto('/')
-    const project = page.getByRole('button', { name: 'Project', exact: true })
-    const box = await project.boundingBox()
-    expect(box).not.toBeNull()
+    const projectCluster = page.locator('[data-studio-cluster="project"]')
+    const transportCluster = page.locator('[data-studio-cluster="transport"]')
+    const projectBox = await projectCluster.boundingBox()
+    const transportBox = await transportCluster.boundingBox()
+    expect(projectBox).not.toBeNull()
+    expect(transportBox).not.toBeNull()
+    expect(projectBox!.x + projectBox!.width).toBeLessThanOrEqual(transportBox!.x)
 
-    const hitCluster = await page.evaluate(({ x, y }) => {
-      const hit = document.elementFromPoint(x, y)
-      return hit?.closest('[data-studio-cluster]')?.getAttribute('data-studio-cluster')
-    }, {
-      x: box!.x + box!.width / 2,
-      y: box!.y + box!.height / 2,
-    })
+    const controls = projectCluster.locator(
+      'button:visible, input:visible:not([type="file"]):not(.visually-hidden)',
+    )
+    for (let index = 0; index < await controls.count(); index += 1) {
+      const control = controls.nth(index)
+      const box = await control.boundingBox()
+      const label = await control.getAttribute('aria-label') ?? await control.textContent()
+      expect(box).not.toBeNull()
+      expect(box!.x).toBeGreaterThanOrEqual(projectBox!.x)
+      expect(
+        box!.x + box!.width,
+        `${label ?? 'Project control'} is clipped by the Project cluster`,
+      ).toBeLessThanOrEqual(projectBox!.x + projectBox!.width)
 
-    expect(hitCluster).toBe('project')
+      const hitIsControl = await control.evaluate((element) => {
+        const box = element.getBoundingClientRect()
+        const hit = document.elementFromPoint(
+          box.left + box.width / 2,
+          box.top + box.height / 2,
+        )
+        return hit === element || element.contains(hit)
+      })
+      expect(hitIsControl, `${label ?? 'Project control'} is not hit-testable`).toBe(true)
+    }
   })
 
   test('keeps the informational footer off Studio and available on routed pages', async ({

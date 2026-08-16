@@ -34,7 +34,7 @@
   grid-row: 1;
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(20rem, 1fr) auto minmax(20rem, 1fr);
+  grid-template-columns: minmax(28rem, 1fr) auto minmax(22rem, 1fr);
   align-items: center;
   gap: var(--space-3);
   min-width: 0;

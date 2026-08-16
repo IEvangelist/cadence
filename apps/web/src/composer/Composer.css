@@ -139,6 +139,18 @@
   gap: var(--space-1);
 }
 
+.studio-frame .midi-controls {
+  flex-wrap: nowrap;
+}
+
+.studio-frame .midi-unsupported-note {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
 .studio-frame .transport .field > span:not(.field-suffix),
 .studio-frame .transport .field-suffix {
   position: absolute;
