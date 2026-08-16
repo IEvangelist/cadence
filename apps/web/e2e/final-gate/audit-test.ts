@@ -8,6 +8,8 @@ export const test = base.extend<{ auditIdentity: void }>({
     async ({ browserName }, use, testInfo) => {
       const servedHead = process.env.CADENCE_FINAL_GATE_SERVED_HEAD
       const baseURL = process.env.CADENCE_FINAL_GATE_BASE_URL
+      const workingTreeDirty =
+        process.env.CADENCE_FINAL_GATE_WORKTREE_DIRTY === 'true'
       if (!servedHead || !baseURL) {
         throw new Error(
           'Final-gate audit identity is missing. Run with playwright.final-gate.config.ts.',
@@ -21,6 +23,7 @@ export const test = base.extend<{ auditIdentity: void }>({
               baseURL,
               browserName,
               servedHead,
+              workingTreeDirty,
             },
             null,
             2,

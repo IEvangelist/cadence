@@ -7,7 +7,9 @@ branch. Until then, final-gate helpers remain isolated under
 
 The isolated final-gate servers use web port 4260 and collaboration relay port
 4360 with server reuse disabled. Every final-gate Playwright result attaches the
-served git HEAD and base URL so cross-worktree port contamination is visible.
+served git HEAD, working-tree dirty state, and base URL so cross-worktree port
+contamination is visible. The complete per-test audit is written to
+`test-results/final-gate/audit-summary.json`.
 
 ## Deterministic capture protocol
 

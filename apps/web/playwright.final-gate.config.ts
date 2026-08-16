@@ -8,12 +8,17 @@ const collabUrl = `ws://127.0.0.1:${RELAY_PORT}`
 const servedHead = execFileSync('git', ['rev-parse', 'HEAD'], {
   encoding: 'utf8',
 }).trim()
+const workingTreeDirty =
+  execFileSync('git', ['status', '--porcelain'], {
+    encoding: 'utf8',
+  }).trim().length > 0
 
 process.env.CADENCE_FINAL_GATE_SERVED_HEAD = servedHead
 process.env.CADENCE_FINAL_GATE_BASE_URL = baseURL
+process.env.CADENCE_FINAL_GATE_WORKTREE_DIRTY = String(workingTreeDirty)
 
 export default defineConfig({
-  metadata: { baseURL, servedHead },
+  metadata: { baseURL, servedHead, workingTreeDirty },
   testDir: './e2e',
   testMatch: '**/*.spec.ts',
   fullyParallel: true,
@@ -21,8 +26,16 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI
-    ? [['github'], ['html', { open: 'never' }]]
-    : [['list'], ['html', { open: 'never' }]],
+    ? [
+        ['github'],
+        ['./e2e/final-gate/audit-reporter.ts'],
+        ['html', { open: 'never' }],
+      ]
+    : [
+        ['list'],
+        ['./e2e/final-gate/audit-reporter.ts'],
+        ['html', { open: 'never' }],
+      ],
   use: {
     baseURL,
     trace: 'on-first-retry',
