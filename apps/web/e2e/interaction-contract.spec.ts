@@ -661,6 +661,7 @@ test.describe('production interaction contract', () => {
       storageState: { cookies: [], origins: [] },
     })
     const firstRunPage = await firstRunContext.newPage()
+    await firstRunPage.addInitScript(() => localStorage.clear())
     await firstRunPage.route('**/api/**', (route) => mockApi(route, false))
     await firstRunPage.goto('/')
     await expect(firstRunPage.getByRole('heading', { name: 'Start a project' })).toBeVisible()
