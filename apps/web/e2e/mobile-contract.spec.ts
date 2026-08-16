@@ -141,6 +141,8 @@ test.describe('production mobile Studio', () => {
   test('uses touch-safe note modes, precise edits, transport, and attached keyboard', async ({
     page,
   }) => {
+    await openTask(page, 'Project')
+    await page.getByRole('button', { name: 'Close Project' }).click()
     await page.getByRole('button', { name: /^Notes:/ }).click()
     const notesBefore = await page.locator('.pr-note:not(.is-preview)').count()
     const empty = await visibleEmptyGridPoint(page)
@@ -176,6 +178,22 @@ test.describe('production mobile Studio', () => {
     const selectPoint = await center(note)
     await page.touchscreen.tap(selectPoint.x, selectPoint.y)
     await expect(note).toHaveAttribute('aria-pressed', 'true')
+    const editSelected = page.getByRole('button', { name: 'Edit selected note' })
+    const editHit = await editSelected.evaluate((element) => {
+        const rect = element.getBoundingClientRect()
+        const hit = document.elementFromPoint(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2,
+        )
+        return {
+          matches: hit === element || element.contains(hit),
+          hit: hit instanceof HTMLElement
+            ? `${hit.tagName}.${hit.className}`
+            : String(hit),
+          rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+        }
+      })
+    expect(editHit.matches, JSON.stringify(editHit)).toBe(true)
     const noteStart = await center(note)
     await touchGesture(page, [noteStart, { x: noteStart.x + 48, y: noteStart.y }])
     await expect(note).toHaveAttribute('aria-pressed', 'true')
@@ -192,7 +210,7 @@ test.describe('production mobile Studio', () => {
       ),
     ).toBe(true)
 
-    await page.getByRole('button', { name: 'Edit selected note' }).click()
+    await editSelected.click()
     const editor = page.getByTestId('selected-note-sheet')
     const controls = editor.locator('button, input')
     expect(

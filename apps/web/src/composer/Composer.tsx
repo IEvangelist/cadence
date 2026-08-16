@@ -431,18 +431,20 @@ function ComposerWorkspace({
       <div className="composer-editor-commandbar">{editControls}</div>
       <div className="composer-editor-stack">
         {mobileLayout ? (
-          <MobileNoteControls
-            mode={mobileState.noteMode}
-            hasSelection={Boolean(selectedNote)}
-            onModeChange={(mode) => dispatchMobile({ type: 'set-note-mode', mode })}
-            onEditSelection={() => {
-              if (!selectedNote) return
-              dispatchMobile({ type: 'select-note', noteId: selectedNote.id })
-              dispatchMobile({ type: 'open-selected-note' })
-            }}
-          />
+          <div className="mobile-note-header">
+            <MobileNoteControls
+              mode={mobileState.noteMode}
+              hasSelection={Boolean(selectedNote)}
+              onModeChange={(mode) => dispatchMobile({ type: 'set-note-mode', mode })}
+              onEditSelection={() => {
+                if (!selectedNote) return
+                dispatchMobile({ type: 'select-note', noteId: selectedNote.id })
+                dispatchMobile({ type: 'open-selected-note' })
+              }}
+            />
+            {mobileCoach('notes')}
+          </div>
         ) : null}
-        {mobileCoach('notes')}
         <PianoRoll
           controller={controller}
           previewNotes={assistant.previewNotes}
