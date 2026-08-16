@@ -347,6 +347,218 @@ describe('useComposer', () => {
   })
 })
 
+describe('useComposer — single-user undo/redo history (#156)', () => {
+  it('starts with no undo/redo history available', () => {
+    const { hook } = setup()
+    expect(hook.result.current.canUndo).toBe(false)
+    expect(hook.result.current.canRedo).toBe(false)
+  })
+
+  it('undoes and redoes a document mutation', () => {
+    const { hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+    act(() => hook.result.current.addNoteAt(trackId, 60, 0, 1))
+    expect(hook.result.current.project.tracks[0].notes).toHaveLength(1)
+    expect(hook.result.current.canUndo).toBe(true)
+    expect(hook.result.current.canRedo).toBe(false)
+
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.tracks[0].notes).toHaveLength(0)
+    expect(hook.result.current.canUndo).toBe(false)
+    expect(hook.result.current.canRedo).toBe(true)
+
+    act(() => hook.result.current.redo())
+    expect(hook.result.current.project.tracks[0].notes).toHaveLength(1)
+    expect(hook.result.current.canUndo).toBe(true)
+    expect(hook.result.current.canRedo).toBe(false)
+  })
+
+  it('clears the redo stack once a new edit follows an undo', () => {
+    const { hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+    act(() => hook.result.current.addNoteAt(trackId, 60, 0, 1))
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.canRedo).toBe(true)
+    act(() => hook.result.current.addTrack())
+    expect(hook.result.current.canRedo).toBe(false)
+  })
+
+  it('coalesces rapid pointer-drag note updates into a single undo step', () => {
+    const { hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+    act(() => hook.result.current.addNoteAt(trackId, 60, 0, 1))
+    const noteId = hook.result.current.project.tracks[0].notes[0].id
+
+    // Each call commits separately (mirroring a pointer-move handler firing on
+    // every mousemove), well within the coalescing window.
+    act(() => hook.result.current.updateNote(trackId, noteId, { start: 0.1 }))
+    act(() => hook.result.current.updateNote(trackId, noteId, { start: 0.2 }))
+    act(() => hook.result.current.updateNote(trackId, noteId, { start: 0.3 }))
+    expect(hook.result.current.project.tracks[0].notes[0].start).toBe(0.3)
+
+    // ONE undo reverts straight past the whole drag, not one step per update.
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.tracks[0].notes[0].start).toBe(0)
+
+    // The drag was its own entry, distinct from the `add-note` that preceded it.
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.tracks[0].notes).toHaveLength(0)
+  })
+
+  it('does not coalesce discrete one-shot commands even when they land back-to-back', () => {
+    const { hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+    act(() => hook.result.current.addNoteAt(trackId, 60, 0, 1))
+    act(() => hook.result.current.addNoteAt(trackId, 64, 1, 1))
+    expect(hook.result.current.project.tracks[0].notes).toHaveLength(2)
+
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.tracks[0].notes).toHaveLength(1)
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.tracks[0].notes).toHaveLength(0)
+  })
+
+  it('keeps rapid loop toggles as discrete undo and redo items', () => {
+    const { hook } = setup()
+
+    act(() => {
+      hook.result.current.toggleLoop()
+      hook.result.current.toggleLoop()
+    })
+    expect(hook.result.current.project.loop.enabled).toBe(false)
+
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.loop.enabled).toBe(true)
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.loop.enabled).toBe(false)
+
+    act(() => hook.result.current.redo())
+    expect(hook.result.current.project.loop.enabled).toBe(true)
+    act(() => hook.result.current.redo())
+    expect(hook.result.current.project.loop.enabled).toBe(false)
+  })
+
+  it('keeps two discrete commands separate when React batches them in one event', () => {
+    const { hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+
+    act(() => {
+      hook.result.current.addNoteAt(trackId, 60, 0, 1)
+      hook.result.current.addNoteAt(trackId, 64, 1, 1)
+    })
+    expect(hook.result.current.project.tracks[0].notes).toHaveLength(2)
+
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.tracks[0].notes).toHaveLength(1)
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.tracks[0].notes).toHaveLength(0)
+  })
+
+  it('coalesces continuous project and track name typing into one field edit', () => {
+    const { hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+    const originalProjectName = hook.result.current.project.name
+    const originalTrackName = hook.result.current.project.tracks[0].name
+
+    act(() => hook.result.current.setProjectName('L'))
+    act(() => hook.result.current.setProjectName('Le'))
+    act(() => hook.result.current.setProjectName('Lead'))
+    act(() => hook.result.current.stopHistoryCapture())
+    act(() => hook.result.current.renameTrack(trackId, 'B'))
+    act(() => hook.result.current.renameTrack(trackId, 'Ba'))
+    act(() => hook.result.current.renameTrack(trackId, 'Bass'))
+    act(() => hook.result.current.stopHistoryCapture())
+
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.tracks[0].name).toBe(originalTrackName)
+    expect(hook.result.current.project.name).toBe('Lead')
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.name).toBe(originalProjectName)
+  })
+
+  it('preserves the current selection across undo/redo (document mutations only)', () => {
+    const { hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+    act(() => hook.result.current.addNoteAt(trackId, 60, 0, 1))
+    const noteId = hook.result.current.project.tracks[0].notes[0].id
+    act(() => hook.result.current.selectNote(noteId))
+    act(() => hook.result.current.updateNote(trackId, noteId, { velocity: 0.9 }))
+    expect(hook.result.current.state.selectedNoteIds).toEqual([noteId])
+
+    act(() => hook.result.current.undo())
+    // The document mutation (velocity) is undone...
+    expect(hook.result.current.project.tracks[0].notes[0].velocity).not.toBe(0.9)
+    // ...but selection is a view concern untouched by undo/redo.
+    expect(hook.result.current.state.selectedNoteIds).toEqual([noteId])
+  })
+
+  it('resets history on any load-project action (new project, demo, snapshot load)', async () => {
+    const { hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+
+    act(() => hook.result.current.addNoteAt(trackId, 60, 0, 1))
+    expect(hook.result.current.canUndo).toBe(true)
+    act(() => hook.result.current.newProject())
+    await waitFor(() => expect(hook.result.current.canUndo).toBe(false))
+    expect(hook.result.current.canRedo).toBe(false)
+
+    act(() => hook.result.current.addTrack())
+    expect(hook.result.current.canUndo).toBe(true)
+    act(() => hook.result.current.loadDemo())
+    await waitFor(() => expect(hook.result.current.canUndo).toBe(false))
+
+    act(() => hook.result.current.setTempo(77))
+    expect(hook.result.current.canUndo).toBe(true)
+    act(() =>
+      hook.result.current.loadProjectSnapshot({
+        ...createEmptyProject('template_x'),
+        name: 'Snapshot',
+      }),
+    )
+    await waitFor(() => expect(hook.result.current.canUndo).toBe(false))
+  })
+
+  it('resets history when a remote sync replaces the document', () => {
+    const { hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+    act(() => hook.result.current.addNoteAt(trackId, 60, 0, 1))
+    expect(hook.result.current.canUndo).toBe(true)
+
+    act(() =>
+      hook.result.current.applyRemoteProject({
+        ...hook.result.current.project,
+        name: 'From peer',
+      }),
+    )
+    expect(hook.result.current.canUndo).toBe(false)
+    expect(hook.result.current.canRedo).toBe(false)
+    expect(hook.result.current.project.name).toBe('From peer')
+  })
+
+  it('setHistoryEnabled(false) suppresses capture and clears history; re-enabling clears again', () => {
+    const { hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+    act(() => hook.result.current.addNoteAt(trackId, 60, 0, 1))
+    expect(hook.result.current.canUndo).toBe(true)
+
+    act(() => hook.result.current.setHistoryEnabled(false))
+    expect(hook.result.current.canUndo).toBe(false)
+
+    const noteId = hook.result.current.project.tracks[0].notes[0].id
+    act(() => hook.result.current.updateNote(trackId, noteId, { velocity: 0.2 }))
+    // Capture is suppressed while disabled — the edit above never pushed.
+    expect(hook.result.current.canUndo).toBe(false)
+
+    act(() => hook.result.current.setHistoryEnabled(true))
+    // Re-enabling also clears — the disabled-period edit isn't retroactively
+    // undoable, since single-user history and a collaboration session's own
+    // `Y.UndoManager` must never both claim the same edit.
+    expect(hook.result.current.canUndo).toBe(false)
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.tracks[0].notes[0].velocity).toBe(0.2)
+  })
+})
+
 describe('useComposer — StrictMode lifecycle (regression #97)', () => {
   it('revives the engine after a StrictMode remount so playback never drives a disposed graph', () => {
     const engine = new FakeEngine()

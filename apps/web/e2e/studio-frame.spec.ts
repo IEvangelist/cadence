@@ -171,7 +171,9 @@ test.describe('professional Studio frame', () => {
     expect(scopes.indexOf('transport')).toBeGreaterThan(scopes.indexOf('project'))
     expect(scopes.indexOf('rail')).toBeGreaterThan(scopes.indexOf('transport'))
     expect(scopes.indexOf('editor')).toBeGreaterThan(scopes.indexOf('rail'))
-    expect(scopes.indexOf('editor')).toBeLessThan(20)
+    // #156 adds four intentional TrackRail controls before the editor while
+    // keeping the workbench concise and fully keyboard reachable.
+    expect(scopes.indexOf('editor')).toBeLessThan(25)
   })
 
   test('keeps Project controls above the transport hit target at 1440px', async ({ page }) => {

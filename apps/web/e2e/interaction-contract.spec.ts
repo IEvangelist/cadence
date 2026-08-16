@@ -391,12 +391,58 @@ test.describe('production interaction contract', () => {
     await expect(authenticatedPage.locator('#composer-main')).toBeFocused()
     await assertInteractionContract(authenticatedPage, 'authenticated studio', observed)
 
+    const instrumentInspector = await openInspectorPanel(authenticatedPage, 'Track')
+    await instrumentInspector
+      .getByRole('button', { name: /Choose instrument for/ })
+      .click()
+    await expect(
+      authenticatedPage.getByRole('region', { name: 'Instrument browser' }),
+    ).toBeVisible()
+    await assertInteractionContract(authenticatedPage, 'instrument browser', observed)
+    await authenticatedPage
+      .locator('[data-interaction="studio.instrument-browser.close"]')
+      .click()
+
+    await authenticatedPage.getByRole('button', { name: 'Shortcuts' }).click()
+    await expect(
+      authenticatedPage.getByRole('dialog', { name: 'Keyboard shortcuts' }),
+    ).toBeVisible()
+    await assertInteractionContract(authenticatedPage, 'shortcut help', observed)
+    await authenticatedPage
+      .locator('[data-interaction="studio.shortcuts.close"]')
+      .click()
+
     const note = authenticatedPage.locator('[data-interaction="studio.piano-roll.note"]').first()
     await note.click()
     await expect(
       authenticatedPage.locator('[data-interaction="studio.piano-roll.velocity.selected"]'),
     ).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'selected piano note', observed)
+
+    await authenticatedPage.getByRole('button', { name: 'Add track' }).click()
+    await authenticatedPage.getByRole('button', { name: 'Select Synth' }).click()
+    await authenticatedPage.getByRole('button', { name: 'Delete Synth' }).click()
+    await expect(
+      authenticatedPage.getByRole('alertdialog', { name: /Delete Synth/ }),
+    ).toBeVisible()
+    await assertInteractionContract(authenticatedPage, 'track delete confirmation', observed)
+    await expect(
+      authenticatedPage.getByRole('alertdialog', { name: /Delete Synth/ }).locator(':focus'),
+    ).toHaveCount(1)
+    await authenticatedPage.keyboard.press('Escape')
+    await expect(
+      authenticatedPage.getByRole('alertdialog', { name: /Delete Synth/ }),
+    ).toHaveCount(0)
+    await expect(
+      authenticatedPage.getByRole('button', { name: 'Delete Synth' }),
+    ).toBeFocused()
+    await authenticatedPage.getByRole('button', { name: 'Delete Synth' }).click()
+    await authenticatedPage.getByRole('button', { name: 'Cancel' }).click()
+    await authenticatedPage.getByRole('button', { name: 'Delete Synth' }).click()
+    await authenticatedPage
+      .getByRole('button', { name: 'Delete track', exact: true })
+      .click()
+    await expect(authenticatedPage.getByRole('heading', { name: 'Tracks' })).toBeFocused()
 
     const shareToggle = authenticatedPage.locator('[data-interaction="studio.share.toggle"]')
     await shareToggle.click()
@@ -420,7 +466,9 @@ test.describe('production interaction contract', () => {
     await authenticatedPage.keyboard.press('Escape')
 
     const trackInspector = await openInspectorPanel(authenticatedPage, 'Track')
-    await expect(trackInspector.getByRole('region', { name: 'Tracks' })).toBeVisible()
+    await expect(
+      trackInspector.getByRole('region', { name: 'Track inspector' }),
+    ).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'track inspector', observed)
 
     const aiStudioHost = await openInspectorPanel(authenticatedPage, 'AI Studio')

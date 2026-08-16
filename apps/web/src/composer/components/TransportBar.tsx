@@ -26,6 +26,7 @@ export function TransportBar({ controller }: TransportBarProps) {
         type="button"
         className="btn btn-primary transport-play"
         data-interaction="studio.transport.play"
+        aria-keyshortcuts="Space"
         onClick={togglePlay}
         aria-pressed={isPlaying}
       >

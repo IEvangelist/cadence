@@ -88,6 +88,7 @@ export function ProjectToolbar({
   const {
     project,
     setProjectName,
+    stopHistoryCapture,
     saveProject,
     exportMidi,
     exportWav,
@@ -179,6 +180,7 @@ export function ProjectToolbar({
           data-interaction="studio.project.name"
           value={project.name}
           onChange={(event) => setProjectName(event.target.value)}
+          onBlur={stopHistoryCapture}
           aria-label="Project name"
         />
       </label>

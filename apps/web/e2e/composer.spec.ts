@@ -18,6 +18,87 @@ async function openExportMenu(page: import('@playwright/test').Page): Promise<vo
 // (localStorage autosave/restore). Exercises the audio engine, piano roll,
 // MIDI export, and persistence end to end.
 test.describe('composer', () => {
+  test('Space activates a focused Studio control instead of toggling transport', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    const rail = page.getByRole('complementary', { name: 'Track rail' })
+    const addTrack = rail.getByRole('button', { name: 'Add track' })
+    await addTrack.focus()
+    const before = await rail.locator('.track-rail__row').count()
+    await page.keyboard.press('Space')
+
+    await expect(rail.locator('.track-rail__row')).toHaveCount(before + 1)
+    await expect(page.locator('button.transport-play')).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+  })
+
+  test('moves focus to the remaining track after an immediate keyboard delete', async ({ page }) => {
+    await page.goto('/')
+    const rail = page.getByRole('complementary', { name: 'Track rail' })
+    const deletes = rail.locator('[data-interaction="studio.track.delete"]')
+    await expect(deletes.first()).toBeVisible()
+    const before = await deletes.count()
+    await rail.getByRole('button', { name: 'Add track' }).click()
+    await expect(deletes).toHaveCount(before + 1)
+    await deletes.last().focus()
+
+    await page.keyboard.press('Enter')
+
+    await expect(deletes).toHaveCount(before)
+    await expect(rail.locator('[data-interaction="studio.track.select"]').last()).toBeFocused()
+  })
+
+  test('shortcut help traps focus, blocks the Studio, and restores its trigger', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    const trigger = page.getByRole('button', { name: 'Shortcuts' })
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled()
+    await expect(trigger).toBeEnabled()
+    await trigger.click()
+    const dialog = page.getByRole('dialog', { name: 'Keyboard shortcuts' })
+    const search = dialog.getByRole('searchbox', { name: 'Search commands' })
+    const close = dialog.getByRole('button', { name: 'Close' })
+    await expect(search).toBeFocused()
+
+    await page.keyboard.press('Shift+Tab')
+    await expect(close).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(search).toBeFocused()
+    await expect(page.locator('body')).toHaveCSS('pointer-events', 'none')
+    const backgroundAddTrack = page.locator('[data-interaction="studio.track.add"]')
+    expect(
+      await backgroundAddTrack.evaluate((control) => {
+        const rect = control.getBoundingClientRect()
+        const hit = document.elementFromPoint(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2,
+        )
+        return hit === control || control.contains(hit)
+      }),
+    ).toBe(false)
+
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    await expect(trigger).toBeFocused()
+
+    await trigger.click()
+    const closeButton = dialog.getByRole('button', { name: 'Close' })
+    await expect(closeButton).toBeVisible()
+    await closeButton.click()
+    await expect(trigger).toBeFocused()
+
+    const keyboardInvoker = page.locator('[data-interaction="studio.track.add"]')
+    await keyboardInvoker.focus()
+    await page.keyboard.press('?')
+    await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(keyboardInvoker).toBeFocused()
+  })
+
   test('create a note, play, export MIDI, and persist across reload', async ({ page }) => {
     await page.goto('/')
 

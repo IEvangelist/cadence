@@ -178,4 +178,66 @@ describe('<Composer />', () => {
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
     expect(screen.getByLabelText('Project name')).toHaveValue('Demo — Every idea, resolved')
   })
+
+  it('uses Space for transport while the piano-roll grid is focused', () => {
+    render(<Composer options={options()} />)
+    const grid = screen.getByRole('application', { name: /Note grid/ })
+    grid.focus()
+
+    fireEvent.keyDown(grid, { key: ' ' })
+
+    expect(screen.getByRole('button', { name: /Pause/ })).toBeInTheDocument()
+    expect(screen.queryAllByRole('button').filter((button) =>
+      button.className.includes('pr-note'),
+    )).toHaveLength(0)
+  })
+
+  it('exposes undo, redo, and searchable shortcut help from the Studio command source', () => {
+    coversInteractions(
+      'studio.history.undo',
+      'studio.history.redo',
+      'studio.shortcuts.open',
+    )
+    render(<Composer options={options()} />)
+    const grid = screen.getByRole('application', { name: /Note grid/ })
+    fireEvent.keyDown(grid, { key: 'Enter' })
+    const notes = () =>
+      screen.queryAllByRole('button').filter((button) => button.className.includes('pr-note'))
+    expect(notes()).toHaveLength(1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    expect(notes()).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Redo' }))
+    expect(notes()).toHaveLength(1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Shortcuts' }))
+    expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument()
+  })
+
+  it('restores shortcut help to its toolbar trigger when opened from the document body', async () => {
+    const user = userEvent.setup()
+    localStorage.setItem('cadence.v1.onboarding.seen', '1')
+    render(<Composer options={options()} />)
+    document.body.focus()
+
+    fireEvent.keyDown(document.body, { key: '?' })
+    expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('button', { name: 'Shortcuts' })).toHaveFocus()
+  })
+
+  it('restores shortcut help to an interactive keyboard invoker', async () => {
+    const user = userEvent.setup()
+    localStorage.setItem('cadence.v1.onboarding.seen', '1')
+    render(<Composer options={options()} />)
+    const addTrack = screen.getByRole('button', { name: 'Add track' })
+    addTrack.focus()
+
+    fireEvent.keyDown(addTrack, { key: '?' })
+    expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    expect(addTrack).toHaveFocus()
+  })
 })

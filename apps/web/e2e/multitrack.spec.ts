@@ -1,6 +1,5 @@
 import AxeBuilder from '@axe-core/playwright'
 import { test, expect, type Page } from '@playwright/test'
-import { openInspectorPanel } from './studioActions'
 
 // #131 multi-track piano roll. The app boots with the demo project (a Synth track
 // and a Drums track), so "Show all tracks" overlays the Drums notes as read-only,
@@ -29,9 +28,11 @@ test.describe('composer multi-track view (#131)', () => {
     await expect(page.locator('.pr-note.is-ghost')).toHaveCount(0)
     await expect(page.locator('.pr-legend')).toHaveCount(0)
 
-    // Reveal every track from the contextual Track inspector.
-    const inspector = await openInspectorPanel(page, 'Track')
-    await inspector.getByRole('button', { name: 'Show all tracks' }).click()
+    // Reveal every track from the persistent #156 track rail.
+    await page
+      .getByRole('complementary', { name: 'Track rail' })
+      .getByRole('button', { name: 'Show all tracks' })
+      .click()
 
     const legend = page.getByRole('list', { name: /Tracks shown on the piano roll/ })
     await expect(legend).toBeVisible()
