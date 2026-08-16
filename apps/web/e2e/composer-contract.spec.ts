@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { chooseExport, createBlankProject } from './projectActions'
-import { openInspectorPanel } from './studioActions'
+import { openAiInspectorMode } from './studioActions'
 
 test.describe('composer shared contract surfaces', () => {
   test.beforeEach(async ({ page }) => {
@@ -25,7 +25,7 @@ test.describe('composer shared contract surfaces', () => {
     await page.getByRole('button', { name: /Play/ }).click()
     await page.getByRole('button', { name: /Stop/ }).click()
 
-    const inspector = await openInspectorPanel(page, 'Assistant')
+    const inspector = await openAiInspectorMode(page, 'Basic')
     const panel = inspector.getByRole('region', { name: 'AI Assistant' })
     await panel.getByRole('radio', { name: /Generate melody/ }).check()
     await panel.getByRole('button', { name: 'Generate' }).click()

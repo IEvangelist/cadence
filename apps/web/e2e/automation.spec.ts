@@ -90,19 +90,6 @@ async function dismissTour(page: Page): Promise<void> {
   }
 }
 
-async function openMixer(page: Page) {
-  const workspace = page.getByRole('region', { name: 'Mix workspace' })
-  if (await workspace.isVisible().catch(() => false)) {
-    return workspace.getByRole('region', { name: 'Mixer' })
-  }
-  const mixerToggle = page.getByRole('button', { name: /Mixer|Mix/ }).first()
-  if ((await mixerToggle.getAttribute('aria-expanded')) !== 'true') {
-    await mixerToggle.click()
-  }
-  await expect(mixerToggle).toHaveAttribute('aria-expanded', 'true')
-  return page.getByRole('region', { name: 'Mixer' })
-}
-
 test.describe('composer parameter automation', () => {
   test('master-gain automation silences the output over the timeline', async ({ page }) => {
     await installOutputTap(page)
@@ -150,7 +137,7 @@ test.describe('composer parameter automation', () => {
     await dismissTour(page)
     await expect(page.locator('.pr-note').first()).toBeVisible()
 
-    const mixer = await openMixer(page)
+    const mixer = await openMixWorkspace(page)
     await mixer
       .getByRole('group', { name: 'Master bus' })
       .getByRole('slider', { name: /Gain/ })

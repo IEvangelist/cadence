@@ -6,6 +6,7 @@ import {
 import {
   defaultProjectDetailDto,
   defaultProjectSummaryDto,
+  returningProjectStorage,
 } from './projectFixtures'
 import {
   openAiInspectorMode,
@@ -84,7 +85,12 @@ async function mockApi(
   if (path === '/api/entitlements') {
     return json(
       authenticated
-        ? { ...proEntitlements, tier: pro ? 'Pro' : 'Free', stemSeparation: pro }
+        ? {
+            ...proEntitlements,
+            tier: pro ? 'Pro' : 'Free',
+            aiGenerationsPerDay: pro ? -1 : 10,
+            stemSeparation: pro,
+          }
         : { ...proEntitlements, tier: 'Free', stemSeparation: false },
     )
   }
@@ -357,7 +363,10 @@ test.describe('production interaction contract', () => {
       origins: [
         {
           origin,
-          localStorage: [{ name: 'cadence.v1.onboarding.seen', value: '1' }],
+          localStorage: [
+            { name: 'cadence.v1.onboarding.seen', value: '1' },
+            ...returningProjectStorage,
+          ],
         },
       ],
     }
@@ -369,6 +378,11 @@ test.describe('production interaction contract', () => {
     await freeUserPage.route('**/api/**', (route) => mockApi(route, true, false))
     await freeUserPage.goto('/')
     await expect(freeUserPage.getByRole('button', { name: 'Profile' })).toBeVisible()
+    const freeAiHost = await openAiInspectorMode(freeUserPage, 'Advanced')
+    const freeAiStudio = freeAiHost.getByRole('region', { name: 'AI Studio' })
+    await freeAiStudio.getByRole('radio', { name: /Style transfer/ }).check()
+    await expect(freeAiStudio.getByRole('link', { name: 'View plans' })).toBeVisible()
+    await assertInteractionContract(freeUserPage, 'authenticated free AI lock', observed)
     await openStudioDestination(freeUserPage, 'Stems')
     await expect(freeUserPage.getByRole('button', { name: 'See Pro plans' })).toBeVisible()
     await assertInteractionContract(freeUserPage, 'authenticated free stems', observed)

@@ -1,13 +1,6 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
-
-async function openMixer(page: Page): Promise<Locator> {
-  const workspace = page.getByRole('region', { name: 'Mix workspace' })
-  if (await workspace.isVisible().catch(() => false)) return workspace
-
-  const toggle = page.getByRole('button', { name: /Mixer|Mix/ }).first()
-  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click()
-  return page.getByRole('region', { name: 'Mixer' })
-}
+import { expect, test, type Locator } from '@playwright/test'
+import { createBlankProject } from './projectActions'
+import { openMixWorkspace, openStudioDestination } from './studioActions'
 
 async function firstTrackStrip(mixer: Locator): Promise<Locator> {
   return mixer.locator('.mixer-strip').first()
@@ -16,7 +9,7 @@ async function firstTrackStrip(mixer: Locator): Promise<Locator> {
 test.describe('persisted Mix workspace', () => {
   test('round-trips manual mix state through save, reload, and route remount', async ({ page }) => {
     await page.goto('/')
-    const mixer = await openMixer(page)
+    const mixer = await openMixWorkspace(page)
     const track = await firstTrackStrip(mixer)
     const master = mixer.getByRole('group', { name: 'Master bus' })
 
@@ -33,7 +26,7 @@ test.describe('persisted Mix workspace', () => {
     await page.getByRole('button', { name: 'Save' }).click()
     await page.reload()
 
-    const reloadedMixer = await openMixer(page)
+    const reloadedMixer = await openMixWorkspace(page)
     const reloadedTrack = await firstTrackStrip(reloadedMixer)
     const reloadedMaster = reloadedMixer.getByRole('group', { name: 'Master bus' })
     await expect(reloadedTrack.getByRole('slider', { name: /Gain/ })).toHaveValue('-12')
@@ -51,10 +44,10 @@ test.describe('persisted Mix workspace', () => {
     await expect(reloadedMaster.getByRole('checkbox', { name: 'Limiter' })).toBeChecked()
     await expect(reloadedMaster.getByRole('slider', { name: /Ceiling/ })).toHaveValue('-3')
 
-    await page.getByRole('button', { name: 'Pricing' }).click()
+    await openStudioDestination(page, 'Pricing')
     await page.getByRole('button', { name: 'Back to composer' }).click()
 
-    const remountedMixer = await openMixer(page)
+    const remountedMixer = await openMixWorkspace(page)
     const remountedTrack = await firstTrackStrip(remountedMixer)
     await expect(remountedTrack.getByRole('slider', { name: /Gain/ })).toHaveValue('-12')
     await expect(remountedTrack.getByRole('button', { name: 'Solo' })).toHaveAttribute(
@@ -67,14 +60,14 @@ test.describe('persisted Mix workspace', () => {
     page,
   }) => {
     await page.goto('/')
-    let mixer = await openMixer(page)
+    let mixer = await openMixWorkspace(page)
     let track = await firstTrackStrip(mixer)
     await track.getByRole('slider', { name: /Gain/ }).fill('-18')
     await track.getByRole('button', { name: 'Solo' }).click()
 
-    await page.getByRole('button', { name: 'New' }).click()
+    await createBlankProject(page)
 
-    mixer = await openMixer(page)
+    mixer = await openMixWorkspace(page)
     track = await firstTrackStrip(mixer)
     await expect(track.getByRole('slider', { name: /Gain/ })).toHaveValue('0')
     await expect(track.getByRole('slider', { name: /Pan/ })).toHaveValue('0')
