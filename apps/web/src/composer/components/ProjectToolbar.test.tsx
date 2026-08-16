@@ -218,7 +218,7 @@ describe('<ProjectToolbar />', () => {
         channel[i] = Math.sin((2 * Math.PI * 440 * i) / rate) * 0.25
       }
       return { sampleRate: rate, channels: [channel] }
-    }, 15_000)
+    })
     render(<Harness download={download} options={{ audioRenderer }} />)
 
     await chooseMenuItem(user, 'Export & share', 'Export MusicXML (.musicxml)')
@@ -241,7 +241,7 @@ describe('<ProjectToolbar />', () => {
     expect((download.mock.calls[2][0] as Uint8Array).byteLength).toBeGreaterThan(44)
     expect((download.mock.calls[3][0] as Uint8Array).byteLength).toBeGreaterThan(0)
     expect((download.mock.calls[4][0] as Uint8Array).byteLength).toBeGreaterThan(0)
-  })
+  }, 15_000)
 
   it('exports and imports a plugin-contributed format', async () => {
     const user = userEvent.setup()
