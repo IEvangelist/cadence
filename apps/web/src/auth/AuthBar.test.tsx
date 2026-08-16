@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { coversInteractions } from '../test/coversInteractions'
 import type { AuthClient } from './authClient'
@@ -75,6 +75,31 @@ describe('AuthBar', () => {
     await user.click(screen.getByRole('button', { name: 'Sign in' }))
 
     expect(signIn).toHaveBeenCalledWith('a@b.com', 'secret12')
+  })
+
+  it('shows one visible busy state while sign-in reconciliation is pending', async () => {
+    let finish!: () => void
+    const signIn = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve
+        }),
+    )
+    const user = userEvent.setup()
+    renderBar(makeValue({ signIn }))
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    await user.type(screen.getByLabelText('Email'), 'a@b.com')
+    await user.type(screen.getByLabelText('Password'), 'secret12')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+
+    const busy = screen.getByRole('button', { name: 'Signing in...' })
+    expect(busy).toBeDisabled()
+    expect(busy).toHaveAttribute('aria-busy', 'true')
+
+    finish()
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Signing in...' })).not.toBeInTheDocument(),
+    )
   })
 
   it('names the authentication popover dialog from its title', async () => {

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { chooseExport, createBlankProject } from './projectActions'
 
 test.describe('composer shared contract surfaces', () => {
   test.beforeEach(async ({ page }) => {
@@ -12,7 +13,7 @@ test.describe('composer shared contract surfaces', () => {
   }) => {
     await page.goto('/')
 
-    await page.getByRole('button', { name: 'New' }).click()
+    await createBlankProject(page)
     await expect(page.getByText('Your canvas is empty.')).toBeVisible()
 
     const grid = page.getByRole('application', { name: /Note grid/ })
@@ -39,7 +40,7 @@ test.describe('composer shared contract surfaces', () => {
     await page.getByRole('button', { name: 'Save' }).click()
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: 'Export MIDI' }).click(),
+      chooseExport(page, 'Export MIDI'),
     ])
     expect(download.suggestedFilename()).toMatch(/\.mid$/)
 

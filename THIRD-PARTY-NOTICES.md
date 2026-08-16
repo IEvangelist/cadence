@@ -15,6 +15,7 @@ different license.
 | --- | --- | --- | --- |
 | [`@breezystack/lamejs`](https://www.npmjs.com/package/@breezystack/lamejs) | 1.2.7 | LGPL-3.0-or-later | LAME MP3 encoder (pure-JavaScript port) |
 | [`react-router-dom`](https://www.npmjs.com/package/react-router-dom) | 7.18.2 | MIT | Browser-history routing |
+| [`@radix-ui/react-dialog`](https://www.npmjs.com/package/@radix-ui/react-dialog) | 1.1.23 | MIT | Accessible project/replacement dialogs |
 | [`@radix-ui/react-dropdown-menu`](https://www.npmjs.com/package/@radix-ui/react-dropdown-menu) | 2.1.24 | MIT | Accessible theme menu |
 | [`@radix-ui/react-popover`](https://www.npmjs.com/package/@radix-ui/react-popover) | 1.1.23 | MIT | Accessible authentication popover |
 | [`@radix-ui/react-tooltip`](https://www.npmjs.com/package/@radix-ui/react-tooltip) | 1.2.16 | MIT | Accessible icon-control tooltip |

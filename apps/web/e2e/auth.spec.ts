@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { test, expect, type Route } from '@playwright/test'
+import { createBlankProject } from './projectActions'
 
 // Auth + remote-persistence smoke against the production build. There is no
 // backend in e2e, so every `/api/**` call is mocked with `page.route`. We prove:
@@ -73,7 +74,7 @@ test.describe('auth', () => {
     await expect(page.getByText('Ada')).toBeVisible()
 
     // Create a fresh project and place a note so there is something to save.
-    await page.getByRole('button', { name: 'New' }).click()
+    await createBlankProject(page)
     const grid = page.getByRole('application', { name: /Note grid/ })
     await grid.click({ position: { x: 72, y: 96 } })
     await expect(page.locator('.pr-note')).toHaveCount(1)

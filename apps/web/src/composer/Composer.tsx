@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { type UseComposerOptions, useComposer } from './hooks/useComposer'
+import type { ComposerController } from './hooks/useComposer'
 import { type UseAssistantOptions, useAssistant } from './hooks/useAssistant'
 import { type UseAiStudioOptions, useAiStudio } from './hooks/useAiStudio'
 import { useAiStudioEntitlements } from './hooks/useAiStudioEntitlements'
@@ -15,9 +17,11 @@ import { MixerPanel } from './components/MixerPanel'
 import { PluginsPanel } from './components/PluginsPanel'
 import { CollapsiblePanel } from './components/CollapsiblePanel'
 import { PianoRoll } from './components/PianoRoll'
-import { QuickStartGallery } from './components/QuickStartGallery'
 import { PresenceBar } from './components/PresenceBar'
 import { ShareProjectButton } from './components/ShareProjectButton'
+import { StartCenter } from './components/StartCenter'
+import { ProjectBrowser } from './components/ProjectBrowser'
+import { ProjectReplacementDialog } from './components/ProjectReplacementDialog'
 import {
   type CollabConfig,
   type CollabProviderFactory,
@@ -26,6 +30,7 @@ import {
 import { CollaborationStatusContext } from './contract/collaborationContext'
 import { selectCollaborationStatus } from './contract/collaborationSelector'
 import { StudioNavigationGuard } from '../app/StudioNavigationGuard'
+import { OnboardingTour } from '../onboarding/OnboardingTour'
 import './Composer.css'
 
 interface ComposerProps {
@@ -60,6 +65,61 @@ export function Composer({
   guardNavigation = false,
 }: ComposerProps = {}) {
   const controller = useComposer(options)
+
+  if (controller.hydration.status === 'hydrating') {
+    return (
+      <section
+        className="composer-hydration"
+        id="composer-main"
+        aria-label="Studio"
+        aria-busy="true"
+        tabIndex={-1}
+      >
+        <p role="status">Restoring your project...</p>
+      </section>
+    )
+  }
+
+  if (
+    controller.hydration.status === 'ready-without-project' ||
+    controller.hydration.status === 'restore-error'
+  ) {
+    return <StartCenter controller={controller} />
+  }
+
+  return (
+    <ComposerWorkspace
+      controller={controller}
+      assistantOptions={assistantOptions}
+      collab={collab}
+      collabProviderFactory={collabProviderFactory}
+      canShare={canShare}
+      aiStudioOptions={aiStudioOptions}
+      guardNavigation={guardNavigation}
+    />
+  )
+}
+
+interface ComposerWorkspaceProps {
+  controller: ComposerController
+  assistantOptions?: UseAssistantOptions
+  collab: CollabConfig | null
+  collabProviderFactory?: CollabProviderFactory
+  canShare: boolean
+  aiStudioOptions?: UseAiStudioOptions
+  guardNavigation: boolean
+}
+
+function ComposerWorkspace({
+  controller,
+  assistantOptions,
+  collab,
+  collabProviderFactory,
+  canShare,
+  aiStudioOptions,
+  guardNavigation,
+}: ComposerWorkspaceProps) {
+  const [projectBrowserOpen, setProjectBrowserOpen] = useState(false)
   const assistant = useAssistant(controller, assistantOptions)
   const resolvedEntitlements = useAiStudioEntitlements()
   const aiStudio = useAiStudio(controller, {
@@ -95,7 +155,11 @@ export function Composer({
     {guardNavigation ? <StudioNavigationGuard controller={controller} /> : null}
     <section className="composer" aria-label="Composer" id="composer-main" tabIndex={-1}>
       <div className="composer-topbar">
-        <ProjectToolbar controller={controller} />
+        <ProjectToolbar
+          controller={controller}
+          onNewProject={() => setProjectBrowserOpen(true)}
+          onOpenProject={() => setProjectBrowserOpen(true)}
+        />
         <MidiControls controller={controller} />
         {canShare && <ShareProjectButton projectId={project.id} />}
       </div>
@@ -135,16 +199,6 @@ export function Composer({
             onToggle={panels.toggle}
           >
             <TrackPanel controller={controller} />
-          </CollapsiblePanel>
-          <CollapsiblePanel
-            id="quickStarts"
-            title="Quick Starts"
-            open={panels.isOpen('quickStarts')}
-            onToggle={panels.toggle}
-          >
-            <QuickStartGallery
-              onLoad={(template) => controller.loadProjectSnapshot(template.build())}
-            />
           </CollapsiblePanel>
           <CollapsiblePanel
             id="assistant"
@@ -194,6 +248,16 @@ export function Composer({
         </p>
       )}
     </section>
+    <ProjectBrowser
+      controller={controller}
+      open={projectBrowserOpen}
+      onOpenChange={setProjectBrowserOpen}
+    />
+    <ProjectReplacementDialog
+      controller={controller}
+      onReplaced={() => setProjectBrowserOpen(false)}
+    />
+    <OnboardingTour />
     </CollaborationStatusContext.Provider>
   )
 }

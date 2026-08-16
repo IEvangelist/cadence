@@ -63,6 +63,12 @@ const COMPONENTS: ThirdPartyComponent[] = [
     packageUrl: 'https://www.npmjs.com/package/react-router-dom',
   },
   {
+    name: '@radix-ui/react-dialog',
+    version: '1.1.23',
+    license: 'MIT',
+    packageUrl: 'https://www.npmjs.com/package/@radix-ui/react-dialog',
+  },
+  {
     name: '@radix-ui/react-dropdown-menu',
     version: '2.1.24',
     license: 'MIT',
@@ -252,6 +258,9 @@ export function AcknowledgementsPage({ onClose }: AcknowledgementsPageProps) {
             ))}
           </tbody>
         </table>
+        <p>
+          Radix Dialog provides Cadence&rsquo;s accessible project/replacement dialogs.
+        </p>
       </div>
 
       <div className="acknowledgements-section" aria-labelledby={textsHeadingId}>

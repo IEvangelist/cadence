@@ -42,6 +42,32 @@ describe('SyncingProjectStore', () => {
     expect((await remote.list()).map((m) => m.id)).toEqual(['remote-only'])
   })
 
+  it('binds save and last-pointer update to the backend captured before await', async () => {
+    let finishSave!: (meta: { id: string; name: string; updatedAt: number }) => void
+    const pendingSave = new Promise<{ id: string; name: string; updatedAt: number }>(
+      (resolve) => {
+        finishSave = resolve
+      },
+    )
+    const remoteSave = vi.spyOn(remote, 'save').mockReturnValue(pendingSave)
+    // Exercise the fallback transaction too: it must capture `remote` once.
+    remote.persist = undefined
+    const remoteSetLast = vi.spyOn(remote, 'setLast')
+    const localSetLast = vi.spyOn(local, 'setLast')
+    auth.current = true
+    const project = createEmptyProject('remote-pending')
+
+    const persistence = store.persist(project)
+    expect(remoteSave).toHaveBeenCalledWith(project)
+    auth.current = false
+    finishSave({ id: project.id, name: project.name, updatedAt: 1 })
+    await persistence
+
+    expect(remoteSetLast).toHaveBeenCalledWith(project.id)
+    expect(localSetLast).not.toHaveBeenCalled()
+    expect(await local.loadLast()).toBeNull()
+  })
+
   it('delegates load/remove/loadLast/setLast to the active backend', async () => {
     const project = createEmptyProject('p3')
     await store.save(project)
@@ -105,5 +131,70 @@ describe('SyncingProjectStore', () => {
 
   it('syncLocalToRemote() is a no-op with nothing local', async () => {
     expect(await store.syncLocalToRemote()).toBe(0)
+  })
+
+  it('preserves the pre-sync remote last project after uploads', async () => {
+    await remote.save(createEmptyProject('remote-last'))
+    await remote.setLast('remote-last')
+    await local.save(createEmptyProject('local-new'))
+    const setLast = vi.spyOn(remote, 'setLast')
+
+    await store.syncLocalToRemote()
+
+    expect(setLast).toHaveBeenLastCalledWith('remote-last')
+    expect((await remote.loadLast())?.id).toBe('remote-last')
+  })
+
+  it('chooses the newest synced local project when remote has no last project', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date(1_000))
+      await local.save(createEmptyProject('older-local'))
+      vi.setSystemTime(new Date(2_000))
+      await local.save(createEmptyProject('newest-local'))
+      const setLast = vi.spyOn(remote, 'setLast')
+
+      await store.syncLocalToRemote()
+
+      expect(setLast).toHaveBeenLastCalledWith('newest-local')
+      expect((await remote.loadLast())?.id).toBe('newest-local')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('restores the prior remote last project when a later upload fails', async () => {
+    await remote.save(createEmptyProject('remote-last'))
+    await remote.setLast('remote-last')
+    await local.save(createEmptyProject('older-local'))
+    await local.save(createEmptyProject('newest-local'))
+    const realSave = remote.save.bind(remote)
+    vi.spyOn(remote, 'save')
+      .mockImplementationOnce(realSave)
+      .mockRejectedValueOnce(new Error('second upload failed'))
+
+    await expect(store.syncLocalToRemote()).rejects.toThrow('second upload failed')
+
+    expect((await remote.loadLast())?.id).toBe('remote-last')
+  })
+
+  it('keeps the newest successful local as last when a later upload fails', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date(1_000))
+      await local.save(createEmptyProject('older-local'))
+      vi.setSystemTime(new Date(2_000))
+      await local.save(createEmptyProject('newest-local'))
+      const realSave = remote.save.bind(remote)
+      vi.spyOn(remote, 'save')
+        .mockImplementationOnce(realSave)
+        .mockRejectedValueOnce(new Error('second upload failed'))
+
+      await expect(store.syncLocalToRemote()).rejects.toThrow('second upload failed')
+
+      expect((await remote.loadLast())?.id).toBe('newest-local')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

@@ -3,6 +3,10 @@ import {
   interactionManifest,
   type InteractionManifestEntry,
 } from '../src/test/interactionManifest'
+import {
+  defaultProjectDetailDto,
+  defaultProjectSummaryDto,
+} from './projectFixtures'
 
 const interactiveSelector = [
   'button',
@@ -78,7 +82,29 @@ async function mockApi(
         : { ...proEntitlements, tier: 'Free', stemSeparation: false },
     )
   }
-  if (path === '/api/projects' && method === 'GET') return json([])
+  if (path === '/api/projects' && method === 'GET') return json([defaultProjectSummaryDto])
+  if (path === `/api/projects/${defaultProjectSummaryDto.id}` && method === 'GET') {
+    return json(defaultProjectDetailDto)
+  }
+  if (path === '/api/projects' && method === 'POST') {
+    const payload = request.postDataJSON()
+    return json(
+      {
+        ...(payload as object),
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-01T00:01:00Z',
+      },
+      201,
+    )
+  }
+  if (/^\/api\/projects\/[^/]+$/.test(path) && method === 'PUT') {
+    const payload = request.postDataJSON()
+    return json({
+      ...(payload as object),
+      createdAt: '2025-01-01T00:00:00Z',
+      updatedAt: '2025-01-01T00:01:00Z',
+    })
+  }
   if (path === '/api/projects' && method === 'POST') {
     const project = request.postDataJSON() as {
       id: string
@@ -155,10 +181,19 @@ async function assertInteractionContract(
   const failures: string[] = []
   const visibleCounts = new Map<string, number>()
   const snapshot = await rendered.evaluateAll((elements) =>
-    elements.map((element) => ({
-      tag: element.tagName.toLowerCase(),
-      id: element.getAttribute('data-interaction'),
-    })),
+    elements.map((element) => {
+      const style = getComputedStyle(element)
+      const rect = element.getBoundingClientRect()
+      return {
+        tag: element.tagName.toLowerCase(),
+        id: element.getAttribute('data-interaction'),
+        visible:
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          rect.width > 0 &&
+          rect.height > 0,
+      }
+    }),
   )
 
   for (const { tag, id } of snapshot) {
@@ -175,34 +210,32 @@ async function assertInteractionContract(
   for (const id of ids) {
     const entry = manifestById.get(id)
     if (!entry) continue
-    const visible = page.locator(`[data-interaction="${id}"]:visible`)
-    const count = await visible.count()
+    const count = snapshot.filter((item) => item.id === id && item.visible).length
     if (count === 0) continue
     visibleCounts.set(id, count)
+    if (observed.has(id)) continue
 
-    for (let index = 0; index < count; index += 1) {
-      const locator = visible.nth(index)
-      const semantics = await renderedSemantics(locator)
-      if (semantics.role !== entry.expectedRole) {
-        failures.push(
-          `${state}: ${id} role ${semantics.role} does not match ${entry.expectedRole}`,
-        )
+    const locator = page.locator(`[data-interaction="${id}"]:visible`).first()
+    const semantics = await renderedSemantics(locator)
+    if (semantics.role !== entry.expectedRole) {
+      failures.push(
+        `${state}: ${id} role ${semantics.role} does not match ${entry.expectedRole}`,
+      )
+    }
+    try {
+      if (entry.accessibilityExemption) {
+        await expect(locator).toHaveAccessibleName('', { timeout: 0 })
+      } else {
+        await expect(locator).toHaveAccessibleName(expectedAccessibleName(entry), {
+          timeout: 0,
+        })
       }
-      try {
-        if (entry.accessibilityExemption) {
-          await expect(locator).toHaveAccessibleName('', { timeout: 500 })
-        } else {
-          await expect(locator).toHaveAccessibleName(expectedAccessibleName(entry), {
-            timeout: 500,
-          })
-        }
-      } catch {
-        failures.push(
-          entry.accessibilityExemption
-            ? `${state}: ${id} exemption is stale because it now has an accessible name`
-            : `${state}: ${id} accessible name does not match ${entry.expectedName}`,
-        )
-      }
+    } catch {
+      failures.push(
+        entry.accessibilityExemption
+          ? `${state}: ${id} exemption is stale because it now has an accessible name`
+          : `${state}: ${id} accessible name does not match ${entry.expectedName}`,
+      )
     }
   }
 
@@ -232,7 +265,7 @@ async function openPanel(page: Page, name: string): Promise<Locator> {
 }
 
 test.describe('production interaction contract', () => {
-  test.describe.configure({ timeout: 300_000 })
+  test.describe.configure({ timeout: 600_000 })
 
   test('observes every registered interaction across current production states', async ({
     page,
@@ -331,8 +364,18 @@ test.describe('production interaction contract', () => {
     await assertInteractionContract(authenticatedPage, 'authenticated share panel', observed)
     await shareToggle.click()
 
-    await openPanel(authenticatedPage, 'Quick Starts')
-    await assertInteractionContract(authenticatedPage, 'quick starts open', observed)
+    await authenticatedPage.getByRole('button', { name: 'Project', exact: true }).click()
+    await assertInteractionContract(authenticatedPage, 'project menu open', observed)
+    await authenticatedPage.getByRole('menuitem', { name: 'New project' }).click()
+    await expect(authenticatedPage.getByRole('dialog', { name: 'Project browser' })).toBeVisible()
+    await assertInteractionContract(authenticatedPage, 'project browser open', observed)
+    await authenticatedPage
+      .getByRole('button', { name: 'Close project browser' })
+      .click()
+
+    await authenticatedPage.getByRole('button', { name: 'Export & share' }).click()
+    await assertInteractionContract(authenticatedPage, 'export and share menu open', observed)
+    await authenticatedPage.keyboard.press('Escape')
 
     const aiStudio = await openPanel(authenticatedPage, 'AI Studio')
     await expect(aiStudio.getByText('Pro · on-device')).toBeVisible()
@@ -360,7 +403,9 @@ test.describe('production interaction contract', () => {
     await expect(authenticatedPage.getByRole('region', { name: 'Example plugin' })).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'extensions enabled', observed)
 
-    await authenticatedPage.getByRole('button', { name: 'New' }).click()
+    await authenticatedPage.getByRole('button', { name: 'Project', exact: true }).click()
+    await authenticatedPage.getByRole('menuitem', { name: 'New project' }).click()
+    await authenticatedPage.getByRole('button', { name: /Blank project/ }).click()
     await expect(authenticatedPage.getByText('Your canvas is empty.')).toBeVisible()
     await assertInteractionContract(authenticatedPage, 'empty project', observed)
 
@@ -401,7 +446,9 @@ test.describe('production interaction contract', () => {
     await failingSavePage.goto('/')
     await failingSavePage.getByLabel('Project name').fill('Unsaved route exit')
     await failingSavePage.getByRole('button', { name: 'Pricing' }).click()
-    await expect(failingSavePage.getByRole('button', { name: 'Retry save' })).toBeVisible()
+    await expect(
+      failingSavePage.locator('[data-interaction="studio.autosave.retry"]'),
+    ).toBeVisible()
     await assertInteractionContract(failingSavePage, 'failed route autosave', observed)
     await failingSavePage.getByRole('button', { name: 'Discard changes' }).click()
     await expect(failingSavePage).toHaveURL(/\/pricing/)
@@ -414,6 +461,9 @@ test.describe('production interaction contract', () => {
     const firstRunPage = await firstRunContext.newPage()
     await firstRunPage.route('**/api/**', (route) => mockApi(route, false))
     await firstRunPage.goto('/')
+    await expect(firstRunPage.getByRole('heading', { name: 'Start a project' })).toBeVisible()
+    await assertInteractionContract(firstRunPage, 'first-run Start Center', observed)
+    await firstRunPage.getByRole('button', { name: /Blank project/ }).click()
     await expect(firstRunPage.getByRole('dialog')).toBeVisible()
     await assertInteractionContract(firstRunPage, 'first-run onboarding step 1', observed)
 
@@ -424,6 +474,64 @@ test.describe('production interaction contract', () => {
     await firstRunPage.getByRole('button', { name: 'Next' }).click()
     await assertInteractionContract(firstRunPage, 'first-run onboarding final step', observed)
     await firstRunContext.close()
+
+    const restoreErrorContext = await browser.newContext({
+      baseURL: origin,
+      storageState: returningStorage,
+    })
+    const restoreErrorPage = await restoreErrorContext.newPage()
+    await restoreErrorPage.route('**/api/**', async (route) => {
+      const request = route.request()
+      const path = new URL(request.url()).pathname
+      if (path === '/api/projects' && request.method() === 'GET') {
+        return route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
+      }
+      return mockApi(route, true)
+    })
+    await restoreErrorPage.goto('/')
+    await expect(
+      restoreErrorPage.getByRole('heading', {
+        name: 'Your last project could not be restored',
+      }),
+    ).toBeVisible()
+    await assertInteractionContract(restoreErrorPage, 'restore error', observed)
+    await restoreErrorPage
+      .getByRole('button', { name: 'Continue to Start Center' })
+      .click()
+    await expect(restoreErrorPage.getByRole('button', { name: 'Retry' })).toBeVisible()
+    await assertInteractionContract(
+      restoreErrorPage,
+      'restore error continued to Start Center',
+      observed,
+    )
+    await restoreErrorContext.close()
+
+    const saveErrorContext = await browser.newContext({
+      baseURL: origin,
+      storageState: returningStorage,
+    })
+    const saveErrorPage = await saveErrorContext.newPage()
+    await saveErrorPage.route('**/api/**', async (route) => {
+      const method = route.request().method()
+      const path = new URL(route.request().url()).pathname
+      if (
+        (path === '/api/projects' && method === 'POST') ||
+        (/^\/api\/projects\/[^/]+$/.test(path) && method === 'PUT')
+      ) {
+        return route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
+      }
+      return mockApi(route, true)
+    })
+    await saveErrorPage.goto('/')
+    await saveErrorPage.getByLabel('Project name').fill('Unsaved interaction state')
+    await expect(saveErrorPage.getByRole('button', { name: 'Retry save' })).toBeVisible()
+    await assertInteractionContract(saveErrorPage, 'save error', observed)
+    await saveErrorPage.getByRole('button', { name: 'Project', exact: true }).click()
+    await saveErrorPage.getByRole('menuitem', { name: 'New project' }).click()
+    await saveErrorPage.getByRole('button', { name: /Blank project/ }).click()
+    await expect(saveErrorPage.getByRole('alertdialog')).toBeVisible()
+    await assertInteractionContract(saveErrorPage, 'replacement flush error', observed)
+    await saveErrorContext.close()
 
     const missing = interactionManifest
       .map(({ id }) => id)

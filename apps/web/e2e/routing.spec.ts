@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test'
+import { chooseExport, createBlankProject } from './projectActions'
 
 interface MockProjectState {
   saved?: Record<string, unknown>
@@ -75,6 +76,11 @@ async function expectRoute(page: Page, path: string, title: string) {
   await expect(page).toHaveTitle(title)
 }
 
+async function startBlankWhenNeeded(page: Page): Promise<void> {
+  const blank = page.getByRole('button', { name: /Blank project/ })
+  if (await blank.isVisible().catch(() => false)) await blank.click()
+}
+
 test.describe('browser-history routes', () => {
   test('direct-loads and reloads every product route', async ({ page }) => {
     await expectRoute(page, '/', 'Cadence')
@@ -114,7 +120,7 @@ test.describe('browser-history routes', () => {
     page,
   }) => {
     await page.goto('/')
-    await page.getByRole('button', { name: 'New' }).click()
+    await createBlankProject(page)
     await page.getByLabel('Project name').fill('Shared through router')
     await page.evaluate(() => {
       Object.defineProperty(navigator, 'clipboard', {
@@ -126,7 +132,7 @@ test.describe('browser-history routes', () => {
         },
       })
     })
-    await page.locator('[data-interaction="studio.project.share"]').click()
+    await chooseExport(page, 'Share snapshot')
     await page.waitForFunction(
       () => Boolean((window as unknown as { __sharedUrl?: string }).__sharedUrl),
     )
@@ -148,6 +154,7 @@ test.describe('browser-history routes', () => {
     const state: MockProjectState = {}
     await page.route('**/api/**', (route) => mockAuthenticatedApi(route, state, 600))
     await page.goto('/')
+    await startBlankWhenNeeded(page)
     await page.getByLabel('Project name').fill('Saved before route exit')
     await page.getByRole('button', { name: 'Pricing' }).click()
 
@@ -161,23 +168,30 @@ test.describe('browser-history routes', () => {
 
   test('keeps Studio mounted after a failed save until Retry succeeds', async ({ page }) => {
     let saveAttempts = 0
+    let failSave = false
     const state: MockProjectState = {}
     await page.route('**/api/**', async (route) => {
       const request = route.request()
       if (new URL(request.url()).pathname === '/api/projects' && request.method() === 'POST') {
         saveAttempts += 1
-        if (saveAttempts === 1) return route.fulfill({ status: 503, body: 'offline' })
+        if (failSave) return route.fulfill({ status: 503, body: 'offline' })
       }
       return mockAuthenticatedApi(route, state)
     })
     await page.goto('/')
+    await startBlankWhenNeeded(page)
+    await expect(page.locator('.toolbar-save-state')).toContainText(/All changes saved|Saved/)
+    failSave = true
     await page.getByLabel('Project name').fill('Retry this save')
     await page.getByRole('button', { name: 'Pricing' }).click()
 
     await expect(page).toHaveURL(/\/$/)
-    await page.getByRole('button', { name: 'Retry save' }).click()
+    const routeRetry = page.locator('[data-interaction="studio.autosave.retry"]')
+    await expect(routeRetry).toBeVisible()
+    failSave = false
+    await routeRetry.click()
     await expect(page).toHaveURL(/\/pricing$/)
-    expect(saveAttempts).toBe(2)
+    expect(saveAttempts).toBeGreaterThanOrEqual(2)
   })
 
   test('awaits autosave before browser back leaves Studio', async ({ page }) => {
@@ -185,6 +199,7 @@ test.describe('browser-history routes', () => {
     await page.route('**/api/**', (route) => mockAuthenticatedApi(route, state, 500))
     await page.goto('/pricing')
     await page.getByRole('button', { name: 'Back to composer' }).click()
+    await startBlankWhenNeeded(page)
     await page.getByLabel('Project name').fill('Saved before browser back')
 
     const back = page.goBack()
@@ -200,6 +215,7 @@ test.describe('browser-history routes', () => {
     page.on('pageerror', (error) => pageErrors.push(error))
     await page.route('**/api/**', (route) => mockAuthenticatedApi(route, state, 600))
     await page.goto('/')
+    await startBlankWhenNeeded(page)
     await page.getByLabel('Project name').fill('Latest destination')
 
     await page.getByRole('button', { name: 'Pricing' }).click()

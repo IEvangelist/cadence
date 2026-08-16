@@ -1,0 +1,339 @@
+import { parseProject, serializeProject } from './persistence'
+import type { Project } from './project'
+import type { SyncStorage } from './storage'
+
+export const PROJECT_RECOVERY_KEY_PREFIX = 'cadence.v1.recovery'
+
+export const recoveryIndexKey = (scope: string): string =>
+  `${PROJECT_RECOVERY_KEY_PREFIX}.${encodeURIComponent(scope)}.active`
+
+export const projectRecoveryKey = (
+  scope: string,
+  projectId: string,
+  token: string,
+): string =>
+  `${PROJECT_RECOVERY_KEY_PREFIX}.${encodeURIComponent(scope)}.${encodeURIComponent(projectId)}.${encodeURIComponent(token)}`
+
+interface ProjectRecoveryEnvelope {
+  version: 1
+  scope: string
+  token: string
+  parentToken: string | null
+  lineageId: string
+  revision: number
+  updatedAt: number
+  order: number
+  projectId: string
+  project: string
+}
+
+export interface ProjectRecoveryWrite {
+  token: string
+  order: number
+}
+
+export function clearProjectRecoveryLineage(
+  storage: SyncStorage | null,
+  scope: string,
+  projectId: string,
+  lineageId: string | null,
+  throughOrder = Number.POSITIVE_INFINITY,
+): void {
+  if (!storage || !lineageId) return
+  const records = listRecoveryRecords(storage, scope, projectId)
+  const removedTokens = new Set<string>()
+  for (const record of records) {
+    if (record.lineageId !== lineageId || record.order > throughOrder) continue
+    storage.removeItem(projectRecoveryKey(scope, projectId, record.token))
+    removedTokens.add(record.token)
+  }
+  const pointer = readPointer(storage, scope)
+  if (
+    pointer?.projectId === projectId &&
+    removedTokens.has(pointer.token)
+  ) {
+    storage.removeItem(recoveryIndexKey(scope))
+    const remaining = discoverNewestRecord(storage, scope)
+    if (remaining) {
+      writePointer(storage, scope, remaining.project.id, remaining.token)
+    }
+  }
+}
+
+export function clearProjectRecoveryChain(
+    storage: SyncStorage | null,
+    scope: string,
+    projectId: string,
+    headToken: string | null,
+  ): void {
+    if (!storage || !headToken) return
+    const removedTokens = new Set<string>()
+    let token: string | null = headToken
+    while (token) {
+      if (removedTokens.has(token)) break
+      const record = readRecord(storage, scope, projectId, token)
+      if (!record) break
+      removedTokens.add(token)
+      storage.removeItem(projectRecoveryKey(scope, projectId, token))
+      token = record.parentToken
+    }
+    const pointer = readPointer(storage, scope)
+    if (
+      pointer?.projectId === projectId &&
+      removedTokens.has(pointer.token)
+    ) {
+      storage.removeItem(recoveryIndexKey(scope))
+      const remaining = discoverNewestRecord(storage, scope)
+      if (remaining) {
+        writePointer(storage, scope, remaining.project.id, remaining.token)
+    }
+  }
+}
+
+interface ProjectRecoveryPointer {
+  version: 1
+  projectId: string
+  token: string
+}
+
+export function newRecoveryLineageId(): string {
+  return newRecoveryToken()
+}
+
+export interface ProjectRecovery {
+  token: string
+  parentToken: string | null
+  lineageId: string
+  revision: number
+  updatedAt: number
+  order: number
+  project: Project
+}
+
+export function defaultRecoveryStorage(): SyncStorage | null {
+  try {
+    return typeof globalThis !== 'undefined' && 'localStorage' in globalThis
+      ? globalThis.localStorage
+      : null
+  } catch {
+    return null
+  }
+}
+
+export function readProjectRecovery(
+  storage: SyncStorage | null,
+  scope: string,
+  projectId?: string,
+): ProjectRecovery | null {
+  if (!storage) return null
+  const pointer = readPointer(storage, scope)
+  const active =
+    pointer && (!projectId || pointer.projectId === projectId)
+      ? readRecord(storage, scope, pointer.projectId, pointer.token)
+      : null
+  const discovered = discoverNewestRecord(storage, scope, projectId)
+  const selected = newerRecovery(active, discovered)
+  if (
+    selected &&
+    (pointer?.projectId !== selected.project.id || pointer.token !== selected.token)
+  ) {
+    writePointer(storage, scope, selected.project.id, selected.token)
+  }
+  return selected
+}
+
+export function writeProjectRecovery(
+  storage: SyncStorage | null,
+  scope: string,
+  project: Project,
+  revision: number,
+  lineageId = newRecoveryLineageId(),
+  previousToken?: string | null,
+): ProjectRecoveryWrite | null {
+  if (!storage) return null
+  const token = newRecoveryToken()
+  const envelope: ProjectRecoveryEnvelope = {
+    version: 1,
+    scope,
+    token,
+    parentToken: previousToken ?? null,
+    lineageId,
+    revision,
+    updatedAt: Date.now(),
+    order: newRecoveryOrder(),
+    projectId: project.id,
+    project: serializeProject(project),
+  }
+  try {
+    storage.setItem(
+      projectRecoveryKey(scope, project.id, token),
+      JSON.stringify(envelope),
+    )
+  } catch {
+    return null
+  }
+  try {
+    writePointer(storage, scope, project.id, token)
+  } catch {
+    // The durable record remains discoverable even if the pointer update fails.
+  }
+  return { token, order: envelope.order }
+}
+
+export function clearProjectRecovery(
+  storage: SyncStorage | null,
+  scope: string,
+  projectId: string,
+  token: string | null,
+): void {
+  if (!storage || !token) return
+  storage.removeItem(projectRecoveryKey(scope, projectId, token))
+  const pointer = readPointer(storage, scope)
+  if (pointer?.projectId === projectId && pointer.token === token) {
+    storage.removeItem(recoveryIndexKey(scope))
+    const remaining = discoverNewestRecord(storage, scope)
+    if (remaining) {
+      writePointer(storage, scope, remaining.project.id, remaining.token)
+    }
+  }
+}
+
+function readRecord(
+  storage: SyncStorage,
+  scope: string,
+  projectId: string,
+  token: string,
+): ProjectRecovery | null {
+  const raw = storage.getItem(projectRecoveryKey(scope, projectId, token))
+  if (!raw) return null
+  return parseEnvelope(raw, scope, projectId, token)
+}
+
+function parseEnvelope(
+  raw: string,
+  scope: string,
+  projectId?: string,
+  token?: string,
+): ProjectRecovery | null {
+  try {
+    const envelope = JSON.parse(raw) as Partial<ProjectRecoveryEnvelope>
+    if (
+      envelope.version !== 1 ||
+      envelope.scope !== scope ||
+      typeof envelope.token !== 'string' ||
+      (envelope.parentToken !== null && typeof envelope.parentToken !== 'string') ||
+      typeof envelope.lineageId !== 'string' ||
+      typeof envelope.revision !== 'number' ||
+      typeof envelope.updatedAt !== 'number' ||
+      typeof envelope.order !== 'number' ||
+      typeof envelope.projectId !== 'string' ||
+      typeof envelope.project !== 'string' ||
+      (projectId && envelope.projectId !== projectId) ||
+      (token && envelope.token !== token)
+    ) {
+      return null
+    }
+    const project = parseProject(envelope.project)
+    if (project.id !== envelope.projectId) return null
+    return {
+      token: envelope.token,
+      parentToken: envelope.parentToken ?? null,
+      lineageId: envelope.lineageId,
+      revision: envelope.revision,
+      updatedAt: envelope.updatedAt,
+      order: envelope.order,
+      project,
+    }
+  } catch {
+    return null
+  }
+}
+
+function discoverNewestRecord(
+  storage: SyncStorage,
+  scope: string,
+  projectId?: string,
+): ProjectRecovery | null {
+  return listRecoveryRecords(storage, scope, projectId).reduce<ProjectRecovery | null>(
+    (newest, recovery) => newerRecovery(newest, recovery),
+    null,
+  )
+}
+
+function listRecoveryRecords(
+  storage: SyncStorage,
+  scope: string,
+  projectId?: string,
+): ProjectRecovery[] {
+  if (typeof storage.length !== 'number' || !storage.key) return []
+  const prefix = `${PROJECT_RECOVERY_KEY_PREFIX}.${encodeURIComponent(scope)}.`
+  const records: ProjectRecovery[] = []
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index)
+    if (!key?.startsWith(prefix) || key === recoveryIndexKey(scope)) continue
+    const raw = storage.getItem(key)
+    if (!raw) continue
+    const recovery = parseEnvelope(raw, scope)
+    if (!recovery || (projectId && recovery.project.id !== projectId)) continue
+    records.push(recovery)
+  }
+  return records
+}
+
+function newerRecovery(
+  first: ProjectRecovery | null,
+  second: ProjectRecovery | null,
+): ProjectRecovery | null {
+  if (!first) return second
+  if (!second) return first
+  if (second.updatedAt !== first.updatedAt) {
+    return second.updatedAt > first.updatedAt ? second : first
+  }
+  if (second.order !== first.order) {
+    return second.order > first.order ? second : first
+  }
+  return second.token > first.token ? second : first
+}
+
+function readPointer(storage: SyncStorage, scope: string): ProjectRecoveryPointer | null {
+  const raw = storage.getItem(recoveryIndexKey(scope))
+  if (!raw) return null
+  try {
+    const pointer = JSON.parse(raw) as Partial<ProjectRecoveryPointer>
+    return pointer.version === 1 &&
+      typeof pointer.projectId === 'string' &&
+      typeof pointer.token === 'string'
+      ? { version: 1, projectId: pointer.projectId, token: pointer.token }
+      : null
+  } catch {
+    return null
+  }
+}
+
+function writePointer(
+  storage: SyncStorage,
+  scope: string,
+  projectId: string,
+  token: string,
+): void {
+  const pointer: ProjectRecoveryPointer = { version: 1, projectId, token }
+  storage.setItem(recoveryIndexKey(scope), JSON.stringify(pointer))
+}
+
+function newRecoveryToken(): string {
+  const cryptoApi = globalThis.crypto
+  return cryptoApi && typeof cryptoApi.randomUUID === 'function'
+    ? cryptoApi.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+let lastRecoveryOrder = 0
+
+function newRecoveryOrder(): number {
+  const highResolutionNow =
+    typeof performance !== 'undefined'
+      ? Math.floor((performance.timeOrigin + performance.now()) * 1_000)
+      : Date.now() * 1_000
+  lastRecoveryOrder = Math.max(lastRecoveryOrder + 1, highResolutionNow)
+  return lastRecoveryOrder
+}

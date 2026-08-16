@@ -32,6 +32,8 @@ describe('usePanelLayout', () => {
     expect(result.current.isOpen('mixer')).toBe(false)
     expect(result.current.isOpen('aiStudio')).toBe(false)
     expect(result.current.isOpen('extensions')).toBe(false)
+    expect(DEFAULT_PANEL_OPEN).not.toHaveProperty('quickStarts')
+    expect(result.current.isOpen('quickStarts')).toBe(false)
     expect(result.current.railCollapsed).toBe(false)
     // Unknown panels default to closed rather than throwing.
     expect(result.current.isOpen('nope')).toBe(false)

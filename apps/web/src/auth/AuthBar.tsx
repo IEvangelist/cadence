@@ -176,8 +176,9 @@ export function AuthBar({ onShowProfile, profileActive }: AuthBarProps) {
               className="btn btn-primary"
               data-interaction="auth.credentials.submit"
               disabled={busy}
+              aria-busy={busy && mode === 'signin'}
             >
-              {mode === 'signin' ? 'Sign in' : 'Create account'}
+              {mode === 'signin' ? (busy ? 'Signing in...' : 'Sign in') : 'Create account'}
             </button>
 
             {mode === 'register' && registerSent && (

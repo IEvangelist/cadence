@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { test, expect } from '@playwright/test'
+import { createBlankProject } from './projectActions'
 
 // The AI assistant is exercised against the production build with the model
 // MOCKED: `window.__CADENCE_AI_MOCK__` makes the provider factory return the
@@ -17,7 +18,7 @@ test.describe('AI assistant', () => {
     await page.goto('/')
 
     // Start from a clean, empty project so counts are unambiguous.
-    await page.getByRole('button', { name: 'New' }).click()
+    await createBlankProject(page)
     await expect(page.getByText('Your canvas is empty.')).toBeVisible()
 
     const panel = page.getByRole('region', { name: 'AI Assistant' })
@@ -57,7 +58,7 @@ test.describe('AI assistant', () => {
 
   test('is keyboard-operable', async ({ page }) => {
     await page.goto('/')
-    await page.getByRole('button', { name: 'New' }).click()
+    await createBlankProject(page)
 
     const panel = page.getByRole('region', { name: 'AI Assistant' })
     const generateAction = panel.getByRole('radio', { name: /Generate melody/ })
@@ -77,7 +78,7 @@ test.describe('AI assistant', () => {
     page,
   }) => {
     await page.goto('/')
-    await page.getByRole('button', { name: 'New' }).click()
+    await createBlankProject(page)
 
     const scan = () =>
       new AxeBuilder({ page })

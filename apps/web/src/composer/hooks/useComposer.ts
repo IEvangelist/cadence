@@ -28,6 +28,7 @@ import type { AutomationPoint, AutomationTarget } from '../model/automation'
 import {
   type ProjectStore,
   type StoredProjectMeta,
+  type SyncStorage,
   createProjectStore,
 } from '../model/storage'
 import { migrateProject } from '../model/persistence'
@@ -46,6 +47,24 @@ import { type AudioEngine, type TransportState, createAudioEngine } from '../aud
 import type { MixerController } from '../audio/mixerController'
 import { type MidiAccessLike, type MidiInputInfo, normalizeVelocity } from '../midi/webMidi'
 import { type MidiCapture, recordedNoteFrom } from '../midi/record'
+import {
+  type ProjectActionMessage,
+  type ProjectHydrationState,
+  type ProjectReplacementRequest,
+  type ProjectReplacementResult,
+  type ProjectReplacementState,
+  type ProjectSaveState,
+  type RecentProjectsState,
+  initialSaveState,
+} from '../model/projectLifecycle'
+import type { SongTemplate } from '../templates'
+import {
+  clearProjectRecoveryChain,
+  defaultRecoveryStorage,
+  newRecoveryLineageId,
+  readProjectRecovery,
+  writeProjectRecovery,
+} from '../model/recovery'
 import { useMidiInput } from './useMidiInput'
 
 /** Beats a live-MIDI monitor note rings for (matches the preview default). */
@@ -76,6 +95,12 @@ export interface UseComposerOptions {
   sharedProjectHash?: string
   /** Called after a shared project hash is imported so the router can replace it. */
   onSharedProjectConsumed?: () => void
+  /** Changes when the injected store switches between local and remote backends. */
+  storeRevision?: unknown
+  /** Synchronous crash-recovery storage; defaults to localStorage in the app. */
+  recoveryStorage?: SyncStorage | null
+  /** Stable persistence identity, e.g. local anonymous or one remote user id. */
+  recoveryScope?: string | null
 }
 
 /**
@@ -119,13 +144,44 @@ export interface ComposerController {
   snap: number
   setSnap: (grid: number) => void
   savedProjects: StoredProjectMeta[]
+  recentProjectsState: RecentProjectsState
+  refreshSavedProjects: () => Promise<void>
   status: string
+  actionMessage: ProjectActionMessage | null
+  hydration: ProjectHydrationState
+  saveState: ProjectSaveState
+  replacement: ProjectReplacementState
   audioReady: boolean
   isDirty: boolean
   isFlushing: boolean
   flushAutosave: () => Promise<void>
+  settleActivePersistence: () => Promise<void>
+  beginPersistenceTransition: () => void
+  retryHydration: () => void
+  continueToStartCenter: () => void
+  retrySave: () => Promise<void>
+  requestProjectReplacement: (
+    request: ProjectReplacementRequest,
+  ) => Promise<ProjectReplacementResult>
+  retryProjectReplacement: () => Promise<ProjectReplacementResult>
+  discardProjectReplacement: () => Promise<ProjectReplacementResult>
+  cancelProjectReplacement: () => void
+  discardAutosaveRecovery: () => void
+  replaceWithBlank: () => Promise<ProjectReplacementResult>
+  replaceWithDemo: () => Promise<ProjectReplacementResult>
+  replaceWithTemplate: (template: SongTemplate) => Promise<ProjectReplacementResult>
+  openStoredProject: (id: string) => Promise<ProjectReplacementResult>
+  replaceWithMidi: (bytes: ArrayBuffer, name?: string) => Promise<ProjectReplacementResult>
+  replaceWithMusicXml: (xml: string, name?: string) => Promise<ProjectReplacementResult>
+  replaceWithProjectFile: (text: string, name?: string) => Promise<ProjectReplacementResult>
+  replaceWithPluginFormat: (
+    id: string,
+    data: string,
+    name?: string,
+  ) => Promise<ProjectReplacementResult>
   /** Show a transient status message (used by the CommandApi `notify`). */
   notify: (message: string) => void
+  notifyError: (message: string) => void
 
   play: () => void
   pause: () => void
@@ -257,12 +313,19 @@ export interface ComposerController {
 }
 
 function defaultProject(options: UseComposerOptions): Project {
-  return options.initialProject ?? createDemoProject()
+  return options.initialProject ?? createEmptyProject('project_bootstrap')
 }
 
 export function useComposer(options: UseComposerOptions = {}): ComposerController {
   const autosaveDelay = options.autosaveDelay ?? 800
   const [store] = useState<ProjectStore>(() => options.store ?? createProjectStore())
+  const [recoveryStorage] = useState<SyncStorage | null>(() =>
+    options.initialProject
+      ? null
+      : options.recoveryStorage === undefined
+        ? defaultRecoveryStorage()
+        : options.recoveryStorage,
+  )
 
   const [state, dispatch] = useReducer(
     composerReducer,
@@ -273,15 +336,70 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   const [transportState, setTransportState] = useState<TransportState>('stopped')
   const [positionBeats, setPositionBeats] = useState(0)
   const [savedProjects, setSavedProjects] = useState<StoredProjectMeta[]>([])
+  const [recentProjectsState, setRecentProjectsState] = useState<RecentProjectsState>({
+    status: 'loading',
+  })
   const [status, setStatus] = useState('Ready')
-  const [savedProject, setSavedProject] = useState(state.project)
+  const [actionMessage, setActionMessage] = useState<ProjectActionMessage | null>(null)
+  const [hydration, setHydration] = useState<ProjectHydrationState>(
+    options.initialProject
+      ? { status: 'ready-with-project', source: 'injected' }
+      : { status: 'hydrating' },
+  )
+  const [hydrationAttempt, setHydrationAttempt] = useState(0)
+  const [saveState, setSaveState] = useState<ProjectSaveState>(() => initialSaveState())
+  const [replacement, setReplacement] = useState<ProjectReplacementState>({ status: 'idle' })
   const [isFlushing, setIsFlushing] = useState(false)
+  const [persistenceBarrier, setPersistenceBarrier] = useState(false)
   const [joinedFailure, setJoinedFailure] = useState(0)
   const mountedRef = useRef(true)
+  const actionSequenceRef = useRef(0)
+  const recentRequestRef = useRef(0)
+  const hydrationGenerationRef = useRef(0)
   const revisionRef = useRef(0)
   const savedRevisionRef = useRef(0)
+  const persistenceGenerationRef = useRef(0)
+  const failedRevisionRef = useRef<number | null>(null)
+  const recoveryTokenRef = useRef<string | null>(null)
+  const recoveryTokensRef = useRef(new Set<string>())
+  const recoveryLineageRef = useRef(newRecoveryLineageId())
+  const skipNextProjectRevisionRef = useRef(false)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const flushPromiseRef = useRef<Promise<void> | null>(null)
+  const persistenceBarrierRef = useRef(false)
+  const beginPersistenceTransition = useCallback(() => {
+    persistenceBarrierRef.current = true
+    if (autosaveTimerRef.current !== null) {
+      clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
+    }
+    setPersistenceBarrier(true)
+  }, [])
+  const endPersistenceTransition = useCallback(() => {
+    persistenceBarrierRef.current = false
+    setPersistenceBarrier(false)
+  }, [])
+  const resetPersistenceForProject = useCallback((
+    persisted: boolean,
+    lineageId = newRecoveryLineageId(),
+  ) => {
+    persistenceGenerationRef.current += 1
+    if (autosaveTimerRef.current !== null) {
+      clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
+    }
+    revisionRef.current = 0
+    savedRevisionRef.current = 0
+    failedRevisionRef.current = null
+    recoveryTokenRef.current = null
+    recoveryTokensRef.current.clear()
+    recoveryLineageRef.current = lineageId
+    flushPromiseRef.current = null
+    skipNextProjectRevisionRef.current = persisted
+    setJoinedFailure(0)
+    setIsFlushing(false)
+    setSaveState(initialSaveState('clean'))
+  }, [])
   // #131 multi-track view: ids of tracks shown on the piano roll as read-only
   // context, in ADDITION to the always-visible selected track. Deliberately
   // EPHEMERAL — it is view state, so it stays out of the persisted `project`
@@ -317,6 +435,11 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   useEffect(() => {
     projectRef.current = state.project
   }, [state.project])
+  const announce = useCallback((text: string, tone: ProjectActionMessage['tone'] = 'info') => {
+    setStatus(text)
+    actionSequenceRef.current += 1
+    setActionMessage({ id: actionSequenceRef.current, tone, text })
+  }, [])
   useEffect(
     () => {
       mountedRef.current = true
@@ -381,15 +504,32 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     return () => cancelAnimationFrame(raf)
   }, [engine, transportState])
 
-  const refreshList = useCallback(() => {
-    void store.list().then((projects) => {
-      if (mountedRef.current) setSavedProjects(projects)
-    })
+  const refreshList = useCallback(async () => {
+    recentRequestRef.current += 1
+    const request = recentRequestRef.current
+    await Promise.resolve()
+    if (mountedRef.current && request === recentRequestRef.current) {
+      setRecentProjectsState({ status: 'loading' })
+    }
+    try {
+      const projects = await store.list()
+      if (mountedRef.current && request === recentRequestRef.current) {
+        setSavedProjects(projects)
+        setRecentProjectsState({ status: 'ready' })
+      }
+    } catch {
+      if (mountedRef.current && request === recentRequestRef.current) {
+        setRecentProjectsState({
+          status: 'error',
+          message: 'Cadence could not load your recent projects.',
+        })
+      }
+    }
   }, [store])
 
   useEffect(() => {
-    refreshList()
-  }, [refreshList])
+    queueMicrotask(() => void refreshList())
+  }, [refreshList, options.storeRevision])
 
   // Restore a shared project (URL fragment) or the last autosaved project on
   // first load — unless a project was explicitly injected (e.g. in tests). Keeps
@@ -397,39 +537,89 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   useEffect(() => {
     if (options.initialProject) return
     let cancelled = false
-    const shared =
-      typeof window !== 'undefined'
-        ? decodeProjectFromFragment(options.sharedProjectHash ?? window.location.hash)
-        : null
-    if (shared) {
-      // Defer to a microtask so we don't call setState synchronously inside the
-      // effect body (mirrors the async loadLast path below).
-      void Promise.resolve().then(() => {
-        if (cancelled) return
+    hydrationGenerationRef.current += 1
+    const generation = hydrationGenerationRef.current
+    const isCurrent = () =>
+      !cancelled && hydrationGenerationRef.current === generation
+    void (async () => {
+      await Promise.resolve()
+      if (!isCurrent()) return
+      setHydration({ status: 'hydrating' })
+      const shared =
+        typeof window !== 'undefined'
+          ? decodeProjectFromFragment(options.sharedProjectHash ?? window.location.hash)
+          : null
+      if (shared) {
+        if (!isCurrent()) return
+        resetPersistenceForProject(false)
         dispatch({ type: 'load-project', project: { ...shared, id: newId('project') } })
-        setStatus('Opened shared project')
+        setHydration({ status: 'ready-with-project', source: 'shared' })
+        announce('Opened shared project', 'success')
         options.onSharedProjectConsumed?.()
-      })
-      return () => {
-        cancelled = true
+        return
       }
-    }
-    void store.loadLast().then((project) => {
-      if (!cancelled && project) dispatch({ type: 'load-project', project })
-    })
+
+      try {
+        const recovery = options.recoveryScope
+          ? readProjectRecovery(recoveryStorage, options.recoveryScope)
+          : null
+        if (recovery) {
+          if (!isCurrent()) return
+          resetPersistenceForProject(false, recovery.lineageId)
+          recoveryTokenRef.current = recovery.token
+          recoveryTokensRef.current.add(recovery.token)
+          dispatch({ type: 'load-project', project: recovery.project })
+          setHydration({ status: 'ready-with-project', source: 'recovery' })
+          announce('Recovered unsaved changes', 'success')
+          return
+        }
+        const project = await store.loadLast()
+        if (!isCurrent()) return
+        if (project) {
+          resetPersistenceForProject(true)
+          dispatch({ type: 'load-project', project })
+          setHydration({ status: 'ready-with-project', source: 'last' })
+          return
+        }
+        setHydration({ status: 'ready-without-project' })
+      } catch {
+        if (isCurrent()) {
+          setHydration({
+            status: 'restore-error',
+            message: 'Cadence could not restore your last project.',
+          })
+        }
+      }
+    })()
     return () => {
       cancelled = true
     }
-    // Run once on mount for the resolved store.
+    // Router hash cleanup must not trigger a second pass; identity/backend changes must.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store])
+  }, [
+    store,
+    hydrationAttempt,
+    options.storeRevision,
+    options.recoveryScope,
+    resetPersistenceForProject,
+  ])
+
+  const retryHydration = useCallback(() => {
+    setHydrationAttempt((attempt) => attempt + 1)
+  }, [])
+
+  const continueToStartCenter = useCallback(() => {
+    setHydration({ status: 'ready-without-project' })
+  }, [])
 
   const persist = useCallback(
     async (project: Project) => {
+      if (store.persist) {
+        await store.persist(project)
+        return
+      }
       await store.save(project)
       await store.setLast(project.id)
-      const projects = await store.list()
-      if (mountedRef.current) setSavedProjects(projects)
     },
     [store],
   )
@@ -440,26 +630,90 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
       autosaveTimerRef.current = null
     }
     if (flushPromiseRef.current) return flushPromiseRef.current
+    if (persistenceBarrierRef.current) return Promise.resolve()
+    if (hydration.status !== 'ready-with-project') return Promise.resolve()
+    const generation = persistenceGenerationRef.current
+    const isCurrent = () => persistenceGenerationRef.current === generation
     if (mountedRef.current) setIsFlushing(true)
+    const savingRevision = revisionRef.current
+    if (mountedRef.current) {
+      setSaveState((current) => ({
+        ...current,
+        status: 'saving',
+        revision: revisionRef.current,
+        persistedRevision: savedRevisionRef.current,
+        savingRevision,
+        message: null,
+      }))
+    }
 
     const flush = async () => {
       let attemptedRevision = savedRevisionRef.current
       try {
-        while (savedRevisionRef.current < revisionRef.current) {
+        while (isCurrent() && savedRevisionRef.current < revisionRef.current) {
           attemptedRevision = revisionRef.current
           const project = projectRef.current
+          const recoveryTokens = [...recoveryTokensRef.current]
+          const recoveryHeadToken = recoveryTokenRef.current
           await persist(project)
+          if (!isCurrent()) return
           savedRevisionRef.current = Math.max(savedRevisionRef.current, attemptedRevision)
-          if (mountedRef.current) setSavedProject(project)
+          if (
+            failedRevisionRef.current !== null &&
+            savedRevisionRef.current >= failedRevisionRef.current
+          ) {
+            failedRevisionRef.current = null
+          }
+          if (options.recoveryScope) {
+            clearProjectRecoveryChain(
+              recoveryStorage,
+              options.recoveryScope,
+              project.id,
+              recoveryHeadToken,
+            )
+            for (const token of recoveryTokens) recoveryTokensRef.current.delete(token)
+            if (
+              recoveryTokenRef.current &&
+              recoveryTokens.includes(recoveryTokenRef.current)
+            ) {
+              recoveryTokenRef.current = null
+            }
+          }
+          void refreshList()
+        }
+        if (!isCurrent()) return
+        if (mountedRef.current) {
+          const fullySaved = savedRevisionRef.current >= revisionRef.current
+          setSaveState({
+            status: fullySaved ? 'saved' : 'dirty',
+            revision: revisionRef.current,
+            persistedRevision: savedRevisionRef.current,
+            savingRevision: null,
+            savedAt: Date.now(),
+            message: null,
+          })
         }
       } catch (error) {
-        if (mountedRef.current && revisionRef.current > attemptedRevision) {
-          setJoinedFailure((value) => value + 1)
+        if (!isCurrent()) return
+        failedRevisionRef.current = attemptedRevision
+        if (mountedRef.current) {
+          if (revisionRef.current > attemptedRevision) {
+            setJoinedFailure((value) => value + 1)
+          }
+          setSaveState((current) => ({
+            ...current,
+            status: 'error',
+            revision: revisionRef.current,
+            persistedRevision: savedRevisionRef.current,
+            savingRevision: null,
+            message: 'Cadence could not save your latest changes.',
+          }))
         }
         throw error
       }
     }
     const pending = flush().finally(() => {
+      if (!isCurrent()) return
       if (flushPromiseRef.current === pending) flushPromiseRef.current = null
       if (mountedRef.current) {
         setIsFlushing(false)
@@ -467,7 +721,23 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     })
     flushPromiseRef.current = pending
     return pending
-  }, [persist])
+  }, [
+    hydration.status,
+    persist,
+    recoveryStorage,
+    refreshList,
+    options.recoveryScope,
+  ])
+
+  const settleActivePersistence = useCallback(async () => {
+    const active = flushPromiseRef.current
+    if (!active) return
+    try {
+      await active
+    } catch {
+      // Explicit discard callers need the transaction settled, not successful.
+    }
+  }, [])
 
   // A failed in-flight save may have been joined by a newer revision's debounce.
   // Once that attempt settles, queue one normal-delay retry for any still-dirty
@@ -475,6 +745,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   useEffect(() => {
     if (
       joinedFailure === 0 ||
+      persistenceBarrier ||
       savedRevisionRef.current >= revisionRef.current ||
       autosaveTimerRef.current !== null
     ) {
@@ -484,9 +755,6 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     autosaveTimerRef.current = setTimeout(() => {
       autosaveTimerRef.current = null
       void flushAutosave()
-        .then(() => {
-          if (mountedRef.current) setStatus('Autosaved')
-        })
         .catch(() => undefined)
     }, retryDelay)
     return () => {
@@ -495,12 +763,47 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         autosaveTimerRef.current = null
       }
     }
-  }, [autosaveDelay, flushAutosave, joinedFailure])
+  }, [autosaveDelay, flushAutosave, joinedFailure, persistenceBarrier])
 
   // Debounced autosave on any project change. Explicit route-exit flushes cancel
   // this timer and await the same serialized persistence path.
   useEffect(() => {
+    if (persistenceBarrier) return
+    if (hydration.status !== 'ready-with-project') return
+    if (skipNextProjectRevisionRef.current) {
+      skipNextProjectRevisionRef.current = false
+      return
+    }
     revisionRef.current += 1
+    if (
+      failedRevisionRef.current !== null &&
+      revisionRef.current > failedRevisionRef.current
+    ) {
+      failedRevisionRef.current = null
+    }
+    if (options.recoveryScope) {
+      const previousToken = recoveryTokenRef.current
+      const write = writeProjectRecovery(
+        recoveryStorage,
+        options.recoveryScope,
+        state.project,
+        revisionRef.current,
+        recoveryLineageRef.current,
+        previousToken,
+      )
+      if (write) {
+        recoveryTokenRef.current = write.token
+        recoveryTokensRef.current.add(write.token)
+      }
+    }
+    setSaveState((current) => ({
+      ...current,
+      status: 'dirty',
+      revision: revisionRef.current,
+      persistedRevision: savedRevisionRef.current,
+      savingRevision: null,
+      message: null,
+    }))
     if (autosaveTimerRef.current !== null) clearTimeout(autosaveTimerRef.current)
     if (autosaveDelay <= 0) {
       void flushAutosave().catch(() => undefined)
@@ -508,11 +811,8 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     }
     autosaveTimerRef.current = setTimeout(() => {
       autosaveTimerRef.current = null
-      void flushAutosave()
-        .then(() => {
-          if (mountedRef.current) setStatus('Autosaved')
-        })
-        .catch(() => undefined)
+      if (failedRevisionRef.current === revisionRef.current) return
+      void flushAutosave().catch(() => undefined)
     }, autosaveDelay)
     return () => {
       if (autosaveTimerRef.current !== null) {
@@ -520,7 +820,15 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         autosaveTimerRef.current = null
       }
     }
-  }, [state.project, autosaveDelay, flushAutosave])
+  }, [
+    state.project,
+    autosaveDelay,
+    flushAutosave,
+    hydration.status,
+    recoveryStorage,
+    options.recoveryScope,
+    persistenceBarrier,
+  ])
 
   const play = useCallback(() => {
     void engine.play()
@@ -653,7 +961,11 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   }, [midiArmed, transportState])
   const toggleMidiArmed = useCallback(() => setMidiArmed((armed) => !armed), [])
 
-  const notify = useCallback((message: string) => setStatus(message), [])
+  const notify = useCallback((message: string) => announce(message), [announce])
+  const notifyError = useCallback(
+    (message: string) => announce(message, 'error'),
+    [announce],
+  )
 
   const addTrack = useCallback(() => {
     const index = projectRef.current.tracks.length
@@ -733,129 +1045,366 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     (name: string) => dispatch({ type: 'set-project-name', name }),
     [],
   )
-  const newProject = useCallback(() => {
-    dispatch({ type: 'load-project', project: createEmptyProject(newId('project')) })
-    setStatus('New project')
-  }, [])
-  const loadDemo = useCallback(() => {
-    dispatch({ type: 'load-project', project: createDemoProject(newId('project')) })
-    setStatus('Loaded demo')
-  }, [])
-  const loadProjectSnapshot = useCallback((incoming: Project) => {
-    // Stamp a fresh id so autosave stores the template as a NEW document instead
-    // of clobbering whatever was last saved under the template's own id.
-    const project = { ...incoming, id: newId('project') }
-    dispatch({ type: 'load-project', project })
-    // `load-project` selects the first track; reveal ITS notes so the roll scrolls
-    // the freshly loaded arrangement into view (reuses the #101 reveal machinery).
-    const revealNotes = project.tracks[0]?.notes ?? []
-    if (revealNotes.length > 0) {
-      setRevealRequest((prev) => ({
-        noteIds: revealNotes.map((note) => note.id),
-        token: prev.token + 1,
-      }))
+
+  const installReplacement = useCallback(
+    async (request: ProjectReplacementRequest): Promise<void> => {
+      const project =
+        request.project ?? (request.loadId ? await store.load(request.loadId) : null)
+      if (!project) throw new Error('Project not found')
+      if (request.persisted) await store.setLast(project.id)
+      endPersistenceTransition()
+      resetPersistenceForProject(request.persisted)
+      dispatch({ type: 'load-project', project })
+      setHydration({ status: 'ready-with-project', source: 'created' })
+      setReplacement({ status: 'idle' })
+
+      const revealNotes = project.tracks[0]?.notes ?? []
+      if (revealNotes.length > 0) {
+        setRevealRequest((prev) => ({
+          noteIds: revealNotes.map((note) => note.id),
+          token: prev.token + 1,
+        }))
+      }
+      announce(
+        request.source === 'open' ? `Opened “${project.name}”` : request.label,
+        'success',
+      )
+      await refreshList()
+    },
+    [
+      announce,
+      endPersistenceTransition,
+      refreshList,
+      resetPersistenceForProject,
+      store,
+    ],
+  )
+
+  const requestProjectReplacement = useCallback(
+    async (request: ProjectReplacementRequest): Promise<ProjectReplacementResult> => {
+      const mustFlush =
+        hydration.status === 'ready-with-project' &&
+        (savedRevisionRef.current < revisionRef.current || flushPromiseRef.current !== null)
+      if (mustFlush) {
+        setReplacement({ status: 'flushing', request })
+        try {
+          await flushAutosave()
+        } catch {
+          setReplacement({
+            status: 'blocked',
+            request,
+            message: 'Cadence could not save the current project.',
+          })
+          return 'blocked'
+        }
+      }
+
+      beginPersistenceTransition()
+      try {
+        await installReplacement(request)
+        return 'replaced'
+      } catch {
+        endPersistenceTransition()
+        setReplacement({ status: 'idle' })
+        announce(
+          request.source === 'open'
+            ? 'Could not open project'
+            : 'Cadence could not finish switching projects.',
+          'error',
+        )
+        return 'failed'
+      }
+    },
+    [
+      announce,
+      beginPersistenceTransition,
+      endPersistenceTransition,
+      flushAutosave,
+      hydration.status,
+      installReplacement,
+    ],
+  )
+
+  const retryProjectReplacement = useCallback(async (): Promise<ProjectReplacementResult> => {
+    if (replacement.status !== 'blocked') return 'failed'
+    return requestProjectReplacement(replacement.request)
+  }, [replacement, requestProjectReplacement])
+
+  const discardProjectReplacement = useCallback(async (): Promise<ProjectReplacementResult> => {
+    if (replacement.status !== 'blocked') return 'failed'
+    beginPersistenceTransition()
+    await settleActivePersistence()
+    if (options.recoveryScope) {
+      clearProjectRecoveryChain(
+        recoveryStorage,
+        options.recoveryScope,
+        projectRef.current.id,
+        recoveryTokenRef.current,
+      )
+      recoveryTokensRef.current.clear()
+      recoveryTokenRef.current = null
     }
-    setStatus(`Loaded “${project.name}”`)
+    try {
+      await installReplacement(replacement.request)
+      return 'replaced'
+    } catch {
+      endPersistenceTransition()
+      setReplacement({ status: 'idle' })
+      announce(
+        replacement.request.source === 'open'
+          ? 'Could not open project'
+          : 'Cadence could not finish switching projects.',
+        'error',
+      )
+      return 'failed'
+    }
+  }, [
+    announce,
+    beginPersistenceTransition,
+    endPersistenceTransition,
+    installReplacement,
+    options.recoveryScope,
+    recoveryStorage,
+    replacement,
+    settleActivePersistence,
+  ])
+
+  const cancelProjectReplacement = useCallback(() => {
+    setReplacement({ status: 'idle' })
   }, [])
+
+  const discardAutosaveRecovery = useCallback(() => {
+    if (!options.recoveryScope) return
+    clearProjectRecoveryChain(
+      recoveryStorage,
+      options.recoveryScope,
+      projectRef.current.id,
+      recoveryTokenRef.current,
+    )
+    recoveryTokensRef.current.clear()
+    recoveryTokenRef.current = null
+  }, [options.recoveryScope, recoveryStorage])
+
+  const replaceWithBlank = useCallback(
+    () =>
+      requestProjectReplacement({
+        source: 'blank',
+        project: createEmptyProject(newId('project')),
+        label: 'Created a blank project',
+        persisted: false,
+      }),
+    [requestProjectReplacement],
+  )
+
+  const replaceWithDemo = useCallback(
+    () =>
+      requestProjectReplacement({
+        source: 'demo',
+        project: createDemoProject(newId('project')),
+        label: 'Loaded demo',
+        persisted: false,
+      }),
+    [requestProjectReplacement],
+  )
+
+  const replaceWithTemplate = useCallback(
+    (template: SongTemplate) =>
+      requestProjectReplacement({
+        source: 'template',
+        project: { ...template.build(), id: newId('project') },
+        label: `Loaded “${template.name}”`,
+        persisted: false,
+      }),
+    [requestProjectReplacement],
+  )
+
+  const openStoredProject = useCallback(
+    async (id: string): Promise<ProjectReplacementResult> => {
+      const result = await requestProjectReplacement({
+        source: 'open',
+        loadId: id,
+        label: 'Opened project',
+        persisted: true,
+      })
+      if (result === 'blocked') return result
+      if (result === 'failed') announce('Could not open project', 'error')
+      return result
+    },
+    [announce, requestProjectReplacement],
+  )
+
+  const replaceWithMidi = useCallback(
+    async (bytes: ArrayBuffer, name?: string): Promise<ProjectReplacementResult> => {
+      try {
+        const project = midiBytesToProject(bytes, { id: newId('project'), name })
+        return requestProjectReplacement({
+          source: 'import-midi',
+          project,
+          label: 'Imported MIDI',
+          persisted: false,
+        })
+      } catch {
+        announce("Couldn't import that file - is it a valid MIDI file?", 'error')
+        return 'failed'
+      }
+    },
+    [announce, requestProjectReplacement],
+  )
+
+  const replaceWithMusicXml = useCallback(
+    async (xml: string, name?: string): Promise<ProjectReplacementResult> => {
+      try {
+        const project = musicXmlToProject(xml, { id: newId('project'), name })
+        return requestProjectReplacement({
+          source: 'import-musicxml',
+          project,
+          label: 'Imported MusicXML',
+          persisted: false,
+        })
+      } catch {
+        announce("Couldn't import that file - is it valid MusicXML?", 'error')
+        return 'failed'
+      }
+    },
+    [announce, requestProjectReplacement],
+  )
+
+  const replaceWithProjectFile = useCallback(
+    async (text: string, name?: string): Promise<ProjectReplacementResult> => {
+      try {
+        const project = fileToProject(text, { id: newId('project'), name })
+        return requestProjectReplacement({
+          source: 'import-project',
+          project,
+          label: 'Opened project file',
+          persisted: false,
+        })
+      } catch {
+        announce("Couldn't open that file - is it a Cadence project?", 'error')
+        return 'failed'
+      }
+    },
+    [announce, requestProjectReplacement],
+  )
+
+  const replaceWithPluginFormat = useCallback(
+    async (
+      id: string,
+      data: string,
+      name?: string,
+    ): Promise<ProjectReplacementResult> => {
+      const format = defaultPluginHost.formats().find((candidate) => candidate.id === id)
+      if (!format?.import) return 'failed'
+      try {
+        const imported = format.import(data, { id: newId('project'), name })
+        const project = migrateProject(imported)
+        return requestProjectReplacement({
+          source: 'import-plugin',
+          project: { ...project, id: newId('project') },
+          label: `Imported ${format.name}`,
+          persisted: false,
+        })
+      } catch {
+        announce(`Couldn't import that ${format.name} file`, 'error')
+        return 'failed'
+      }
+    },
+    [announce, requestProjectReplacement],
+  )
+
+  const newProject = useCallback(() => {
+    void replaceWithBlank()
+  }, [replaceWithBlank])
+  const loadDemo = useCallback(() => {
+    void replaceWithDemo()
+  }, [replaceWithDemo])
+  const loadProjectSnapshot = useCallback(
+    (incoming: Project) => {
+      void requestProjectReplacement({
+        source: 'template',
+        project: { ...incoming, id: newId('project') },
+        label: `Loaded “${incoming.name}”`,
+        persisted: false,
+      })
+    },
+    [requestProjectReplacement],
+  )
   const applyRemoteProject = useCallback((project: Project) => {
     dispatch({ type: 'sync-remote', project })
   }, [])
   const saveProject = useCallback(async () => {
     await flushAutosave()
-    if (mountedRef.current) setStatus('Saved')
-  }, [flushAutosave])
+    if (mountedRef.current) announce('Saved', 'success')
+  }, [announce, flushAutosave])
   const loadProject = useCallback(
     async (id: string) => {
-      const project = await store.load(id)
-      if (project) {
-        dispatch({ type: 'load-project', project })
-        setStatus(`Opened “${project.name}”`)
-      } else {
-        setStatus('Could not open project')
-      }
+      await openStoredProject(id)
     },
-    [store],
+    [openStoredProject],
   )
   const importMidi = useCallback((bytes: ArrayBuffer, name?: string) => {
-    try {
-      const project = midiBytesToProject(bytes, { id: newId('project'), name })
-      dispatch({ type: 'load-project', project })
-      setStatus('Imported MIDI')
-    } catch {
-      setStatus("Couldn't import that file — is it a valid MIDI file?")
-    }
-  }, [])
+    void replaceWithMidi(bytes, name)
+  }, [replaceWithMidi])
   const exportMidi = useCallback(() => {
-    setStatus('Exported MIDI')
+    announce('Exported MIDI', 'success')
     return projectToMidiBytes(projectRef.current)
-  }, [])
+  }, [announce])
   const exportMusicXml = useCallback(() => {
-    setStatus('Exported MusicXML')
+    announce('Exported MusicXML', 'success')
     return projectToMusicXml(projectRef.current)
-  }, [])
+  }, [announce])
   const importMusicXml = useCallback((xml: string, name?: string) => {
-    try {
-      const project = musicXmlToProject(xml, { id: newId('project'), name })
-      dispatch({ type: 'load-project', project })
-      setStatus('Imported MusicXML')
-    } catch {
-      setStatus("Couldn't import that file — is it valid MusicXML?")
-    }
-  }, [])
+    void replaceWithMusicXml(xml, name)
+  }, [replaceWithMusicXml])
   const exportProjectFile = useCallback(() => {
-    setStatus('Exported project file')
+    announce('Exported project file', 'success')
     return projectToFile(projectRef.current)
-  }, [])
+  }, [announce])
   const importProjectFile = useCallback((text: string, name?: string) => {
-    try {
-      const project = fileToProject(text, { id: newId('project'), name })
-      dispatch({ type: 'load-project', project })
-      setStatus('Opened project file')
-    } catch {
-      setStatus("Couldn't open that file — is it a Cadence project?")
-    }
-  }, [])
+    void replaceWithProjectFile(text, name)
+  }, [replaceWithProjectFile])
   const exportWav = useCallback(async (): Promise<Uint8Array | null> => {
-    setStatus('Rendering audio…')
+    announce('Rendering audio')
     try {
       const { bytes } = await renderProjectToWav(projectRef.current, {
         renderOffline: options.audioRenderer,
         watermark: options.watermarkExports ?? true,
       })
-      setStatus('Exported WAV')
+      announce('Exported WAV', 'success')
       return bytes
     } catch {
-      setStatus("Couldn't render audio in this environment")
+      announce("Couldn't render audio in this environment", 'error')
       return null
     }
-  }, [options.audioRenderer, options.watermarkExports])
+  }, [announce, options.audioRenderer, options.watermarkExports])
   // MP3 mirrors WAV: same offline render, same pre-encode watermark, same
   // entitlement gate. The encoder module (LAME) is lazy-imported so it only loads
   // when MP3 is actually exported.
   const exportMp3 = useCallback(async (): Promise<Uint8Array | null> => {
-    setStatus('Rendering audio…')
+    announce('Rendering audio')
     try {
       const { renderProjectToMp3 } = await import('../formats/mp3Export')
       const { bytes } = await renderProjectToMp3(projectRef.current, {
         renderOffline: options.audioRenderer,
         watermark: options.watermarkExports ?? true,
       })
-      setStatus('Exported MP3')
+      announce('Exported MP3', 'success')
       return bytes
     } catch {
-      setStatus("Couldn't render audio in this environment")
+      announce("Couldn't render audio in this environment", 'error')
       return null
     }
-  }, [options.audioRenderer, options.watermarkExports])
+  }, [announce, options.audioRenderer, options.watermarkExports])
   const shareSnapshot = useCallback((): ShareSnapshot => {
     const snapshot = createShareSnapshot(projectRef.current)
-    setStatus(
+    announce(
       snapshot.kind === 'url'
         ? 'Copied a shareable link'
-        : 'Project too large for a link — share the file',
+        : 'Project too large for a link - share the file',
+      'success',
     )
     return snapshot
-  }, [])
+  }, [announce])
 
   // Generic export/import through the plugin host, keyed by format id. These let
   // the toolbar drive plugin-contributed formats with no per-format code.
@@ -863,27 +1412,18 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     (id: string): string | Uint8Array | null => {
       const format = defaultPluginHost.formats().find((f) => f.id === id)
       if (!format?.export) return null
-      setStatus(`Exported ${format.name}`)
+      announce(`Exported ${format.name}`, 'success')
       return format.export(projectRef.current)
     },
-    [],
+    [announce],
   )
   const importFormat = useCallback((id: string, data: string, name?: string) => {
-    const format = defaultPluginHost.formats().find((f) => f.id === id)
-    if (!format?.import) return
-    try {
-      const imported = format.import(data, { id: newId('project'), name })
-      // Plugin importers are untrusted: route the result through the same
-      // migrateProject sanitize seam as projectFile/MusicXML/share imports so a
-      // malicious or buggy importer can't inject out-of-range pitches, NaN/negative
-      // durations, or unbounded loop/tempo/ppq values into live state.
-      const project = migrateProject(imported)
-      dispatch({ type: 'load-project', project })
-      setStatus(`Imported ${format.name}`)
-    } catch {
-      setStatus(`Couldn't import that ${format.name} file`)
-    }
-  }, [])
+    void replaceWithPluginFormat(id, data, name)
+  }, [replaceWithPluginFormat])
+
+  const retrySave = useCallback(async () => {
+    await flushAutosave()
+  }, [flushAutosave])
 
   return {
     state,
@@ -894,12 +1434,37 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     snap,
     setSnap,
     savedProjects,
+    recentProjectsState,
+    refreshSavedProjects: refreshList,
     status,
+    actionMessage,
+    hydration,
+    saveState,
+    replacement,
     audioReady,
-    isDirty: state.project !== savedProject,
+    isDirty: saveState.revision > saveState.persistedRevision,
     isFlushing,
     flushAutosave,
+    settleActivePersistence,
+    beginPersistenceTransition,
+    retryHydration,
+    continueToStartCenter,
+    retrySave,
+    requestProjectReplacement,
+    retryProjectReplacement,
+    discardProjectReplacement,
+    cancelProjectReplacement,
+    discardAutosaveRecovery,
+    replaceWithBlank,
+    replaceWithDemo,
+    replaceWithTemplate,
+    openStoredProject,
+    replaceWithMidi,
+    replaceWithMusicXml,
+    replaceWithProjectFile,
+    replaceWithPluginFormat,
     notify,
+    notifyError,
     play,
     pause,
     stop,

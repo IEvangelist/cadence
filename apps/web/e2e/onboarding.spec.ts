@@ -8,6 +8,7 @@ test.describe('first-run onboarding', () => {
     page,
   }) => {
     await page.goto('/')
+    await page.getByRole('button', { name: /Blank project/ }).click()
 
     await expect(page.getByRole('dialog')).toBeVisible()
 
@@ -22,6 +23,7 @@ test.describe('first-run onboarding', () => {
 
   test('persists dismissal after skipping', async ({ page }) => {
     await page.goto('/')
+    await page.getByRole('button', { name: /Blank project/ }).click()
 
     await expect(page.getByRole('dialog')).toBeVisible()
     await page.getByRole('button', { name: 'Skip tour' }).click()

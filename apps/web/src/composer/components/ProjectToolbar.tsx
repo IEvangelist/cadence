@@ -1,5 +1,24 @@
 import { useRef } from 'react'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import {
+  ChevronDown,
+  Download,
+  FilePlus2,
+  FolderOpen,
+  Music,
+  Save,
+  Share2,
+  Upload,
+} from 'lucide-react'
+import { Icon } from '../../ui/Icon'
 import { type ComposerController } from '../hooks/useComposer'
+import {
+  baseName,
+  fileMatchesExtension,
+  isProjectFileImport,
+  pluginImportFormats,
+  projectImportAccept,
+} from './projectFileRouting'
 
 interface ProjectToolbarProps {
   controller: ComposerController
@@ -7,6 +26,8 @@ interface ProjectToolbarProps {
   download?: (data: Uint8Array | string, filename: string, mime?: string) => void
   /** Injectable clipboard write so sharing can be asserted in tests. */
   copyText?: (text: string) => void | Promise<void>
+  onNewProject?: () => void
+  onOpenProject?: () => void
 }
 
 function defaultDownload(
@@ -36,76 +57,51 @@ function defaultCopyText(text: string): void {
 const slug = (name: string): string =>
   name.trim().replace(/[^a-z0-9-_]+/gi, '_').replace(/^_+|_+$/g, '') || 'cadence'
 
-const baseName = (filename: string): string =>
-  filename.replace(/\.cadence\.json$/i, '').replace(/\.[^.]+$/, '')
-
-/**
- * Decide whether an imported file is a portable project (`.cadence.json`) or
- * MusicXML. Extension is the primary signal; when it's ambiguous we sniff
- * *structurally* (a project file is JSON) rather than scanning the text for a
- * substring like "score-partwise" — which would misroute a valid project whose
- * own content happens to contain that string.
- */
-function isProjectFileImport(filename: string, text: string): boolean {
-  if (/\.(xml|musicxml)$/i.test(filename)) return false
-  if (/\.cadence(\.json)?$/i.test(filename) || /\.json$/i.test(filename)) return true
-  try {
-    JSON.parse(text)
-    return true
-  } catch {
-    return false
+const saveLabel = (controller: ComposerController): string => {
+  switch (controller.saveState.status) {
+    case 'dirty':
+      return 'Unsaved changes'
+    case 'saving':
+      return 'Saving'
+    case 'error':
+      return 'Could not save'
+    case 'saved':
+      return controller.saveState.savedAt
+        ? `Saved ${new Intl.DateTimeFormat(undefined, {
+            hour: 'numeric',
+            minute: '2-digit',
+          }).format(new Date(controller.saveState.savedAt))}`
+        : 'All changes saved'
+    default:
+      return 'All changes saved'
   }
 }
 
-/** Built-in formats handled by the toolbar's own structural import routing. */
-const BUILTIN_FORMAT_IDS = new Set(['musicxml', 'project'])
-
-const fileMatchesExtension = (extension: string, filename: string): boolean =>
-  filename.toLowerCase().endsWith(extension.toLowerCase())
-
-/** Project name + New/Demo/Save/Open plus multi-format import/export and share. */
+/** Project name, explicit save state, and grouped project/export commands. */
 export function ProjectToolbar({
   controller,
   download = defaultDownload,
   copyText = defaultCopyText,
+  onNewProject,
+  onOpenProject,
 }: ProjectToolbarProps) {
   const {
     project,
     setProjectName,
-    newProject,
-    loadDemo,
     saveProject,
-    loadProject,
-    savedProjects,
-    importMidi,
     exportMidi,
-    importMusicXml,
-    importProjectFile,
     exportWav,
     exportMp3,
     shareSnapshot,
     formats,
     exportFormat,
-    importFormat,
-    status,
+    actionMessage,
   } = controller
   const midiRef = useRef<HTMLInputElement>(null)
   const importRef = useRef<HTMLInputElement>(null)
 
   const exportableFormats = formats.filter((f) => f.export)
-  const pluginImportFormats = formats.filter(
-    (f) => f.import && !BUILTIN_FORMAT_IDS.has(f.id),
-  )
-  const importAccept = [
-    '.cadence',
-    '.cadence.json',
-    '.json',
-    '.xml',
-    '.musicxml',
-    'application/json',
-    'application/xml',
-    ...pluginImportFormats.map((f) => f.extension),
-  ].join(',')
+  const importablePluginFormats = pluginImportFormats(formats)
 
   const exportName = (ext: string): string => `${slug(project.name)}${ext}`
 
@@ -113,7 +109,7 @@ export function ProjectToolbar({
     if (!file) return
     try {
       const bytes = await file.arrayBuffer()
-      importMidi(bytes, baseName(file.name))
+      await controller.replaceWithMidi(bytes, baseName(file.name))
     } catch {
       // importMidi surfaces parse errors itself; this guards the file read.
     }
@@ -150,15 +146,18 @@ export function ProjectToolbar({
     }
     // Plugin-contributed formats route by file extension; the built-in
     // project/MusicXML importers keep their structural JSON sniffing below.
-    const pluginFormat = pluginImportFormats.find((f) =>
+    const pluginFormat = importablePluginFormats.find((f) =>
       fileMatchesExtension(f.extension, file.name),
     )
     if (pluginFormat) {
-      importFormat(pluginFormat.id, text, baseName(file.name))
+      await controller.replaceWithPluginFormat(pluginFormat.id, text, baseName(file.name))
       return
     }
-    if (isProjectFileImport(file.name, text)) importProjectFile(text, baseName(file.name))
-    else importMusicXml(text, baseName(file.name))
+    if (isProjectFileImport(file.name, text)) {
+      await controller.replaceWithProjectFile(text, baseName(file.name))
+    } else {
+      await controller.replaceWithMusicXml(text, baseName(file.name))
+    }
   }
 
   const handleShare = (): void => {
@@ -184,64 +183,85 @@ export function ProjectToolbar({
         />
       </label>
 
+      <DropdownMenu.Root modal={false}>
+        <DropdownMenu.Trigger asChild>
+          <button
+            type="button"
+            className="btn btn-sm"
+            data-interaction="studio.project.menu.toggle"
+          >
+            Project
+            <Icon icon={ChevronDown} size={14} />
+          </button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content className="ui-menu" align="start" sideOffset={8}>
+            <DropdownMenu.Label className="ui-menu__label">Project</DropdownMenu.Label>
+            <DropdownMenu.Item asChild>
+              <button
+                type="button"
+                className="ui-menu__item"
+                data-interaction="studio.project.new"
+                onClick={onNewProject}
+              >
+                <Icon icon={FilePlus2} size={16} />
+                <span>New project</span>
+              </button>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item asChild>
+              <button
+                type="button"
+                className="ui-menu__item"
+                data-interaction="studio.project.open"
+                onClick={onOpenProject}
+              >
+                <Icon icon={FolderOpen} size={16} />
+                <span>Open project</span>
+              </button>
+            </DropdownMenu.Item>
+            <DropdownMenu.Separator className="ui-menu__separator" />
+            <DropdownMenu.Item asChild>
+              <button
+                type="button"
+                className="ui-menu__item"
+                data-interaction="studio.project.import.trigger"
+                onClick={() => importRef.current?.click()}
+              >
+                <Icon icon={Upload} size={16} />
+                <span>Import file</span>
+              </button>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item asChild>
+              <button
+                type="button"
+                className="ui-menu__item"
+                data-interaction="studio.project.midi-import.trigger"
+                onClick={() => midiRef.current?.click()}
+              >
+                <Icon icon={Music} size={16} />
+                <span>Import MIDI</span>
+              </button>
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+
       <button
         type="button"
-        className="btn btn-sm"
-        data-interaction="studio.project.new"
-        onClick={newProject}
-      >
-        New
-      </button>
-      <button
-        type="button"
-        className="btn btn-sm"
-        data-interaction="studio.project.demo"
-        onClick={loadDemo}
-      >
-        Demo
-      </button>
-      <button
-        type="button"
-        className="btn btn-sm"
+        className="btn btn-primary btn-sm"
         data-interaction="studio.project.save"
+        disabled={controller.saveState.status === 'saving'}
         onClick={() => void saveProject()}
       >
+        <Icon icon={Save} size={15} />
         Save
       </button>
 
-      <label className="field">
-        <span className="visually-hidden">Open project</span>
-        <select
-          className="open-select"
-          data-interaction="studio.project.open"
-          value=""
-          aria-label="Open project"
-          onChange={(event) => {
-            if (event.target.value) void loadProject(event.target.value)
-          }}
-        >
-          <option value="">Open…</option>
-          {savedProjects.map((meta) => (
-            <option key={meta.id} value={meta.id}>
-              {meta.name}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <button
-        type="button"
-        className="btn btn-sm"
-        data-interaction="studio.project.import.trigger"
-        onClick={() => importRef.current?.click()}
-      >
-        Import file
-      </button>
       <input
         ref={importRef}
         type="file"
         data-interaction="studio.project.import.file"
-        accept={importAccept}
+        accept={projectImportAccept(formats)}
         className="visually-hidden"
         aria-label="Import project or MusicXML file"
         onChange={(event) => {
@@ -250,47 +270,6 @@ export function ProjectToolbar({
         }}
       />
 
-      <label className="field">
-        <span className="visually-hidden">Export as</span>
-        <select
-          className="export-select"
-          data-interaction="studio.project.export"
-          value=""
-          aria-label="Export as"
-          onChange={(event) => {
-            const { value } = event.target
-            event.target.value = ''
-            if (value) void handleExportFormat(value)
-          }}
-        >
-          <option value="">Export…</option>
-          {exportableFormats.map((format) => (
-            <option key={format.id} value={format.id}>
-              {format.name}
-            </option>
-          ))}
-          <option value="wav">Audio (.wav)</option>
-          <option value="mp3">Audio (.mp3)</option>
-        </select>
-      </label>
-
-      <button
-        type="button"
-        className="btn btn-sm"
-        data-interaction="studio.project.share"
-        onClick={handleShare}
-      >
-        Share
-      </button>
-
-      <button
-        type="button"
-        className="btn btn-sm"
-        data-interaction="studio.project.midi-import.trigger"
-        onClick={() => midiRef.current?.click()}
-      >
-        Import MIDI
-      </button>
       <input
         ref={midiRef}
         type="file"
@@ -303,17 +282,96 @@ export function ProjectToolbar({
           event.target.value = ''
         }}
       />
-      <button
-        type="button"
-        className="btn btn-sm"
-        data-interaction="studio.project.midi-export"
-        onClick={handleExportMidi}
-      >
-        Export MIDI
-      </button>
 
+      <DropdownMenu.Root modal={false}>
+        <DropdownMenu.Trigger asChild>
+          <button
+            type="button"
+            className="btn btn-sm"
+            data-interaction="studio.project.export"
+          >
+            Export &amp; share
+            <Icon icon={ChevronDown} size={14} />
+          </button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content className="ui-menu" align="end" sideOffset={8}>
+            <DropdownMenu.Label className="ui-menu__label">Export</DropdownMenu.Label>
+            {exportableFormats.map((format) => (
+              <DropdownMenu.Item key={format.id} asChild>
+                <button
+                  type="button"
+                  className="ui-menu__item"
+                  data-interaction="studio.project.export.format"
+                  onClick={() => void handleExportFormat(format.id)}
+                >
+                  <Icon icon={Download} size={16} />
+                  <span>Export {format.name}</span>
+                </button>
+              </DropdownMenu.Item>
+            ))}
+            {[
+              ['wav', 'WAV audio'],
+              ['mp3', 'MP3 audio'],
+            ].map(([id, label]) => (
+              <DropdownMenu.Item key={id} asChild>
+                <button
+                  type="button"
+                  className="ui-menu__item"
+                  data-interaction="studio.project.export.format"
+                  onClick={() => void handleExportFormat(id)}
+                >
+                  <Icon icon={Download} size={16} />
+                  <span>Export {label}</span>
+                </button>
+              </DropdownMenu.Item>
+            ))}
+            <DropdownMenu.Item asChild>
+              <button
+                type="button"
+                className="ui-menu__item"
+                data-interaction="studio.project.midi-export"
+                onClick={handleExportMidi}
+              >
+                <Icon icon={Music} size={16} />
+                <span>Export MIDI</span>
+              </button>
+            </DropdownMenu.Item>
+            <DropdownMenu.Separator className="ui-menu__separator" />
+            <DropdownMenu.Item asChild>
+              <button
+                type="button"
+                className="ui-menu__item"
+                data-interaction="studio.project.share"
+                onClick={handleShare}
+              >
+                <Icon icon={Share2} size={16} />
+                <span>Share snapshot</span>
+              </button>
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+
+      <span
+        className={`toolbar-save-state toolbar-save-state--${controller.saveState.status}`}
+        role={controller.saveState.status === 'error' ? 'alert' : 'status'}
+        aria-live="polite"
+      >
+        {saveLabel(controller)}
+      </span>
+      {controller.saveState.status === 'error' ? (
+        <button
+          type="button"
+          className="btn btn-sm"
+          data-interaction="studio.save.retry"
+          onClick={() => void controller.retrySave()}
+        >
+          Retry save
+        </button>
+      ) : null}
       <span className="toolbar-status" role="status" aria-live="polite">
-        {status}
+        {actionMessage?.text ?? ''}
       </span>
     </div>
   )

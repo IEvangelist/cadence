@@ -50,6 +50,26 @@ describe('<AcknowledgementsPage />', () => {
     )
   })
 
+  it('lists Radix Dialog as the MIT dependency for accessible project/replacement dialogs', () => {
+    render(<AcknowledgementsPage />)
+    const table = screen.getByRole('table', { name: /third-party components/i })
+    const packageLink = within(table).getByRole('link', {
+      name: '@radix-ui/react-dialog',
+    })
+    const row = packageLink.closest('tr')
+
+    expect(packageLink).toHaveAttribute(
+      'href',
+      'https://www.npmjs.com/package/@radix-ui/react-dialog',
+    )
+    expect(row).not.toBeNull()
+    expect(within(row!).getByText('1.1.23')).toBeInTheDocument()
+    expect(within(row!).getByText('MIT')).toBeInTheDocument()
+    expect(
+      screen.getByText(/accessible project\/replacement dialogs/i),
+    ).toBeInTheDocument()
+  })
+
   it('links to the LAME credit page at lame.sourceforge.io', () => {
     coversInteractions('licenses.external-link')
     render(<AcknowledgementsPage />)

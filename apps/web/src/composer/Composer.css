@@ -107,6 +107,29 @@ select:focus-visible {
   color: var(--color-text-subtle);
 }
 
+.toolbar-save-state {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.toolbar-save-state--dirty,
+.toolbar-save-state--saving {
+  color: var(--color-warning);
+}
+
+.toolbar-save-state--error {
+  color: var(--color-danger);
+}
+
+.composer-hydration {
+  display: grid;
+  flex: 1;
+  min-height: 16rem;
+  place-items: center;
+  color: var(--color-text-muted);
+}
+
 /* ---- Empty state ---- */
 .composer-empty {
   display: flex;
