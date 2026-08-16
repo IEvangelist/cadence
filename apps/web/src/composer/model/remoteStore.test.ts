@@ -52,6 +52,7 @@ describe('RemoteProjectStore', () => {
 
   it('load() returns the parsed project', async () => {
     const project = createEmptyProject('p1')
+    if (project.mix) project.mix.master.gainDb = -5
     const store = new RemoteProjectStore(
       async () => json(detail('p1', project.name, serializeProject(project))),
       '',
@@ -60,6 +61,7 @@ describe('RemoteProjectStore', () => {
     const loaded = await store.load('p1')
 
     expect(loaded?.id).toBe('p1')
+    expect(loaded?.mix?.master.gainDb).toBe(-5)
   })
 
   it('load() returns null on 404', async () => {

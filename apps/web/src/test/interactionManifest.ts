@@ -74,6 +74,7 @@ const auth = traced('src/auth/AuthBar.test.tsx', 'e2e/auth.spec.ts')
 const profile = traced('src/auth/ProfilePage.test.tsx', 'e2e/auth.spec.ts')
 const pricing = traced('src/billing/PricingPage.test.tsx', 'e2e/pricing.spec.ts')
 const aiStudio = traced('src/composer/components/AiStudioPanel.test.tsx', 'e2e/assistant.spec.ts')
+const aiInspector = traced('src/composer/components/AiInspector.test.tsx', 'e2e/assistant.spec.ts')
 const assistant = traced(
   'src/composer/components/AssistantPanel.test.tsx',
   'e2e/assistant.spec.ts',
@@ -87,6 +88,7 @@ const midi = traced('src/composer/components/MidiControls.test.tsx', 'e2e/midi.s
 const mixer = traced('src/composer/components/MixerPanel.test.tsx', 'e2e/automation.spec.ts')
 const piano = traced('src/composer/components/PianoRoll.test.tsx', 'e2e/pro-editing.spec.ts')
 const plugins = traced('src/composer/components/PluginsPanel.test.tsx', 'e2e/plugins.spec.ts')
+const pluginTools = traced('src/composer/components/PluginToolHost.test.tsx', 'e2e/plugins.spec.ts')
 const project = traced('src/composer/components/ProjectToolbar.test.tsx', 'e2e/composer.spec.ts')
 const quickStart = traced(
   'src/composer/components/QuickStartGallery.test.tsx',
@@ -330,6 +332,21 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'Opens the billing portal URL or exposes an error.',
   ),
 
+  aiInspector(
+    'studio.ai.inspector.tab',
+    'studio',
+    'tab',
+    '/Basic|Advanced/',
+    'Switches between the Basic Assistant and Advanced AI presentation without changing controllers.',
+    'repeated',
+  ),
+  aiStudio(
+    'studio.ai.upgrade',
+    'studio',
+    'link',
+    'View plans',
+    'Routes a locked Advanced AI action to pricing without invoking its controller.',
+  ),
   aiStudio(
     'studio.ai.feature.select',
     'studio',
@@ -549,6 +566,13 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'button',
     'MIDI',
     'Opens device selection and recording quantize settings.',
+  ),
+  midi(
+    'studio.midi.settings.open',
+    'studio',
+    'button',
+    'MIDI settings',
+    'Opens device and quantize configuration while record state remains visible.',
   ),
   midi(
     'studio.midi.device',
@@ -774,6 +798,14 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'Updates the selected note velocity and numeric readout.',
   ),
 
+  pluginTools(
+    'studio.plugins.panel.open',
+    'studio',
+    'tab',
+    '/.+/',
+    'Mounts the selected visible extension tool and unmounts inactive tools.',
+    'repeated',
+  ),
   plugins(
     'studio.plugins.keybinding.record',
     'studio',

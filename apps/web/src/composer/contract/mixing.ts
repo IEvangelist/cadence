@@ -1,9 +1,9 @@
 /**
  * Mixer overlay contracts for effort #44.
  *
- * Mixer state is keyed by Track.id and intentionally does not add fields to
- * Track or Project. Insert effects come from the Plugin SDK
- * EffectContribution/EffectNode surface.
+ * Runtime mixer state is keyed by Track.id. The optional Project.mix document
+ * persists its manual values without adding fields to Track; Track.muted remains
+ * the source of truth. Insert effects come from the Plugin SDK surface.
  */
 import type { EffectContribution, EffectNode } from '../plugins/types'
 

@@ -73,7 +73,7 @@ describe('<AiStudioPanel />', () => {
   })
 
   it('shows a Free badge and locks pro features on the free tier', () => {
-    coversInteractions('studio.ai.feature.select')
+    coversInteractions('studio.ai.feature.select', 'studio.ai.upgrade')
     renderStudio({ entitlements: null })
     const panel = studioRanelRegion()
     expect(within(panel).getByText(/Free · on-device/)).toBeInTheDocument()
@@ -84,6 +84,10 @@ describe('<AiStudioPanel />', () => {
     fireEvent.click(within(panel).getByRole('radio', { name: /Style transfer/ }))
     expect(within(panel).getByText(/available on the Pro plan/)).toBeInTheDocument()
     expect(within(panel).getByRole('button', { name: 'Apply style' })).toBeDisabled()
+    expect(within(panel).getByRole('link', { name: 'View plans' })).toHaveAttribute(
+      'href',
+      '/pricing',
+    )
   })
 
   it('generates a motif from a prompt through the composer controller', () => {

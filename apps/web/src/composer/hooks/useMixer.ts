@@ -103,6 +103,11 @@ export function useMixer(controller: ComposerController): MixerViewModel {
     writeAutomationPoint: dispatchWritePoint,
     removeAutomationPoint: dispatchRemovePoint,
     clearAutomationLane: dispatchClearLane,
+    setTrackMix: dispatchTrackMix,
+    addMixInsert: dispatchAddInsert,
+    removeMixInsert: dispatchRemoveInsert,
+    setMixInsertEnabled: dispatchSetInsertEnabled,
+    setMasterMix: dispatchMasterMix,
   } = controller
   const view = useSyncExternalStore(mixer.subscribe, mixer.getView, mixer.getView)
 
@@ -115,10 +120,12 @@ export function useMixer(controller: ComposerController): MixerViewModel {
   )
 
   const [availableEffects, setAvailableEffects] = useState<MixerEffectOption[]>(listEffectOptions)
-  useEffect(
-    () => defaultPluginHost.subscribe(() => setAvailableEffects(listEffectOptions())),
-    [],
-  )
+  useEffect(() => {
+    return defaultPluginHost.subscribe(() => {
+      setAvailableEffects(listEffectOptions())
+      mixer.refreshInserts()
+    })
+  }, [mixer])
 
   // Keep the latest playhead in a ref so the "write at playhead" callbacks stay
   // stable (they must not be re-created on every animation frame).
@@ -133,6 +140,12 @@ export function useMixer(controller: ComposerController): MixerViewModel {
   useEffect(() => {
     mixer.setAutomation(automation)
   }, [mixer, automation])
+
+  // Replace the runtime mixer mirror whenever a project is loaded or its durable
+  // mix document changes. This stays outside the frozen note scheduling seam.
+  useEffect(() => {
+    mixer.hydrate(project.mix)
+  }, [mixer, project.mix])
 
   // Drive automation from the transport: apply interpolated values while playing,
   // then release back to the manual snapshot values when playback stops/pauses.
@@ -173,39 +186,54 @@ export function useMixer(controller: ComposerController): MixerViewModel {
   }, [availableEffects])
 
   const effectName = useCallback(
-    (effectId: string) => effectLabels.get(effectId) ?? effectId,
+    (effectId: string) => effectLabels.get(effectId) ?? `${effectId} (unavailable)`,
     [effectLabels],
   )
 
-  const setTrackGain = useCallback((trackId: string, gainDb: number) => mixer.setTrackGain(trackId, gainDb), [mixer])
-  const setTrackPan = useCallback((trackId: string, pan: number) => mixer.setTrackPan(trackId, pan), [mixer])
+  const setTrackGain = useCallback(
+    (trackId: string, gainDb: number) => dispatchTrackMix(trackId, { gainDb }),
+    [dispatchTrackMix],
+  )
+  const setTrackPan = useCallback(
+    (trackId: string, pan: number) => dispatchTrackMix(trackId, { pan }),
+    [dispatchTrackMix],
+  )
   const toggleSolo = useCallback(
-    (trackId: string) => mixer.setTrackSolo(trackId, !(mixer.getSnapshot().tracks[trackId]?.solo ?? false)),
-    [mixer],
+    (trackId: string) =>
+      dispatchTrackMix(trackId, {
+        solo: !(project.mix?.tracks[trackId]?.solo ?? false),
+      }),
+    [dispatchTrackMix, project.mix],
   )
   const toggleMute = useCallback((trackId: string) => controller.toggleMute(trackId), [controller])
 
-  const addInsert = useCallback((trackId: string, effectId: string) => mixer.addInsert(trackId, effectId), [mixer])
+  const addInsert = useCallback(
+    (trackId: string, effectId: string) => dispatchAddInsert(trackId, effectId),
+    [dispatchAddInsert],
+  )
   const removeInsert = useCallback(
-    (trackId: string, insertId: string) => mixer.removeInsert(trackId, insertId),
-    [mixer],
+    (trackId: string, insertId: string) => dispatchRemoveInsert(trackId, insertId),
+    [dispatchRemoveInsert],
   )
   const toggleInsert = useCallback(
     (trackId: string, insertId: string) => {
-      const insert = mixer.listInserts(trackId).find((entry) => entry.id === insertId)
-      if (insert) mixer.setInsertEnabled(trackId, insertId, !insert.enabled)
+      const insert = project.mix?.tracks[trackId]?.inserts.find((entry) => entry.id === insertId)
+      if (insert) dispatchSetInsertEnabled(trackId, insertId, !insert.enabled)
     },
-    [mixer],
+    [dispatchSetInsertEnabled, project.mix],
   )
 
-  const setMasterGain = useCallback((gainDb: number) => mixer.setMaster({ gainDb }), [mixer])
+  const setMasterGain = useCallback(
+    (gainDb: number) => dispatchMasterMix({ gainDb }),
+    [dispatchMasterMix],
+  )
   const setLimiterEnabled = useCallback(
-    (enabled: boolean) => mixer.setMaster({ limiterEnabled: enabled }),
-    [mixer],
+    (enabled: boolean) => dispatchMasterMix({ limiterEnabled: enabled }),
+    [dispatchMasterMix],
   )
   const setLimiterThreshold = useCallback(
-    (thresholdDb: number) => mixer.setMaster({ limiterThresholdDb: thresholdDb }),
-    [mixer],
+    (thresholdDb: number) => dispatchMasterMix({ limiterThresholdDb: thresholdDb }),
+    [dispatchMasterMix],
   )
 
   const writeTrackGainAutomation = useCallback(

@@ -1,0 +1,114 @@
+.tool-tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+}
+
+.tool-tab {
+  min-height: 2rem;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: calc(var(--radius-md) - 2px);
+  color: var(--color-text-muted);
+  background: transparent;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.tool-tab[aria-selected='true'] {
+  color: var(--color-text);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.tool-tab:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.ai-inspector,
+.plugin-tool-host {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.tool-panel-loading {
+  margin: 0;
+  padding: var(--space-4);
+  color: var(--color-text-muted);
+}
+
+.ui-popover {
+  z-index: 40;
+  width: min(18rem, calc(100vw - 2rem));
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-lg);
+}
+
+.ui-popover__arrow {
+  fill: var(--color-surface-raised);
+}
+
+.midi-settings-popover {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.plugin-tool-surface {
+  min-width: 0;
+}
+
+.mix-workspace {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.mix-workspace .mixer-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(14rem, 17rem);
+  align-items: stretch;
+  gap: var(--space-3);
+}
+
+.mix-workspace .mixer-panel > .panel-header,
+.mix-workspace .mixer-panel > .mixer-status {
+  grid-column: 1 / -1;
+}
+
+.mix-workspace .mixer-tracks {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-3);
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  padding-block-end: var(--space-2);
+  scrollbar-gutter: stable;
+}
+
+.mix-workspace .mixer-strip {
+  flex: 0 0 15rem;
+}
+
+.mix-workspace .mixer-master {
+  min-width: 0;
+}
+
+@media (max-width: 48rem) {
+  .mix-workspace .mixer-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mix-workspace .mixer-master {
+    grid-column: 1;
+  }
+}

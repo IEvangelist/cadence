@@ -3,8 +3,8 @@
 This is the stable surface the composer feature cluster builds against: live
 collaboration (#9) is the foundation, the current composer controller is
 formalized as a frozen core API, and efforts #41–#45 add typed extension seams
-without changing the serialized `Project` shape. The contract is exported from
-`composer/contract`; the current `COMPOSER_CONTRACT_VERSION` is `1.1.0`.
+without breaking the serialized `Project` shape. The contract is exported from
+`composer/contract`; the current `COMPOSER_CONTRACT_VERSION` is `1.2.0`.
 
 ## Stability & versioning
 
@@ -26,7 +26,7 @@ without changing the serialized `Project` shape. The contract is exported from
 Versioning follows semver:
 
 - **Minor**: additive seams, new exported types, or new optional fields in a
-  provisional effort file.
+  provisional effort file or the versioned `Project` document.
 - **Major**: any change to the frozen `ComposerPublicApi` shape or a breaking
   change to stable core re-exports.
 
@@ -375,13 +375,14 @@ function watermarkFor(view: ExportEntitlementView, entitlements: Entitlements) {
 
 ## Integration notes & open decisions (cross-cluster)
 
-The contract defines the API surface, but deliberately does **not** change the
-existing serialized `Project` shape. Feature efforts must resolve these decisions
-before persisting new durable state.
+The contract defines the API surface and schema v3 adds an optional, sanitized
+`Project.mix` document for manual track and master settings.
 
-- **Durable/shared (converges via #9 CRDT):** `Project`, accepted remote edits,
-  per-track instrument and preset params, mixer/inserts/master/automation, and
-  accepted AI edits.
+- **Durable/shared (converges via #9 CRDT):** score fields currently represented
+  by the CRDT and accepted AI note edits.
+- **Durable/local-only in collaboration:** mixer/inserts/master and automation
+  persist through project files, stores, and share snapshots, but remain local
+  while a collaboration session is active because the CRDT does not carry them.
 - **Awareness/ephemeral:** presence, peer cursors, selections, AI preview ghosts,
   and other room-local overlays.
 - **Local-only:** onboarding progress, viewport/touch mode, PWA install state,
@@ -389,10 +390,10 @@ before persisting new durable state.
 
 Place each new field in the right tier before wiring UI or persistence.
 
-The mixer overlay and plugin/soundfont instrument state will not survive
-reload/share/CRDT until #44/#41 add a **versioned persistence envelope** or a
-`Project.schemaVersion` bump owned by those efforts. The contract intentionally
-leaves that storage location open.
+The mixer overlay survives reload, project-file export, stores, and share
+snapshots through schema v3 `Project.mix`. Unavailable plugin effect ids are
+retained and bypassed until their provider becomes available again. This does
+not claim collaborative convergence; the CRDT still excludes mix and automation.
 
 `model/persistence.ts` currently hardcodes `['poly-synth', 'fm-synth',
 'drum-kit']` and coerces unknown `instrumentId` values to `poly-synth`. #41 must

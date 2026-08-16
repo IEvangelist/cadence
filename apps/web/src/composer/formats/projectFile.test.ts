@@ -15,6 +15,7 @@ import {
   projectToFile,
   type ProjectFileEnvelope,
 } from './projectFile'
+import { createProjectMix } from '../model/mix'
 
 function buildProject(): Project {
   const project = createEmptyProject('p1')
@@ -33,6 +34,25 @@ function buildProject(): Project {
       't1',
     ),
   ]
+  project.mix = createProjectMix(['t1'])
+  project.mix.tracks.t1 = {
+    gainDb: -6,
+    pan: 0.25,
+    solo: true,
+    inserts: [
+      {
+        id: 'ghost',
+        effectId: 'plugin.unavailable',
+        enabled: false,
+        params: { amount: 0.5 },
+      },
+    ],
+  }
+  project.mix.master = {
+    gainDb: -2,
+    limiterEnabled: true,
+    limiterThresholdDb: -3,
+  }
   return project
 }
 
@@ -53,6 +73,7 @@ describe('project -> file -> project round trip', () => {
     const project = buildProject()
     const restored = fileToProject(projectToFile(project))
     expect(restored).toEqual(project)
+    expect(restored.mix?.tracks.t1.inserts[0].effectId).toBe('plugin.unavailable')
   })
 
   it('round-trips the richer demo project', () => {

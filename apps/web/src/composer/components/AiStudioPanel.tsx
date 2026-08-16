@@ -228,9 +228,18 @@ export function AiStudioPanel({ studio }: AiStudioPanelProps) {
       )}
 
       {locked && (
-        <p className="ai-studio-upgrade">
-          {FEATURES.find((f) => f.value === feature)?.label} is available on the Pro plan.
-        </p>
+        <div className="ai-studio-upgrade">
+          <p>
+            {FEATURES.find((f) => f.value === feature)?.label} is available on the Pro plan.
+          </p>
+          <a
+            className="btn btn-sm"
+            data-interaction="studio.ai.upgrade"
+            href="/pricing"
+          >
+            View plans
+          </a>
+        </div>
       )}
 
       <p className="ai-studio-status" role="status" aria-live="polite">

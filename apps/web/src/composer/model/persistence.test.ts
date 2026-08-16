@@ -129,6 +129,103 @@ describe('automation persistence', () => {
     expect(migrateProject({ name: 'Legacy' }).automation).toEqual([])
   })
 
+  describe('mix schema v3 migration', () => {
+    it('migrates v1 and v2 documents to neutral per-track and master state', () => {
+      for (const schemaVersion of [1, 2]) {
+        const project = migrateProject({
+          schemaVersion,
+          tracks: [{ id: 't1', instrumentId: 'poly-synth', notes: [] }],
+        })
+        expect(project.schemaVersion).toBe(3)
+        expect(project.mix).toEqual({
+          tracks: {
+            t1: { gainDb: 0, pan: 0, solo: false, inserts: [] },
+          },
+          master: { gainDb: 0, limiterEnabled: false, limiterThresholdDb: -1 },
+        })
+      }
+    })
+
+    it('clamps malformed values, removes orphans, and retains unavailable inserts', () => {
+      const project = migrateProject({
+        schemaVersion: 3,
+        tracks: [{ id: 'live', instrumentId: 'poly-synth', notes: [] }],
+        mix: {
+          tracks: {
+            live: {
+              gainDb: 999,
+              pan: -9,
+              solo: 'yes',
+              inserts: [
+                {
+                  id: 'ghost-insert',
+                  effectId: 'plugin.missing.effect',
+                  enabled: true,
+                  params: { mix: Number.POSITIVE_INFINITY, amount: 2 },
+                },
+                { id: '', effectId: 'broken', enabled: true },
+              ],
+            },
+            orphan: { gainDb: -4, pan: 0, solo: true, inserts: [] },
+          },
+          master: {
+            gainDb: -999,
+            limiterEnabled: true,
+            limiterThresholdDb: 20,
+          },
+        },
+      })
+
+      expect(project.mix).toEqual({
+        tracks: {
+          live: {
+            gainDb: 6,
+            pan: -1,
+            solo: false,
+            inserts: [
+              {
+                id: 'ghost-insert',
+                effectId: 'plugin.missing.effect',
+                enabled: true,
+                params: { amount: 2 },
+              },
+            ],
+          },
+        },
+        master: {
+          gainDb: -60,
+          limiterEnabled: true,
+          limiterThresholdDb: 0,
+        },
+      })
+    })
+
+    it('round-trips full manual mix state', () => {
+      const project = migrateProject({
+        tracks: [{ id: 't1', instrumentId: 'poly-synth', notes: [] }],
+        mix: {
+          tracks: {
+            t1: {
+              gainDb: -8,
+              pan: 0.4,
+              solo: true,
+              inserts: [
+                {
+                  id: 'i1',
+                  effectId: 'plugin.delay',
+                  enabled: false,
+                  params: { feedback: 0.6 },
+                },
+              ],
+            },
+          },
+          master: { gainDb: -2, limiterEnabled: true, limiterThresholdDb: -3 },
+        },
+      })
+      expect(parseProject(serializeProject(project))).toEqual(project)
+    })
+  })
+
   it('preserves and sanitizes valid automation lanes', () => {
     const project = migrateProject({
       name: 'Automated',
