@@ -26,6 +26,12 @@ test.describe('plugins / extensions', () => {
     await expect(toggle).toBeChecked()
     const runButton = panel.getByRole('button', { name: 'Insert a C-major chord' })
     await expect(runButton).toBeVisible()
+    const panelVisibility = panel.getByRole('checkbox', { name: 'Example plugin' })
+    await expect(page.getByRole('region', { name: 'Example plugin' })).toBeVisible()
+    await panelVisibility.uncheck()
+    await expect(page.getByRole('region', { name: 'Example plugin' })).toHaveCount(0)
+    await panelVisibility.check()
+    await expect(page.getByRole('region', { name: 'Example plugin' })).toBeVisible()
 
     // The contributed instrument appears live in registry-backed discovery.
     const trackInspector = await openInspectorPanel(page, 'Track')

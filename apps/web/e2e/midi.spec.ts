@@ -90,6 +90,26 @@ async function sendMidi(page: Page, bytes: number[]): Promise<void> {
 }
 
 test.describe('composer live MIDI input (#111)', () => {
+  test('keeps record state visible while device and quantize settings use a popover', async ({
+    page,
+  }) => {
+    await installMockMidi(page)
+    await page.goto('/')
+    await dismissTour(page)
+    await waitForMidiSubscription(page)
+
+    await expect(page.getByRole('button', { name: 'Record' })).toBeVisible()
+    await expect(page.getByRole('combobox', { name: 'MIDI device' })).toHaveCount(0)
+    await page.getByRole('button', { name: 'MIDI settings' }).click()
+
+    const settings = page.getByRole('dialog', { name: 'MIDI settings' })
+    await expect(settings.getByRole('combobox', { name: 'MIDI device' })).toHaveValue('mock-in')
+    await expect(settings.getByRole('option', { name: 'Mock Controller' })).toBeAttached()
+    await settings.getByRole('checkbox', { name: /Quantize/ }).check()
+    await expect(settings.getByRole('checkbox', { name: /Quantize/ })).toBeChecked()
+    await expect(page.getByRole('button', { name: 'Record' })).toBeVisible()
+  })
+
   test('an incoming MIDI note previews audibly through the existing seam', async ({ page }) => {
     await installMockMidi(page)
     await installOutputTap(page)
@@ -169,5 +189,20 @@ test.describe('composer live MIDI input (#111)', () => {
     await sendMidi(page, [0x80, 64, 0])
 
     await expect(page.locator('.pr-note')).toHaveCount(0)
+  })
+
+  test('unsupported browsers show a non-blocking labelled hint', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'requestMIDIAccess', {
+        configurable: true,
+        value: undefined,
+      })
+    })
+    await page.goto('/')
+    await dismissTour(page)
+
+    await expect(page.getByText('MIDI input is not supported in this browser')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Record' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'MIDI settings' })).toHaveCount(0)
   })
 })
