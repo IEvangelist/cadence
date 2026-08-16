@@ -85,6 +85,12 @@ export class RemoteProjectStore implements ProjectStore {
     return toMeta(dto)
   }
 
+  async persist(project: Project): Promise<StoredProjectMeta> {
+    const meta = await this.save(project)
+    await this.setLast(project.id)
+    return meta
+  }
+
   async load(id: string): Promise<Project | null> {
     const response = await this.fetchImpl(this.url(`/api/projects/${encodeURIComponent(id)}`), {
       credentials: 'include',

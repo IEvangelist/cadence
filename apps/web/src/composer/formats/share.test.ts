@@ -9,6 +9,7 @@ import {
   toBase64Url,
 } from './share'
 import { createEmptyProject, createNote, createTrack, type Project } from '../model/project'
+import { createProjectMix } from '../model/mix'
 
 function smallProject(): Project {
   const project = createEmptyProject('p')
@@ -19,6 +20,13 @@ function smallProject(): Project {
       't',
     ),
   ]
+  project.mix = createProjectMix(['t'])
+  project.mix.tracks.t.gainDb = -5
+  project.mix.master = {
+    gainDb: -2,
+    limiterEnabled: true,
+    limiterThresholdDb: -3,
+  }
   return project
 }
 
@@ -50,6 +58,8 @@ describe('project fragment round trip', () => {
     expect(restored?.name).toBe('Shared ✨')
     expect(restored?.tracks[0].notes).toHaveLength(1)
     expect(restored?.tracks[0].notes[0].pitch).toBe(60)
+    expect(restored?.mix?.tracks.t.gainDb).toBe(-5)
+    expect(restored?.mix?.master.limiterEnabled).toBe(true)
   })
 
   it('decodes a fragment without the leading #', () => {

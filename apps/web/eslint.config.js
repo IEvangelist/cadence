@@ -21,7 +21,7 @@ export default defineConfig([
   },
   // Node-context config + Playwright specs run outside the browser.
   {
-    files: ['playwright.config.ts', 'vite.config.ts', 'e2e/**/*.ts'],
+    files: ['playwright*.config.ts', 'vite.config.ts', 'e2e/**/*.ts'],
     languageOptions: {
       globals: globals.node,
     },

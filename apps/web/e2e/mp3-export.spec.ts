@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { chooseExport } from './projectActions'
 
 // MP3 export end-to-end (issue #121). Exports the demo project to MP3 through the
 // real UI + production build, saves the download, and proves it's a genuine MP3:
@@ -28,7 +29,7 @@ test.describe('MP3 export', () => {
 
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByLabel('Export as').selectOption('mp3'),
+      chooseExport(page, 'Export MP3 audio'),
     ])
     expect(download.suggestedFilename()).toMatch(/\.mp3$/)
 

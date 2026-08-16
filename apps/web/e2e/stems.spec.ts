@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { test, expect, type Route } from '@playwright/test'
+import { openStudioDestination } from './studioActions'
 
 // Standalone stems UI e2e against the production build. There is no backend in
 // e2e, so every `/api/**` call is mocked with `page.route`. We prove:
@@ -60,7 +61,7 @@ test.describe('stems', () => {
     await page.route('**/api/**', (route) => mockApi(route, false))
     await page.goto('/')
 
-    await page.getByRole('button', { name: 'Stems' }).click()
+    await openStudioDestination(page, 'Stems')
 
     await expect(
       page.getByRole('heading', { name: 'Stem separation', exact: true }),
@@ -78,7 +79,7 @@ test.describe('stems', () => {
     await page.route('**/api/**', (route) => mockApi(route, true))
     await page.goto('/')
 
-    await page.getByRole('button', { name: 'Stems' }).click()
+    await openStudioDestination(page, 'Stems')
     await expect(page.getByLabel('Choose a mix to separate')).toBeVisible()
 
     await page.getByLabel('Choose a mix to separate').setInputFiles({

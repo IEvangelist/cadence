@@ -1,11 +1,13 @@
 import { useEffect } from 'react'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { coversInteractions } from '../../test/coversInteractions'
 import { PianoRoll } from './PianoRoll'
 import { useComposer } from '../hooks/useComposer'
 import { SilentAudioEngine } from '../audio/engine'
 import { LocalStorageProjectStore, MemoryStorage } from '../model/storage'
-import { createEmptyProject } from '../model/project'
+import { createEmptyProject, createNote } from '../model/project'
 import { DEFAULT_LAYOUT } from '../timing/timing'
 
 function Harness() {
@@ -16,6 +18,41 @@ function Harness() {
     autosaveDelay: 0,
   })
   return <PianoRoll controller={controller} />
+}
+
+function TouchHarness({ mode = 'pan-select' }: { mode?: 'pan-select' | 'draw' }) {
+  const controller = useComposer({
+    createEngine: () => new SilentAudioEngine(),
+    store: new LocalStorageProjectStore(new MemoryStorage()),
+    initialProject: createEmptyProject('p'),
+    autosaveDelay: 0,
+  })
+  return <PianoRoll controller={controller} mobileNoteMode={mode} />
+}
+
+function HistoryHarness() {
+  const controller = useComposer({
+    createEngine: () => new SilentAudioEngine(),
+    store: new LocalStorageProjectStore(new MemoryStorage()),
+    initialProject: createEmptyProject('p'),
+    autosaveDelay: 0,
+  })
+  const track = controller.project.tracks[0]
+  const note = track.notes[0]
+  return (
+    <>
+      <PianoRoll controller={controller} />
+      <button type="button" onClick={controller.undo} disabled={!controller.canUndo}>
+        Undo history
+      </button>
+      <button type="button" onClick={controller.redo} disabled={!controller.canRedo}>
+        Redo history
+      </button>
+      <output aria-label="Note state">
+        {note ? `${note.start}:${note.pitch}:${note.velocity}` : 'none'}
+      </output>
+    </>
+  )
 }
 
 // The grid reads clientX/Y relative to its bounding box; jsdom returns zeros, so
@@ -49,7 +86,18 @@ describe('<PianoRoll />', () => {
     expect(screen.getAllByRole('button').filter((b) => b.className.includes('pr-note'))).toHaveLength(1)
   })
 
+  it('does not add a note with Space so the Studio dispatcher can control transport', () => {
+    render(<Harness />)
+    const grid = screen.getByRole('application')
+    grid.focus()
+    fireEvent.keyDown(grid, { key: ' ' })
+    expect(screen.queryAllByRole('button').filter((button) =>
+      button.className.includes('pr-note'),
+    )).toHaveLength(0)
+  })
+
   it('adds a note by clicking the grid and can delete it with the keyboard', () => {
+    coversInteractions('studio.piano-roll.grid')
     mockGridRect()
     render(<Harness />)
     const grid = screen.getByRole('application')
@@ -63,7 +111,129 @@ describe('<PianoRoll />', () => {
     expect(notes()).toHaveLength(0)
   })
 
+  it('keeps touch Pan/Select empty taps and drags note-free', () => {
+    mockGridRect()
+    render(<TouchHarness />)
+    const grid = screen.getByRole('application')
+
+    fireEvent.pointerDown(grid, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 96,
+      clientY: 80,
+    })
+    fireEvent.pointerUp(grid, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 96,
+      clientY: 80,
+    })
+    fireEvent.pointerDown(grid, {
+      pointerId: 2,
+      pointerType: 'touch',
+      clientX: 96,
+      clientY: 80,
+    })
+    fireEvent.pointerMove(grid, {
+      pointerId: 2,
+      pointerType: 'touch',
+      clientX: 140,
+      clientY: 80,
+    })
+    fireEvent.pointerUp(grid, {
+      pointerId: 2,
+      pointerType: 'touch',
+      clientX: 140,
+      clientY: 80,
+    })
+
+    expect(screen.queryAllByRole('button').filter((button) =>
+      button.className.includes('pr-note'),
+    )).toHaveLength(0)
+  })
+
+  it('adds one note on a Draw touch tap but not a Draw drag', () => {
+    mockGridRect()
+    render(<TouchHarness mode="draw" />)
+    const grid = screen.getByRole('application')
+
+    fireEvent.pointerDown(grid, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 96,
+      clientY: 80,
+    })
+
+    fireEvent.pointerUp(grid, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 96,
+      clientY: 80,
+    })
+    fireEvent.pointerDown(grid, {
+      pointerId: 2,
+      pointerType: 'touch',
+      clientX: 160,
+      clientY: 80,
+    })
+    fireEvent.pointerMove(grid, {
+      pointerId: 2,
+      pointerType: 'touch',
+      clientX: 200,
+      clientY: 80,
+    })
+    fireEvent.pointerUp(grid, {
+      pointerId: 2,
+      pointerType: 'touch',
+      clientX: 200,
+      clientY: 80,
+    })
+
+    expect(screen.queryAllByRole('button').filter((button) =>
+      button.className.includes('pr-note'),
+    )).toHaveLength(1)
+  })
+
+  it('keeps the first empty-grid touch as the only Draw gesture owner', () => {
+    mockGridRect()
+    render(<TouchHarness mode="draw" />)
+    const grid = screen.getByRole('application')
+
+    fireEvent.pointerDown(grid, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 96,
+      clientY: 80,
+    })
+    fireEvent.pointerDown(grid, {
+      pointerId: 2,
+      pointerType: 'touch',
+      clientX: 160,
+      clientY: 80,
+    })
+    fireEvent.pointerUp(grid, {
+      pointerId: 2,
+      pointerType: 'touch',
+      clientX: 160,
+      clientY: 80,
+    })
+    expect(screen.queryAllByRole('button').filter((button) =>
+      button.className.includes('pr-note'),
+    )).toHaveLength(0)
+
+    fireEvent.pointerUp(grid, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 96,
+      clientY: 80,
+    })
+    expect(screen.queryAllByRole('button').filter((button) =>
+      button.className.includes('pr-note'),
+    )).toHaveLength(1)
+  })
+
   it('edits a note velocity from the velocity lane by keyboard', () => {
+    coversInteractions('studio.piano-roll.velocity.note')
     mockGridRect()
     render(<Harness />)
     const grid = screen.getByRole('application')
@@ -76,6 +246,7 @@ describe('<PianoRoll />', () => {
   })
 
   it('moves a note by dragging it', () => {
+    coversInteractions('studio.piano-roll.note')
     mockGridRect()
     render(<Harness />)
     const grid = screen.getByRole('application')
@@ -91,7 +262,149 @@ describe('<PianoRoll />', () => {
     expect(moved.style.left).not.toBe(beforeLeft)
   })
 
+  it('keeps a captured touch gesture owned by its initiating pointer', () => {
+    mockGridRect()
+    render(<Harness />)
+    const grid = screen.getByRole('application')
+    fireEvent.pointerDown(grid, { clientX: 0, clientY: 80 })
+    const note = screen.getAllByRole('button').find((button) =>
+      button.className.includes('pr-note'),
+    )!
+    Object.defineProperties(note, {
+      setPointerCapture: { configurable: true, value: vi.fn() },
+      hasPointerCapture: { configurable: true, value: vi.fn(() => true) },
+      releasePointerCapture: { configurable: true, value: vi.fn() },
+    })
+    const beforeLeft = note.style.left
+
+    fireEvent.pointerDown(note, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 0,
+      clientY: 80,
+    })
+    fireEvent.pointerMove(window, {
+      pointerId: 2,
+      pointerType: 'touch',
+      clientX: DEFAULT_LAYOUT.beatWidth * 2,
+      clientY: 80,
+    })
+    fireEvent.pointerUp(window, { pointerId: 2, pointerType: 'touch' })
+    expect(note.style.left).toBe(beforeLeft)
+
+    fireEvent.pointerMove(window, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: DEFAULT_LAYOUT.beatWidth * 2,
+      clientY: 80,
+    })
+    expect(note.style.left).not.toBe(beforeLeft)
+    fireEvent.pointerUp(window, { pointerId: 1, pointerType: 'touch' })
+    expect(note.releasePointerCapture).toHaveBeenCalledWith(1)
+  })
+
+  it('finalizes a drag on pointercancel so later pointer moves cannot mutate it', () => {
+    mockGridRect()
+    render(<Harness />)
+    const grid = screen.getByRole('application')
+    fireEvent.pointerDown(grid, { clientX: 0, clientY: 80 })
+    const note = screen.getAllByRole('button').find((button) =>
+      button.className.includes('pr-note'),
+    )!
+
+    fireEvent.pointerDown(note, { clientX: 0, clientY: 80 })
+    fireEvent.pointerMove(window, {
+      clientX: DEFAULT_LAYOUT.beatWidth * 2,
+      clientY: 80,
+    })
+    fireEvent.pointerCancel(window)
+    const cancelledLeft = note.style.left
+
+    fireEvent.pointerMove(window, {
+      clientX: DEFAULT_LAYOUT.beatWidth * 4,
+      clientY: 80,
+    })
+    expect(note.style.left).toBe(cancelledLeft)
+  })
+
+  it('finalizes resize and velocity gestures on pointercancel', () => {
+    mockGridRect()
+    render(<Harness />)
+    const grid = screen.getByRole('application')
+    fireEvent.pointerDown(grid, { clientX: 0, clientY: 80 })
+    const note = screen.getAllByRole('button').find((button) =>
+      button.className.includes('pr-note'),
+    )!
+
+    const resize = note.querySelector('.pr-note-resize-end') as HTMLElement
+    fireEvent.pointerDown(resize, {
+      clientX: DEFAULT_LAYOUT.beatWidth,
+      clientY: 80,
+    })
+    fireEvent.pointerMove(window, {
+      clientX: DEFAULT_LAYOUT.beatWidth * 3,
+      clientY: 80,
+    })
+    fireEvent.pointerCancel(window)
+    const cancelledWidth = note.style.width
+    fireEvent.pointerMove(window, {
+      clientX: DEFAULT_LAYOUT.beatWidth * 5,
+      clientY: 80,
+    })
+    expect(note.style.width).toBe(cancelledWidth)
+
+    const velocity = screen.getByRole('button', { name: /Velocity for/ })
+    fireEvent.pointerDown(velocity, { clientY: 500 })
+    fireEvent.pointerMove(window, { clientY: 700 })
+    fireEvent.pointerCancel(window)
+    const cancelledLabel = velocity.getAttribute('aria-label')
+    fireEvent.pointerMove(window, { clientY: 900 })
+    expect(velocity.getAttribute('aria-label')).toBe(cancelledLabel)
+  })
+
+  it('undoes one complete velocity gesture and separates the next edit', () => {
+    mockGridRect()
+    render(<HistoryHarness />)
+    fireEvent.pointerDown(screen.getByRole('application'), {
+      clientX: 0,
+      clientY: 80,
+    })
+    const initialPitch = Number(
+      screen.getByRole('status', { name: 'Note state' }).textContent!.split(':')[1],
+    )
+    const velocity = screen.getByRole('button', { name: /Velocity for/ })
+
+    fireEvent.pointerDown(velocity, { clientY: 400 })
+    fireEvent.pointerMove(window, { clientY: 600 })
+    fireEvent.pointerUp(window)
+    expect(screen.getByRole('status', { name: 'Note state' })).toHaveTextContent(
+      `0:${initialPitch}:0.4`,
+    )
+
+    const note = screen.getAllByRole('button').find((button) =>
+      button.className.includes('pr-note'),
+    )!
+    fireEvent.keyDown(note, { key: 'ArrowUp' })
+    expect(screen.getByRole('status', { name: 'Note state' })).toHaveTextContent(
+      `0:${initialPitch + 1}:0.4`,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo history' }))
+    expect(screen.getByRole('status', { name: 'Note state' })).toHaveTextContent(
+      `0:${initialPitch}:0.4`,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Undo history' }))
+    expect(screen.getByRole('status', { name: 'Note state' })).toHaveTextContent(
+      `0:${initialPitch}:0.8`,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Redo history' }))
+    expect(screen.getByRole('status', { name: 'Note state' })).toHaveTextContent(
+      `0:${initialPitch}:0.4`,
+    )
+  })
+
   it('resizes a note by dragging its right (end) edge', () => {
+    coversInteractions('studio.piano-roll.note.resize-end')
     mockGridRect()
     render(<Harness />)
     const grid = screen.getByRole('application')
@@ -109,6 +422,7 @@ describe('<PianoRoll />', () => {
   })
 
   it('resizes a note from its left (start) edge, holding the end fixed', () => {
+    coversInteractions('studio.piano-roll.note.resize-start')
     mockGridRect()
     render(<Harness />)
     const grid = screen.getByRole('application')
@@ -155,16 +469,83 @@ describe('<PianoRoll />', () => {
     expect(parseFloat(zoomed.style.width)).toBeGreaterThan(beforeWidth)
   })
 
-  it('runs quantize on the selected note without dropping it', () => {
+  it('updates and resets zoom, quantize strength, and velocity controls', async () => {
+    coversInteractions(
+      'studio.piano-roll.zoom.time-out',
+      'studio.piano-roll.zoom.time-in',
+      'studio.piano-roll.zoom.pitch-out',
+      'studio.piano-roll.zoom.pitch-in',
+      'studio.piano-roll.zoom.reset',
+      'studio.piano-roll.quantize.strength',
+      'studio.piano-roll.velocity.toggle',
+      'studio.piano-roll.velocity.selected',
+    )
+    const user = userEvent.setup()
     mockGridRect()
     render(<Harness />)
-    const grid = screen.getByRole('application')
-    fireEvent.pointerDown(grid, { clientX: 0, clientY: 80 })
+
+    const zoom = screen.getByRole('status', { name: 'Current zoom' })
+    await user.click(screen.getByRole('button', { name: 'Zoom in horizontally (time)' }))
+    expect(zoom).not.toHaveTextContent('100% × 100%')
+    await user.click(screen.getByRole('button', { name: 'Zoom out horizontally (time)' }))
+    expect(zoom).toHaveTextContent('100% × 100%')
+
+    await user.click(screen.getByRole('button', { name: 'Zoom in vertically (pitch)' }))
+    expect(zoom).not.toHaveTextContent('100% × 100%')
+    await user.click(screen.getByRole('button', { name: 'Zoom out vertically (pitch)' }))
+    expect(zoom).toHaveTextContent('100% × 100%')
+
+    await user.click(screen.getByRole('button', { name: 'Zoom in horizontally (time)' }))
+    await user.click(screen.getByRole('button', { name: 'Zoom in vertically (pitch)' }))
+    expect(zoom).not.toHaveTextContent('100% × 100%')
+    await user.click(screen.getByRole('button', { name: 'Reset zoom' }))
+    expect(zoom).toHaveTextContent('100% × 100%')
+
+    fireEvent.change(screen.getByRole('slider', { name: 'Quantize strength' }), {
+      target: { value: '0.5' },
+    })
+    expect(screen.getByText('50%')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Toggle velocity lane' }))
+    expect(screen.queryByRole('group', { name: 'Velocity lane' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Toggle velocity lane' }))
+    expect(screen.getByRole('group', { name: 'Velocity lane' })).toBeInTheDocument()
+
+    fireEvent.pointerDown(screen.getByRole('application'), { clientX: 96, clientY: 80 })
+    const velocityBar = screen.getByRole('button', { name: /Velocity for/ })
+    const before = velocityBar.getAttribute('aria-label')
+    const selectedVelocity = screen.getByRole('slider', { name: /Velocity/ })
+    fireEvent.change(selectedVelocity, {
+      target: { value: '0.25' },
+    })
+    expect(selectedVelocity).toHaveValue('0.25')
+    expect(within(selectedVelocity.closest('label')!).getByText('32')).toBeInTheDocument()
+    expect(velocityBar.getAttribute('aria-label')).not.toBe(before)
+  })
+
+  it('quantizes the selected note to the current snap grid', () => {
+    coversInteractions('studio.piano-roll.quantize.apply')
+    mockGridRect()
+    function QuantizeHarness() {
+      const project = createEmptyProject('p')
+      project.tracks[0].notes = [
+        createNote({ pitch: 60, start: 0.3, duration: 1, velocity: 0.8 }, 'off-grid'),
+      ]
+      const controller = useComposer({
+        createEngine: () => new SilentAudioEngine(),
+        store: new LocalStorageProjectStore(new MemoryStorage()),
+        initialProject: project,
+        autosaveDelay: 0,
+      })
+      return <PianoRoll controller={controller} />
+    }
+    render(<QuantizeHarness />)
     const note = screen.getAllByRole('button').find((b) => b.className.includes('pr-note'))!
+    const beforeLeft = note.style.left
     fireEvent.click(note)
     fireEvent.click(screen.getByRole('button', { name: /Quantize/ }))
-    const after = screen.getAllByRole('button').filter((b) => b.className.includes('pr-note'))
-    expect(after).toHaveLength(1)
+    const quantized = screen.getAllByRole('button').find((b) => b.className.includes('pr-note'))!
+    expect(quantized.style.left).not.toBe(beforeLeft)
   })
 
   it('highlights every note in a batch-inserted selection', () => {

@@ -31,6 +31,7 @@ export function QuickStartGallery({ onLoad, templates }: QuickStartGalleryProps)
                 <button
                   type="button"
                   className="quick-start-card"
+                  data-interaction="studio.quick-start.load"
                   onClick={() => onLoad(template)}
                 >
                   <span className="quick-start-card__head">

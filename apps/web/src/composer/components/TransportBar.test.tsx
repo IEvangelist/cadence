@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
+import { coversInteractions } from '../../test/coversInteractions'
 import { TransportBar } from './TransportBar'
 import { useComposer } from '../hooks/useComposer'
 import { SilentAudioEngine } from '../audio/engine'
@@ -18,6 +19,13 @@ function Harness() {
 
 describe('<TransportBar />', () => {
   it('toggles play/pause, stop, tempo, loop, and snap', async () => {
+    coversInteractions(
+      'studio.transport.play',
+      'studio.transport.stop',
+      'studio.transport.tempo',
+      'studio.transport.loop',
+      'studio.transport.snap',
+    )
     render(<Harness />)
 
     const play = screen.getByRole('button', { name: /Play/ })

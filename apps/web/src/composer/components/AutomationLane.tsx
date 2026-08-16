@@ -87,6 +87,7 @@ export function AutomationLane({
           <button
             type="button"
             className="btn btn-sm"
+            data-interaction="studio.automation.add-point"
             onClick={onAddAtPlayhead}
           >
             Add point
@@ -95,6 +96,7 @@ export function AutomationLane({
             <button
               type="button"
               className="btn btn-sm btn-ghost"
+              data-interaction="studio.automation.clear"
               onClick={onClear}
               aria-label={`Clear ${label} automation`}
             >
@@ -108,6 +110,7 @@ export function AutomationLane({
         <svg
           ref={svgRef}
           className="automation-lane__graph"
+          data-interaction="studio.automation.lane"
           viewBox={`0 0 ${LANE_VIEW} ${LANE_VIEW}`}
           preserveAspectRatio="none"
           role="presentation"
@@ -131,6 +134,7 @@ export function AutomationLane({
             key={point.beat}
             type="button"
             className="automation-lane__point"
+            data-interaction="studio.automation.remove-point"
             style={{
               left: `${xPercent(point.beat, lengthBeats)}%`,
               top: `${yPercent(point.value, min, max)}%`,

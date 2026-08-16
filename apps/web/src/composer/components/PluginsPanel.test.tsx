@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { coversInteractions } from '../../test/coversInteractions'
 import { PluginsPanel } from './PluginsPanel'
 import type { PluginsController } from '../plugins/usePlugins'
 import { createEmptyProject } from '../model/project'
@@ -22,6 +23,8 @@ function makeController(overrides: Partial<PluginsController> = {}): PluginsCont
     runCommand: vi.fn(),
     keybindingFor: (id) => (id === 'acme.hello' ? 'mod+shift+h' : undefined),
     setKeybinding: vi.fn(),
+    keybindingOverrides: {},
+    keybindingNotice: null,
     visiblePanels: [],
     allPanels: [],
     isPanelVisible: () => true,
@@ -50,6 +53,7 @@ describe('<PluginsPanel />', () => {
   })
 
   it('enables a plugin via its checkbox', () => {
+    coversInteractions('studio.plugins.plugin.toggle')
     const setPluginEnabled = vi.fn()
     render(<PluginsPanel plugins={makeController({ setPluginEnabled })} />)
 
@@ -58,6 +62,7 @@ describe('<PluginsPanel />', () => {
   })
 
   it('runs a contributed command from its button', () => {
+    coversInteractions('studio.plugins.command.run')
     const runCommand = vi.fn()
     render(<PluginsPanel plugins={makeController({ runCommand })} />)
 
@@ -66,6 +71,7 @@ describe('<PluginsPanel />', () => {
   })
 
   it('records a new keyboard shortcut for a command', () => {
+    coversInteractions('studio.plugins.keybinding.record')
     const setKeybinding = vi.fn()
     render(<PluginsPanel plugins={makeController({ setKeybinding })} />)
 
@@ -89,6 +95,7 @@ describe('<PluginsPanel />', () => {
   })
 
   it('toggles contributed-panel visibility', () => {
+    coversInteractions('studio.plugins.panel.toggle')
     const setPanelVisible = vi.fn()
     render(
       <PluginsPanel

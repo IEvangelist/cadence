@@ -41,6 +41,11 @@ describe('collaboration selector (post-#9 binding)', () => {
       active: true,
       connected: true,
       canWrite: true,
+      canUndo: false,
+      canRedo: false,
+      undo: () => {},
+      redo: () => {},
+      stopCapturing: () => {},
       presence: [
         { clientId: 1, user: { id: 'u1', name: 'Ripley', color: '#f00' }, cursor: null, isSelf: true },
         { clientId: 2, user: { id: 'u2', name: 'Newt', color: '#0f0' }, cursor: null, isSelf: false },
@@ -58,7 +63,17 @@ describe('collaboration selector (post-#9 binding)', () => {
   })
 
   it('reports the solo/offline default from an inert state', () => {
-    const inert: CollaborationState = { active: false, connected: false, canWrite: false, presence: [] }
+    const inert: CollaborationState = {
+      active: false,
+      connected: false,
+      canWrite: false,
+      canUndo: false,
+      canRedo: false,
+      undo: () => {},
+      redo: () => {},
+      stopCapturing: () => {},
+      presence: [],
+    }
 
     const status = selectCollaborationStatus(inert, { role: 'owner', canShare: false })
 

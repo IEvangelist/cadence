@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { coversInteractions } from '../../../test/coversInteractions'
 
 /** Minimal Tone mock: only what the Music Box voice constructs. */
 const h = vi.hoisted(() => ({ trigger: vi.fn(), dispose: vi.fn() }))
@@ -94,6 +95,7 @@ describe('example plugin', () => {
   })
 
   it('inserts a C-major chord into the selected track', () => {
+    coversInteractions('studio.plugins.example.run-command')
     const insertNotes = vi.fn()
     const project = createEmptyProject('p')
     project.tracks = [createTrack({}, 't1')]

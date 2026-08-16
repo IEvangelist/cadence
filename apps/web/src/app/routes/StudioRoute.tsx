@@ -1,0 +1,96 @@
+import { useCallback, useMemo } from 'react'
+import { useLocation, useNavigate, useOutletContext } from 'react-router-dom'
+import { useAuth } from '../../auth/authContext'
+import { AuthBar } from '../../auth/AuthBar'
+import { Composer } from '../../composer/Composer'
+import { buildCollabConfig } from '../../composer/model/collab/collabConfig'
+import { StudioHelpMenu } from '../../studio'
+import { ThemeMenu } from '../../theme/ThemeMenu'
+import { useProjectStore } from '../projectStoreContext'
+import type { AppRouteContext } from '../routeContext'
+
+function destination(pathname: string, location: ReturnType<typeof useLocation>) {
+  return { pathname, search: location.search, hash: location.hash }
+}
+
+export function StudioRoute() {
+  const auth = useAuth()
+  const store = useProjectStore()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const {
+    authenticated,
+    openSignIn,
+    signingOut,
+    signOut,
+    watermarkExports,
+  } = useOutletContext<AppRouteContext>()
+  const collab = useMemo(
+    () =>
+      buildCollabConfig({
+        search: location.search,
+        location: window.location,
+        user: auth.user,
+        relayOverride: import.meta.env?.VITE_COLLAB_URL as string | undefined,
+      }),
+    [auth.user, location.search],
+  )
+  const consumeSharedProject = useCallback(() => {
+    void navigate(
+      { pathname: location.pathname, search: location.search, hash: '' },
+      { replace: true },
+    )
+  }, [location.pathname, location.search, navigate])
+
+  if (auth.status === 'loading') {
+    return (
+      <section
+        className="composer-hydration"
+        id="composer-main"
+        aria-label="Studio"
+        aria-busy="true"
+        tabIndex={-1}
+      >
+        <p role="status">Loading Studio...</p>
+      </section>
+    )
+  }
+  const persistenceIdentity =
+    authenticated && auth.user
+      ? `remote:${auth.user.id}`
+      : 'local:anonymous'
+
+  return (
+    <>
+      <Composer
+        key={persistenceIdentity}
+        options={{
+          store,
+          watermarkExports,
+          storeRevision: auth.status,
+          recoveryScope: persistenceIdentity,
+          sharedProjectHash: location.hash,
+          onSharedProjectConsumed: consumeSharedProject,
+        }}
+        collab={collab}
+        canShare={authenticated}
+        guardNavigation
+        utilityControls={
+          <>
+            <StudioHelpMenu
+              onNavigate={(pathname) => void navigate(destination(pathname, location))}
+            />
+            <ThemeMenu />
+            <AuthBar
+              onShowSignIn={openSignIn}
+              onShowProfile={() => void navigate(destination('/profile', location))}
+              profileActive={false}
+              signingOut={signingOut}
+              onSignOut={signOut}
+            />
+          </>
+        }
+      />
+    </>
+  )
+}

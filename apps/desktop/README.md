@@ -60,9 +60,9 @@ Issue #52 hardened the desktop webview, which previously shipped with CSP disabl
 ```text
 default-src 'self';
 script-src 'self' 'wasm-unsafe-eval';
-style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+style-src 'self' 'unsafe-inline';
 img-src 'self' data: blob:;
-font-src 'self' https://fonts.gstatic.com data:;
+font-src 'self' data:;
 media-src 'self' blob: data:;
 connect-src 'self' ipc: http://ipc.localhost https://storage.googleapis.com;
 worker-src 'self' blob:;
@@ -73,9 +73,9 @@ frame-ancestors 'self'
 
 - `default-src 'self'` — default to same-origin app assets.
 - `script-src` — same-origin scripts plus `wasm-unsafe-eval` for tfjs/Magenta WASM backends; no `unsafe-eval` needed.
-- `style-src` — React inline styles and the Google Fonts stylesheet.
+- `style-src` — same-origin styles plus React inline styles.
 - `img-src` — same-origin icons plus `data:`/`blob:` generated images.
-- `font-src` — same-origin fonts, Google Fonts files, and `data:` fonts.
+- `font-src` — self-hosted fonts and `data:` fonts.
 - `media-src` — `blob:`/`data:` audio object URLs.
 - `connect-src` — same-origin API, Tauri IPC, and Magenta checkpoints on `storage.googleapis.com`.
 - `worker-src` — same-origin and `blob:` tfjs worker bundles.

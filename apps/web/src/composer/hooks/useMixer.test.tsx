@@ -5,6 +5,14 @@ import type { ComposerController } from './useComposer'
 import { createMixerController } from '../audio/mixerController'
 import { createEmptyProject, createTrack, type Project } from '../model/project'
 import { clearLane, removeLanePoint, writeLanePoint } from '../model/automation'
+import {
+  addMixInsert,
+  removeMixInsert,
+  setMasterMix,
+  setMixInsertEnabled,
+  setTrackMix,
+  createProjectMix,
+} from '../model/mix'
 import type { TransportState } from '../audio/engine'
 
 function makeProject(): Project {
@@ -13,6 +21,7 @@ function makeProject(): Project {
     createTrack({ name: 'Lead', color: '#f0f', notes: [] }, 't1'),
     createTrack({ name: 'Bass', color: '#0ff', notes: [], muted: true }, 't2'),
   ]
+  project.mix = createProjectMix(project.tracks.map((track) => track.id))
   return project
 }
 
@@ -35,6 +44,50 @@ function setup() {
       positionBeats,
       snap: 1,
       toggleMute,
+      setTrackMix: (
+        trackId: Parameters<ComposerController['setTrackMix']>[0],
+        changes: Parameters<ComposerController['setTrackMix']>[1],
+      ) => {
+        project = { ...project, mix: setTrackMix(project.mix, trackId, changes) }
+        rerender({ controller: build() })
+      },
+      addMixInsert: (
+        trackId: Parameters<ComposerController['addMixInsert']>[0],
+        effectId: Parameters<ComposerController['addMixInsert']>[1],
+      ) => {
+        project = {
+          ...project,
+          mix: addMixInsert(project.mix, trackId, {
+            id: `insert-${trackId}-${effectId}`,
+            effectId,
+            enabled: true,
+            params: {},
+          }),
+        }
+        rerender({ controller: build() })
+      },
+      removeMixInsert: (
+        trackId: Parameters<ComposerController['removeMixInsert']>[0],
+        insertId: Parameters<ComposerController['removeMixInsert']>[1],
+      ) => {
+        project = { ...project, mix: removeMixInsert(project.mix, trackId, insertId) }
+        rerender({ controller: build() })
+      },
+      setMixInsertEnabled: (
+        trackId: Parameters<ComposerController['setMixInsertEnabled']>[0],
+        insertId: Parameters<ComposerController['setMixInsertEnabled']>[1],
+        enabled: Parameters<ComposerController['setMixInsertEnabled']>[2],
+      ) => {
+        project = {
+          ...project,
+          mix: setMixInsertEnabled(project.mix, trackId, insertId, enabled),
+        }
+        rerender({ controller: build() })
+      },
+      setMasterMix: (changes: Parameters<ComposerController['setMasterMix']>[0]) => {
+        project = { ...project, mix: setMasterMix(project.mix, changes) }
+        rerender({ controller: build() })
+      },
       writeAutomationPoint: (
         target: Parameters<ComposerController['writeAutomationPoint']>[0],
         trackId: string | undefined,
@@ -128,10 +181,10 @@ describe('useMixer', () => {
     expect(view.result.current.tracks[0].inserts).toHaveLength(0)
   })
 
-  it('resolves effect labels with a fallback to the id', () => {
+  it('labels unavailable effects without discarding their ids', () => {
     const { view } = setup()
     expect(view.result.current.effectName('reverb')).toBe('Studio Reverb')
-    expect(view.result.current.effectName('mystery')).toBe('mystery')
+    expect(view.result.current.effectName('mystery')).toBe('mystery (unavailable)')
   })
 
   it('updates the master bus', () => {
@@ -185,6 +238,14 @@ describe('useMixer', () => {
     expect(spy.mock.calls.at(-1)?.[0]).toEqual([
       { target: 'masterGain', points: [{ beat: 4, value: -6 }] },
     ])
+  })
+
+  it('hydrates persisted manual mix state into the runtime controller', () => {
+    const { view, mixer } = setup()
+    const hydrateSpy = vi.spyOn(mixer, 'hydrate')
+    act(() => view.result.current.setTrackGain('t1', -7))
+    expect(hydrateSpy).toHaveBeenCalled()
+    expect(mixer.getSnapshot().tracks.t1.gainDb).toBe(-7)
   })
 
   it('applies automation while playing and releases when stopped', () => {

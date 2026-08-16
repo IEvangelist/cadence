@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { coversInteractions } from '../test/coversInteractions'
 import { AcknowledgementsPage } from './AcknowledgementsPage'
 
 describe('<AcknowledgementsPage />', () => {
@@ -32,7 +33,48 @@ describe('<AcknowledgementsPage />', () => {
     )
   })
 
+  it('lists routed UI and self-hosted font dependencies with their licenses', () => {
+    render(<AcknowledgementsPage />)
+    const table = screen.getByRole('table', { name: /third-party components/i })
+
+    expect(within(table).getByText('react-router-dom')).toBeInTheDocument()
+    expect(within(table).getByText('lucide-react')).toBeInTheDocument()
+    expect(within(table).getAllByText('OFL-1.1')).toHaveLength(3)
+    expect(screen.getByRole('link', { name: /SIL Open Font License/i })).toHaveAttribute(
+      'href',
+      '/licenses/OFL-1.1.txt',
+    )
+    expect(screen.getByRole('link', { name: /ISC and Feather MIT/i })).toHaveAttribute(
+      'href',
+      '/licenses/lucide-ISC.txt',
+    )
+    expect(
+      screen.getByRole('region', { name: /Scrollable third-party components table/i }),
+    ).toHaveAttribute('tabindex', '0')
+  })
+
+  it('lists Radix Dialog as the MIT dependency for accessible project/replacement dialogs', () => {
+    render(<AcknowledgementsPage />)
+    const table = screen.getByRole('table', { name: /third-party components/i })
+    const packageLink = within(table).getByRole('link', {
+      name: '@radix-ui/react-dialog',
+    })
+    const row = packageLink.closest('tr')
+
+    expect(packageLink).toHaveAttribute(
+      'href',
+      'https://www.npmjs.com/package/@radix-ui/react-dialog',
+    )
+    expect(row).not.toBeNull()
+    expect(within(row!).getByText('1.1.23')).toBeInTheDocument()
+    expect(within(row!).getByText('MIT')).toBeInTheDocument()
+    expect(
+      screen.getByText(/accessible project\/replacement dialogs/i),
+    ).toBeInTheDocument()
+  })
+
   it('links to the LAME credit page at lame.sourceforge.io', () => {
+    coversInteractions('licenses.external-link')
     render(<AcknowledgementsPage />)
     const lame = screen.getByRole('link', { name: /lame project/i })
     expect(lame).toHaveAttribute('href', 'https://lame.sourceforge.io/')
@@ -75,6 +117,7 @@ describe('<AcknowledgementsPage />', () => {
   })
 
   it('invokes onClose from the back button', () => {
+    coversInteractions('licenses.close')
     const onClose = vi.fn()
     render(<AcknowledgementsPage onClose={onClose} />)
     fireEvent.click(screen.getByRole('button', { name: /back to composer/i }))

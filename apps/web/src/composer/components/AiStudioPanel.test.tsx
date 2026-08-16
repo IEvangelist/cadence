@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
+import { coversInteractions } from '../../test/coversInteractions'
 import { Composer } from '../Composer'
 import { SilentAudioEngine } from '../audio/engine'
 import { LocalStorageProjectStore, MemoryStorage } from '../model/storage'
@@ -51,20 +52,20 @@ function renderStudio(opts: { entitlements?: Entitlements | null; project?: Proj
   )
 }
 
-function studioRanelRegion() {
-  // AI Studio is a collapsed-by-default rail panel (#98); expand its disclosure
-  // before reaching into the panel. Idempotent so it survives persisted state.
-  const toggle = screen.getByRole('button', { name: 'AI Studio' })
-  if (toggle.getAttribute('aria-expanded') === 'false') {
-    fireEvent.click(toggle)
+async function studioRanelRegion() {
+  const inspector = screen.getByRole('button', { name: 'Inspector' })
+  if (inspector.getAttribute('aria-expanded') === 'false') {
+    fireEvent.click(inspector)
   }
-  return screen.getByRole('region', { name: 'AI Studio' })
+  fireEvent.click(screen.getByRole('tab', { name: 'AI' }))
+  fireEvent.click(screen.getByRole('tab', { name: 'Advanced' }))
+  return screen.findByRole('region', { name: 'AI Studio' })
 }
 
 describe('<AiStudioPanel />', () => {
-  it('renders the AI Studio with a feature radiogroup', () => {
+  it('renders the AI Studio with a feature radiogroup', async () => {
     renderStudio()
-    const panel = studioRanelRegion()
+    const panel = await studioRanelRegion()
     expect(within(panel).getByRole('heading', { name: 'AI Studio' })).toBeInTheDocument()
     expect(within(panel).getByRole('radio', { name: /Text to motif/ })).toBeInTheDocument()
     expect(within(panel).getByRole('radio', { name: /Style transfer/ })).toBeInTheDocument()
@@ -72,9 +73,10 @@ describe('<AiStudioPanel />', () => {
     expect(within(panel).getByRole('radio', { name: /Auto-master/ })).toBeInTheDocument()
   })
 
-  it('shows a Free badge and locks pro features on the free tier', () => {
+  it('shows a Free badge and locks pro features on the free tier', async () => {
+    coversInteractions('studio.ai.feature.select', 'studio.ai.upgrade')
     renderStudio({ entitlements: null })
-    const panel = studioRanelRegion()
+    const panel = await studioRanelRegion()
     expect(within(panel).getByText(/Free · on-device/)).toBeInTheDocument()
     // Text-to-motif is free: its Create button is present and enabled.
     expect(within(panel).getByRole('button', { name: 'Create motif' })).toBeEnabled()
@@ -83,26 +85,43 @@ describe('<AiStudioPanel />', () => {
     fireEvent.click(within(panel).getByRole('radio', { name: /Style transfer/ }))
     expect(within(panel).getByText(/available on the Pro plan/)).toBeInTheDocument()
     expect(within(panel).getByRole('button', { name: 'Apply style' })).toBeDisabled()
+    expect(within(panel).getByRole('link', { name: 'View plans' })).toHaveAttribute(
+      'href',
+      '/pricing',
+    )
   })
 
-  it('generates a motif from a prompt through the composer controller', () => {
+  it('generates a motif from a prompt through the composer controller', async () => {
+    coversInteractions(
+      'studio.ai.motif.prompt',
+      'studio.ai.motif.length',
+      'studio.ai.motif.create',
+    )
     renderStudio({ entitlements: null })
-    const panel = studioRanelRegion()
+    const panel = await studioRanelRegion()
 
-    fireEvent.change(within(panel).getByRole('textbox', { name: 'Prompt' }), {
-      target: { value: 'a bright happy melody' },
+    const prompt = within(panel).getByRole('textbox', { name: 'Prompt' })
+    const length = within(panel).getByRole('slider', { name: /Motif length/ })
+    fireEvent.change(prompt, {
+      target: { value: 'a dark melody in D minor' },
     })
-    fireEvent.change(within(panel).getByRole('slider', { name: /Motif length/ }), {
+    fireEvent.change(length, {
       target: { value: '6' },
     })
+    expect(prompt).toHaveValue('a dark melody in D minor')
+    expect(length).toHaveValue('6')
+    expect(within(panel).getByText('6 beats')).toBeInTheDocument()
     fireEvent.click(within(panel).getByRole('button', { name: 'Create motif' }))
 
-    expect(within(panel).getByRole('status')).toHaveTextContent(/Added \d+-note motif/)
+    expect(within(panel).getByRole('status')).toHaveTextContent(
+      /Added \d+-note motif in D Minor/,
+    )
   })
 
-  it('applies a style on the pro tier', () => {
+  it('applies a style on the pro tier', async () => {
+    coversInteractions('studio.ai.style.select', 'studio.ai.style.apply')
     renderStudio({ entitlements: proEntitlements() })
-    const panel = studioRanelRegion()
+    const panel = await studioRanelRegion()
 
     fireEvent.click(within(panel).getByRole('radio', { name: /Style transfer/ }))
     const select = within(panel).getByRole('combobox', { name: 'Style' })
@@ -113,25 +132,36 @@ describe('<AiStudioPanel />', () => {
     expect(within(panel).getByRole('status')).toHaveTextContent(/Applied Jazz swing/)
   })
 
-  it('applies a groove with an intensity control on any tier', () => {
+  it('applies a groove with an intensity control on any tier', async () => {
+    coversInteractions(
+      'studio.ai.groove.select',
+      'studio.ai.groove.intensity',
+      'studio.ai.groove.apply',
+    )
     renderStudio({ entitlements: null })
-    const panel = studioRanelRegion()
+    const panel = await studioRanelRegion()
 
     fireEvent.click(within(panel).getByRole('radio', { name: /Groove/ }))
-    fireEvent.change(within(panel).getByRole('combobox', { name: 'Groove' }), {
+    const groove = within(panel).getByRole('combobox', { name: 'Groove' })
+    const intensity = within(panel).getByRole('slider', { name: /Intensity/ })
+    fireEvent.change(groove, {
       target: { value: 'human' },
     })
-    fireEvent.change(within(panel).getByRole('slider', { name: /Intensity/ }), {
+    fireEvent.change(intensity, {
       target: { value: '0.5' },
     })
+    expect(groove).toHaveValue('human')
+    expect(intensity).toHaveValue('0.5')
+    expect(within(panel).getByText('50%')).toBeInTheDocument()
     fireEvent.click(within(panel).getByRole('button', { name: 'Apply groove' }))
 
     expect(within(panel).getByRole('status')).toHaveTextContent(/Applied Human groove/)
   })
 
-  it('produces a mastering report on the pro tier', () => {
+  it('produces a mastering report on the pro tier', async () => {
+    coversInteractions('studio.ai.mastering.analyze')
     renderStudio({ entitlements: proEntitlements() })
-    const panel = studioRanelRegion()
+    const panel = await studioRanelRegion()
 
     fireEvent.click(within(panel).getByRole('radio', { name: /Auto-master/ }))
     fireEvent.click(within(panel).getByRole('button', { name: 'Analyze mix' }))
@@ -140,27 +170,27 @@ describe('<AiStudioPanel />', () => {
     expect(within(panel).getAllByRole('listitem').length).toBeGreaterThan(0)
   })
 
-  it('locks auto-master on the free tier', () => {
+  it('locks auto-master on the free tier', async () => {
     renderStudio({ entitlements: null })
-    const panel = studioRanelRegion()
+    const panel = await studioRanelRegion()
 
     fireEvent.click(within(panel).getByRole('radio', { name: /Auto-master/ }))
     expect(within(panel).getByRole('button', { name: 'Analyze mix' })).toBeDisabled()
     expect(within(panel).getByText(/available on the Pro plan/)).toBeInTheDocument()
   })
 
-  it('reports when there are no notes to restyle', () => {
+  it('reports when there are no notes to restyle', async () => {
     renderStudio({ entitlements: proEntitlements(), project: createEmptyProject('empty') })
-    const panel = studioRanelRegion()
+    const panel = await studioRanelRegion()
 
     fireEvent.click(within(panel).getByRole('radio', { name: /Style transfer/ }))
     fireEvent.click(within(panel).getByRole('button', { name: 'Apply style' }))
     expect(within(panel).getByRole('status')).toHaveTextContent(/Add notes to the selected track/)
   })
 
-  it('reports when there are no notes to groove', () => {
+  it('reports when there are no notes to groove', async () => {
     renderStudio({ entitlements: null, project: createEmptyProject('empty') })
-    const panel = studioRanelRegion()
+    const panel = await studioRanelRegion()
 
     fireEvent.click(within(panel).getByRole('radio', { name: /Groove/ }))
     fireEvent.click(within(panel).getByRole('button', { name: 'Apply groove' }))

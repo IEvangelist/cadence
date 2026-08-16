@@ -25,12 +25,19 @@ export function TransportBar({ controller }: TransportBarProps) {
       <button
         type="button"
         className="btn btn-primary transport-play"
+        data-interaction="studio.transport.play"
+        aria-keyshortcuts="Space"
         onClick={togglePlay}
         aria-pressed={isPlaying}
       >
         {isPlaying ? '❚❚ Pause' : '▶ Play'}
       </button>
-      <button type="button" className="btn" onClick={stop}>
+      <button
+        type="button"
+        className="btn"
+        data-interaction="studio.transport.stop"
+        onClick={stop}
+      >
         ■ Stop
       </button>
 
@@ -39,6 +46,7 @@ export function TransportBar({ controller }: TransportBarProps) {
         <input
           type="number"
           className="tempo-input"
+          data-interaction="studio.transport.tempo"
           min={20}
           max={300}
           value={project.tempo}
@@ -51,6 +59,7 @@ export function TransportBar({ controller }: TransportBarProps) {
       <button
         type="button"
         className="btn"
+        data-interaction="studio.transport.loop"
         onClick={toggleLoop}
         aria-pressed={project.loop.enabled}
       >
@@ -61,6 +70,7 @@ export function TransportBar({ controller }: TransportBarProps) {
         <span>Snap</span>
         <select
           className="snap-select"
+          data-interaction="studio.transport.snap"
           value={snap}
           onChange={(event) => setSnap(Number(event.target.value))}
           aria-label="Snap"

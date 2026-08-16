@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { test, expect, type Browser, type Route } from '@playwright/test'
+import { openStudioDestination } from './studioActions'
 
 // Live-collaboration e2e. Two authenticated browser contexts open the SAME
 // project through a share link and sync over the standalone Yjs relay
@@ -20,6 +21,7 @@ interface Identity {
 }
 
 function mockApi(user: Identity) {
+  let savedProject: Record<string, unknown> | null = null
   return async (route: Route): Promise<void> => {
     const request = route.request()
     const url = new URL(request.url())
@@ -31,7 +33,47 @@ function mockApi(user: Identity) {
     if (path === '/api/auth/me') return json({}, 401)
     if (path === '/api/auth/providers') return json({ providers: ['GitHub'] })
     if (path === '/api/auth/login' && method === 'POST') return json(user)
-    if (path === '/api/projects' && method === 'GET') return json([])
+    if (path === '/api/projects' && method === 'GET') {
+      return json(
+        savedProject
+          ? [
+              {
+                ...savedProject,
+                createdAt: '2025-01-01T00:00:00Z',
+                updatedAt: '2025-01-01T00:01:00Z',
+              },
+            ]
+          : [],
+      )
+    }
+    if (/^\/api\/projects\/[^/]+$/.test(path) && method === 'GET') {
+      return savedProject
+        ? json({
+            ...savedProject,
+            createdAt: '2025-01-01T00:00:00Z',
+            updatedAt: '2025-01-01T00:01:00Z',
+          })
+        : json({}, 404)
+    }
+    if (path === '/api/projects' && method === 'POST') {
+      savedProject = request.postDataJSON() as Record<string, unknown>
+      return json(
+        {
+          ...savedProject,
+          createdAt: '2025-01-01T00:00:00Z',
+          updatedAt: '2025-01-01T00:01:00Z',
+        },
+        201,
+      )
+    }
+    if (/^\/api\/projects\/[^/]+$/.test(path) && method === 'PUT') {
+      savedProject = request.postDataJSON() as Record<string, unknown>
+      return json({
+        ...savedProject,
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-01T00:01:00Z',
+      })
+    }
     // Anything else the app calls (entitlements, saves): succeed emptily.
     return json({}, method === 'GET' ? 200 : 204)
   }
@@ -47,16 +89,35 @@ async function openCollaborator(
 ) {
   const context = await browser.newContext()
   const page = await context.newPage()
+  await page.addInitScript(() => {
+    const NativeWebSocket = window.WebSocket
+    const counts = { created: 0, closed: 0 }
+    ;(window as unknown as { __CADENCE_WS_COUNTS__: typeof counts }).__CADENCE_WS_COUNTS__ =
+      counts
+    class CountingWebSocket extends NativeWebSocket {
+      constructor(url: string | URL, protocols?: string | string[]) {
+        super(url, protocols)
+        counts.created += 1
+        this.addEventListener('close', () => {
+          counts.closed += 1
+        })
+      }
+    }
+    window.WebSocket = CountingWebSocket
+  })
   await page.route('**/api/**', mockApi(user))
 
   await page.goto(`/?collab=${room}&role=${role}&share=${TOKENS[role]}`)
 
-  // Sign in with the mocked local credentials (opens the panel, then submits).
+  // Sign in with the mocked local credentials.
   await page.getByRole('button', { name: 'Sign in' }).click()
   await page.getByLabel('Email').fill(user.email)
   await page.getByLabel('Password').fill('correct horse battery')
-  await page.getByRole('button', { name: 'Sign in' }).click()
-  await expect(page.locator('.app-header').getByText(user.displayName, { exact: true })).toBeVisible()
+  await page
+    .getByRole('dialog', { name: 'Sign in to Cadence' })
+    .getByRole('button', { name: 'Sign in' })
+    .click()
+  await expect(page.getByRole('button', { name: 'Profile' })).toBeVisible()
 
   // Collaboration activates only once signed in + a share link is present.
   const roster = page.getByRole('region', { name: 'Collaborators' })
@@ -180,5 +241,54 @@ test.describe('live collaboration', () => {
 
     await ada.context.close()
     await bob.context.close()
+  })
+
+  test('secondary routes close the socket and browser back reconnects once', async ({
+    browser,
+  }) => {
+    const collaborator = await openCollaborator(
+      browser,
+      { id: 'u-route', email: 'route@example.com', displayName: 'Route Editor', tier: 'Free' },
+      'editor',
+      `route-${Date.now()}`,
+    )
+    await expect
+      .poll(() =>
+        collaborator.page.evaluate(
+          () =>
+            (window as unknown as {
+              __CADENCE_WS_COUNTS__: { created: number; closed: number }
+            }).__CADENCE_WS_COUNTS__,
+        ),
+      )
+      .toMatchObject({ created: 1, closed: 0 })
+
+    await openStudioDestination(collaborator.page, 'Pricing')
+    await expect(collaborator.page.getByRole('heading', { name: 'Plans & pricing' })).toBeVisible()
+    await expect
+      .poll(() =>
+        collaborator.page.evaluate(
+          () =>
+            (window as unknown as {
+              __CADENCE_WS_COUNTS__: { created: number; closed: number }
+            }).__CADENCE_WS_COUNTS__,
+        ),
+      )
+      .toMatchObject({ created: 1, closed: 1 })
+
+    await collaborator.page.goBack()
+    await expect(collaborator.roster).toBeVisible()
+    await expect
+      .poll(() =>
+        collaborator.page.evaluate(
+          () =>
+            (window as unknown as {
+              __CADENCE_WS_COUNTS__: { created: number; closed: number }
+            }).__CADENCE_WS_COUNTS__,
+        ),
+      )
+      .toMatchObject({ created: 2, closed: 1 })
+
+    await collaborator.context.close()
   })
 })

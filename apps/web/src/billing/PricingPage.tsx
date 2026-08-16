@@ -11,7 +11,8 @@
  * a real heading hierarchy, and plans marked up as a list with the current plan
  * conveyed via aria-current rather than colour alone.
  */
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { RoutedPage, RouteState } from '../ui/RoutedPage'
 import { EntitlementsClient, type Entitlements } from './entitlementsClient'
 import './pricing.css'
 
@@ -67,7 +68,6 @@ const PLANS: PlanCopy[] = [
 ]
 
 export function PricingPage({ onClose, client, redirect }: PricingPageProps) {
-  const headingId = useId()
   const resolvedClient = useMemo(() => client ?? new EntitlementsClient(), [client])
   const navigate = useMemo(
     () => redirect ?? ((url: string) => window.location.assign(url)),
@@ -76,6 +76,7 @@ export function PricingPage({ onClose, client, redirect }: PricingPageProps) {
 
   const [entitlements, setEntitlements] = useState<Entitlements | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const [busy, setBusy] = useState<'checkout' | 'portal' | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -95,7 +96,7 @@ export function PricingPage({ onClose, client, redirect }: PricingPageProps) {
     return () => {
       cancelled = true
     }
-  }, [resolvedClient])
+  }, [loadAttempt, resolvedClient])
 
   const currentTier = entitlements?.tier ?? 'Free'
   const isPro = currentTier === 'Pro'
@@ -123,44 +124,68 @@ export function PricingPage({ onClose, client, redirect }: PricingPageProps) {
   }
 
   return (
-    <section className="pricing" aria-labelledby={headingId}>
-      <div className="pricing-head">
-        <div>
-          <h2 id={headingId}>Plans &amp; pricing</h2>
-          <p className="pricing-sub">
-            Start free. Upgrade when you’re ready for clean exports and no limits.
-          </p>
-        </div>
-        {onClose && (
-          <button type="button" className="pricing-btn" onClick={onClose}>
+    <RoutedPage
+      title="Plans & pricing"
+      description="Start free. Upgrade when you’re ready for clean exports and no limits."
+      className="pricing"
+      actions={
+        onClose ? (
+          <button
+            type="button"
+            className="btn"
+            data-interaction="pricing.close"
+            onClick={onClose}
+          >
             Back to composer
           </button>
-        )}
-      </div>
+        ) : null
+      }
+    >
 
       {status === 'loading' && (
-        <p role="status" className="pricing-status">
-          Loading your plan…
-        </p>
+        <RouteState kind="loading" label="Loading your plan" />
       )}
       {status === 'error' && (
-        <p role="alert" className="pricing-error">
-          We couldn’t load your plan. You can still review the options below.
-        </p>
+        <RouteState
+          kind="error"
+          label="Your plan could not be loaded"
+          title="Your plan is unavailable"
+          message="We couldn’t load your plan. You can still review the options below."
+          action={
+            <button
+              type="button"
+              className="btn"
+              data-interaction="pricing.retry"
+              onClick={() => {
+                setEntitlements(null)
+                setStatus('loading')
+                setLoadAttempt((attempt) => attempt + 1)
+              }}
+            >
+              Retry
+            </button>
+          }
+        />
       )}
 
       {status === 'ready' && entitlements && (
-        <p className="pricing-current" role="status">
-          You’re on the <strong>{currentTier}</strong> plan.
-          {isPro
-            ? ' Your exports are watermark-free.'
-            : ' Free exports include a subtle watermark.'}
-        </p>
+        <RouteState
+          kind="success"
+          label={`Current plan: ${currentTier}`}
+          message={
+            <p>
+              You’re on the <strong>{currentTier}</strong> plan.
+              {isPro
+                ? ' Your exports are watermark-free.'
+                : ' Free exports include a subtle watermark.'}
+            </p>
+          }
+        />
       )}
 
       <ul className="pricing-plans" role="list">
         {PLANS.map((plan) => {
-          const current = plan.id === currentTier
+          const current = status === 'ready' && plan.id === currentTier
           return (
             <li
               key={plan.id}
@@ -186,7 +211,8 @@ export function PricingPage({ onClose, client, redirect }: PricingPageProps) {
                 {plan.id === 'Pro' && !isPro && (
                   <button
                     type="button"
-                    className="pricing-btn pricing-btn-primary"
+                    className="btn btn-primary"
+                    data-interaction="pricing.upgrade"
                     onClick={upgrade}
                     disabled={busy !== null}
                   >
@@ -196,14 +222,15 @@ export function PricingPage({ onClose, client, redirect }: PricingPageProps) {
                 {plan.id === 'Pro' && isPro && (
                   <button
                     type="button"
-                    className="pricing-btn"
+                    className="btn"
+                    data-interaction="pricing.manage"
                     onClick={manage}
                     disabled={busy !== null}
                   >
                     {busy === 'portal' ? 'Opening…' : 'Manage billing'}
                   </button>
                 )}
-                {plan.id === 'Free' && !isPro && (
+                {plan.id === 'Free' && status === 'ready' && !isPro && (
                   <span className="pricing-note">Your current plan</span>
                 )}
               </div>
@@ -213,10 +240,8 @@ export function PricingPage({ onClose, client, redirect }: PricingPageProps) {
       </ul>
 
       {actionError && (
-        <p role="alert" className="pricing-error">
-          {actionError}
-        </p>
+        <RouteState kind="error" label={actionError} message={actionError} />
       )}
-    </section>
+    </RoutedPage>
   )
 }

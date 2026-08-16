@@ -139,6 +139,7 @@ export function createExamplePlugin(): CadencePlugin {
               <button
                 type="button"
                 className="btn btn-sm"
+                data-interaction="studio.plugins.example.run-command"
                 onClick={() => context.runCommand(EXAMPLE_COMMAND_ID)}
               >
                 Insert a C-major chord

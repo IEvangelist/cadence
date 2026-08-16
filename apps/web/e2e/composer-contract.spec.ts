@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test'
+import { chooseExport, createBlankProject } from './projectActions'
+import { openAiInspectorMode } from './studioActions'
 
 test.describe('composer shared contract surfaces', () => {
   test.beforeEach(async ({ page }) => {
@@ -12,7 +14,7 @@ test.describe('composer shared contract surfaces', () => {
   }) => {
     await page.goto('/')
 
-    await page.getByRole('button', { name: 'New' }).click()
+    await createBlankProject(page)
     await expect(page.getByText('Your canvas is empty.')).toBeVisible()
 
     const grid = page.getByRole('application', { name: /Note grid/ })
@@ -23,8 +25,8 @@ test.describe('composer shared contract surfaces', () => {
     await page.getByRole('button', { name: /Play/ }).click()
     await page.getByRole('button', { name: /Stop/ }).click()
 
-    const panel = page.getByRole('region', { name: 'AI Assistant' })
-    await expect(panel).toBeVisible()
+    const inspector = await openAiInspectorMode(page, 'Basic')
+    const panel = inspector.getByRole('region', { name: 'AI Assistant' })
     await panel.getByRole('radio', { name: /Generate melody/ }).check()
     await panel.getByRole('button', { name: 'Generate' }).click()
     await expect(panel.getByRole('button', { name: 'Accept' })).toBeVisible()
@@ -39,7 +41,7 @@ test.describe('composer shared contract surfaces', () => {
     await page.getByRole('button', { name: 'Save' }).click()
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: 'Export MIDI' }).click(),
+      chooseExport(page, 'Export MIDI'),
     ])
     expect(download.suggestedFilename()).toMatch(/\.mid$/)
 

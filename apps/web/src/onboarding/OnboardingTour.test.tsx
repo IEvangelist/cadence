@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
+import { coversInteractions } from '../test/coversInteractions'
 import { OnboardingTour } from './OnboardingTour'
 import {
   MemoryOnboardingStorage,
@@ -46,6 +47,7 @@ describe('<OnboardingTour />', () => {
   })
 
   it('moves next, back, and directly across steps', async () => {
+    coversInteractions('onboarding.next', 'onboarding.back', 'onboarding.step.select')
     renderTour()
     await findDialog()
 
@@ -77,6 +79,11 @@ describe('<OnboardingTour />', () => {
   })
 
   it('skips, closes, and dismisses from the backdrop with persistence', async () => {
+    coversInteractions(
+      'onboarding.skip',
+      'onboarding.close',
+      'onboarding.dismiss-backdrop',
+    )
     const skipStorage = renderTour()
     await findDialog()
     fireEvent.click(screen.getByRole('button', { name: 'Skip tour' }))
@@ -99,6 +106,7 @@ describe('<OnboardingTour />', () => {
   })
 
   it('supports Escape and arrow-key navigation', async () => {
+    coversInteractions('onboarding.dialog.keyboard')
     const storage = renderTour()
     const dialog = await findDialog()
 
@@ -114,6 +122,7 @@ describe('<OnboardingTour />', () => {
   })
 
   it('opens from the launcher even after the seen flag is set', async () => {
+    coversInteractions('onboarding.launch')
     const storage = new MemoryOnboardingStorage()
     storage.setItem(ONBOARDING_SEEN_KEY, '1')
     render(<OnboardingTour storage={storage} autoOpenDelay={0} />)

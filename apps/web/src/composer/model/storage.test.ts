@@ -15,10 +15,12 @@ describe('LocalStorageProjectStore', () => {
     const store = makeStore()
     const project = createEmptyProject('p1')
     project.name = 'Song A'
+    if (project.mix) project.mix.master.gainDb = -4
     await store.save(project)
     const loaded = await store.load('p1')
     expect(loaded?.id).toBe('p1')
     expect(loaded?.name).toBe('Song A')
+    expect(loaded?.mix?.master.gainDb).toBe(-4)
   })
 
   it('returns null for a missing project', async () => {

@@ -8,6 +8,8 @@ import {
   useRef,
   useState,
 } from 'react'
+import { X } from 'lucide-react'
+import { Icon } from '../ui/Icon'
 import './OnboardingTour.css'
 import { type OnboardingStorage } from './onboardingStorage'
 import { ONBOARDING_STEPS } from './steps'
@@ -216,6 +218,7 @@ export function OnboardingTour({
         ref={launcherRef}
         className="onboarding-tour__launcher"
         type="button"
+        data-interaction="onboarding.launch"
         onClick={open}
       >
         Take a tour
@@ -226,6 +229,7 @@ export function OnboardingTour({
           <button
             className="onboarding-tour__backdrop"
             type="button"
+            data-interaction="onboarding.dismiss-backdrop"
             aria-label="Dismiss onboarding tour"
             onClick={close}
           />
@@ -238,6 +242,7 @@ export function OnboardingTour({
           ) : null}
           <div
             ref={dialogRef}
+            data-interaction="onboarding.dialog.keyboard"
             className={
               anchorRect
                 ? 'onboarding-tour__dialog onboarding-tour__dialog--anchored'
@@ -255,10 +260,11 @@ export function OnboardingTour({
             <button
               className="onboarding-tour__close"
               type="button"
+              data-interaction="onboarding.close"
               aria-label="Close onboarding tour"
               onClick={close}
             >
-              ×
+              <Icon icon={X} size={16} />
             </button>
             <p className="onboarding-tour__step" aria-live="polite">
               Step {stepIndex + 1} of {stepCount}
@@ -273,6 +279,7 @@ export function OnboardingTour({
                   key={step.id}
                   className="onboarding-tour__dot"
                   type="button"
+                  data-interaction="onboarding.step.select"
                   aria-label={`Go to step ${index + 1}: ${step.title}`}
                   aria-current={index === stepIndex ? 'step' : undefined}
                   onClick={() => goTo(index)}
@@ -283,6 +290,7 @@ export function OnboardingTour({
               <button
                 className="onboarding-tour__button onboarding-tour__button--ghost"
                 type="button"
+                data-interaction="onboarding.skip"
                 onClick={skip}
               >
                 Skip tour
@@ -291,6 +299,7 @@ export function OnboardingTour({
                 <button
                   className="onboarding-tour__button onboarding-tour__button--secondary"
                   type="button"
+                  data-interaction="onboarding.back"
                   onClick={back}
                   disabled={isFirstStep}
                 >
@@ -299,6 +308,7 @@ export function OnboardingTour({
                 <button
                   className="onboarding-tour__button onboarding-tour__button--primary"
                   type="button"
+                  data-interaction="onboarding.next"
                   onClick={isLastStep ? finish : next}
                   data-primary-action="true"
                 >

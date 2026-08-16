@@ -1,5 +1,7 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import { coversInteractions } from '../../test/coversInteractions'
 import { QuickStartGallery } from './QuickStartGallery'
 import { HOUSE_DUBS } from '../templates'
 import type { SongTemplate } from '../templates'
@@ -26,16 +28,19 @@ describe('<QuickStartGallery />', () => {
     }
   })
 
-  it('loads the chosen template on click', () => {
+  it('loads the chosen template on click', async () => {
+    coversInteractions('studio.quick-start.load')
+    const user = userEvent.setup()
     const onLoad = vi.fn()
     render(<QuickStartGallery onLoad={onLoad} />)
     const target = HOUSE_DUBS[0]
-    fireEvent.click(screen.getByRole('button', { name: new RegExp(target.name) }))
+    await user.click(screen.getByRole('button', { name: new RegExp(target.name) }))
     expect(onLoad).toHaveBeenCalledTimes(1)
     expect(onLoad).toHaveBeenCalledWith(target)
   })
 
-  it('honours an injected template list for focused rendering', () => {
+  it('honours an injected template list for focused rendering', async () => {
+    const user = userEvent.setup()
     const fake: SongTemplate[] = [
       {
         id: 'demo-a',
@@ -49,7 +54,7 @@ describe('<QuickStartGallery />', () => {
     const onLoad = vi.fn()
     render(<QuickStartGallery onLoad={onLoad} templates={fake} />)
     expect(screen.getByRole('heading', { level: 3, name: 'Test Genre' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /Demo A/ }))
+    await user.click(screen.getByRole('button', { name: /Demo A/ }))
     expect(onLoad).toHaveBeenCalledWith(fake[0])
   })
 })

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { openMixWorkspace } from './studioActions'
 
 // Parameter-automation guard (#44 mixer automation, the #112 follow-up). This is
 // the *inverse* of the #97 audible guard in `audio.spec.ts`: instead of proving
@@ -99,13 +100,7 @@ test.describe('composer parameter automation', () => {
     // silence below is caused by the automation override, not an empty project.
     await expect(page.locator('.pr-note').first()).toBeVisible()
 
-    // The mixer rail is default-collapsed (#98 compact UX); expand it to reach the
-    // master automation lane.
-    const mixerToggle = page.getByRole('button', { name: 'Mixer' })
-    if ((await mixerToggle.getAttribute('aria-expanded')) !== 'true') {
-      await mixerToggle.click()
-    }
-    await expect(mixerToggle).toHaveAttribute('aria-expanded', 'true')
+    await openMixWorkspace(page)
 
     // Draw a master-gain point near the bottom of the lane (≈ -60 dB). A single
     // point is held across the whole timeline, so the master bus stays down for
@@ -133,6 +128,24 @@ test.describe('composer parameter automation', () => {
     // With the master bus automated to ≈ -60 dB, the output stays below the floor
     // the #97 guard requires playback to clear. If automation failed to apply, the
     // audible demo project would push this over 0.01 and fail the build.
+    expect(result.peak).toBeLessThan(0.01)
+  })
+
+  test('persisted manual master gain changes the audible output', async ({ page }) => {
+    await installOutputTap(page)
+    await page.goto('/')
+    await dismissTour(page)
+    await expect(page.locator('.pr-note').first()).toBeVisible()
+
+    const mixer = await openMixWorkspace(page)
+    await mixer
+      .getByRole('group', { name: 'Master bus' })
+      .getByRole('slider', { name: /Gain/ })
+      .fill('-60')
+    await page.locator('button.transport-play').click()
+
+    const result = await measureSettledPeakRms(page)
+    expect(result.analyserCount).toBeGreaterThan(0)
     expect(result.peak).toBeLessThan(0.01)
   })
 })

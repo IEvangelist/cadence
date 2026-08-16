@@ -120,7 +120,7 @@ describe('usePlugins', () => {
     ])
   })
 
-  it('dispatches a command from its keybinding, honoring overrides', () => {
+  it('exposes persisted overrides for the unified Studio dispatcher', () => {
     const host = createPluginHost()
     const run = vi.fn()
     host.register(commandPlugin(run))
@@ -130,28 +130,48 @@ describe('usePlugins', () => {
       usePlugins(stubController(), { host, preferencesStore: store }),
     )
 
-    // Default binding fires.
-    act(() => {
-      window.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'h', ctrlKey: true, shiftKey: true }),
-      )
-    })
-    expect(run).toHaveBeenCalledTimes(1)
-
-    // Override the binding; the old one no longer fires, the new one does.
     act(() => result.current.setKeybinding('acme.hello', 'mod+alt+z'))
-    act(() => {
-      window.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'h', ctrlKey: true, shiftKey: true }),
-      )
-    })
-    expect(run).toHaveBeenCalledTimes(1)
-    act(() => {
-      window.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, altKey: true }),
-      )
-    })
-    expect(run).toHaveBeenCalledTimes(2)
+
+    expect(result.current.keybindingFor('acme.hello')).toBe('mod+alt+z')
+    expect(result.current.keybindingOverrides).toEqual({ 'acme.hello': 'mod+alt+z' })
+    expect(store.load().keybindings).toEqual({ 'acme.hello': 'mod+alt+z' })
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('rejects and clears an override that conflicts with a reserved core shortcut', () => {
+    const host = createPluginHost()
+    host.register(commandPlugin(vi.fn()))
+    const store = enabledStore('acme.cmd')
+    store.update((prefs) => ({
+      ...prefs,
+      keybindings: { 'acme.hello': 'mod+alt+z' },
+    }))
+    const { result } = renderHook(() =>
+      usePlugins(stubController(), { host, preferencesStore: store }),
+    )
+
+    act(() => result.current.setKeybinding('acme.hello', 'space'))
+
+    expect(result.current.keybindingFor('acme.hello')).toBe('mod+shift+h')
+    expect(store.load().keybindings).toEqual({})
+    expect(result.current.keybindingNotice).toMatch(/reserved by a core Studio command/i)
+  })
+
+  it('ignores a stale persisted reserved override so the plugin default remains active', () => {
+    const host = createPluginHost()
+    host.register(commandPlugin(vi.fn()))
+    const store = enabledStore('acme.cmd')
+    store.update((prefs) => ({
+      ...prefs,
+      keybindings: { 'acme.hello': 'mod+z' },
+    }))
+
+    const { result } = renderHook(() =>
+      usePlugins(stubController(), { host, preferencesStore: store }),
+    )
+
+    expect(result.current.keybindingOverrides).toEqual({})
+    expect(result.current.keybindingFor('acme.hello')).toBe('mod+shift+h')
   })
 
   it('tracks panel visibility with a persisted default of visible', () => {
@@ -208,7 +228,7 @@ describe('usePlugins', () => {
     expect(result.current.plugins.find((p) => p.id === 'constructor')?.enabled).toBe(false)
   })
 
-  it('keydown dispatch is a safe no-op for a command id that collides with a prototype member', () => {
+  it('binding lookup is safe for a command id that collides with a prototype member', () => {
     const host = createPluginHost()
     const run = vi.fn()
     // Valid manifest id, but the contributed command id shadows Object.prototype.
@@ -222,19 +242,11 @@ describe('usePlugins', () => {
 
     // Mount must not crash while building the keybinding map from a plain-keyed
     // overrides object (the pre-fix bug read Object.prototype.toString as data).
-    renderHook(() => usePlugins(stubController(), { host, preferencesStore: store }))
+    const { result } = renderHook(() =>
+      usePlugins(stubController(), { host, preferencesStore: store }),
+    )
 
-    act(() => {
-      window.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 't', ctrlKey: true, shiftKey: true }),
-      )
-    })
-    expect(run).toHaveBeenCalledTimes(1)
-
-    // An unbound shortcut does nothing — no inherited-member bypass.
-    act(() => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'q', ctrlKey: true }))
-    })
-    expect(run).toHaveBeenCalledTimes(1)
+    expect(result.current.keybindingFor('toString')).toBe('mod+shift+t')
+    expect(run).not.toHaveBeenCalled()
   })
 })

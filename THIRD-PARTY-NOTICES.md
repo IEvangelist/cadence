@@ -14,6 +14,30 @@ different license.
 | Component | Version | License | Role |
 | --- | --- | --- | --- |
 | [`@breezystack/lamejs`](https://www.npmjs.com/package/@breezystack/lamejs) | 1.2.7 | LGPL-3.0-or-later | LAME MP3 encoder (pure-JavaScript port) |
+| [`react-router-dom`](https://www.npmjs.com/package/react-router-dom) | 7.18.2 | MIT | Browser-history routing |
+| [`@radix-ui/react-dialog`](https://www.npmjs.com/package/@radix-ui/react-dialog) | 1.1.23 | MIT | Accessible project/replacement dialogs |
+| [`@radix-ui/react-dropdown-menu`](https://www.npmjs.com/package/@radix-ui/react-dropdown-menu) | 2.1.24 | MIT | Accessible theme menu |
+| [`@radix-ui/react-popover`](https://www.npmjs.com/package/@radix-ui/react-popover) | 1.1.23 | MIT | Accessible authentication popover |
+| [`@radix-ui/react-tooltip`](https://www.npmjs.com/package/@radix-ui/react-tooltip) | 1.2.16 | MIT | Accessible icon-control tooltip |
+| [`lucide-react`](https://www.npmjs.com/package/lucide-react) | 1.30.0 | ISC / MIT | Cadence UI icon family |
+| [`@fontsource-variable/inter`](https://www.npmjs.com/package/@fontsource-variable/inter) | 5.3.0 | OFL-1.1 | Self-hosted Latin variable UI font |
+| [`@fontsource-variable/space-grotesk`](https://www.npmjs.com/package/@fontsource-variable/space-grotesk) | 5.3.0 | OFL-1.1 | Self-hosted Latin variable display font |
+| [`@fontsource-variable/jetbrains-mono`](https://www.npmjs.com/package/@fontsource-variable/jetbrains-mono) | 5.3.0 | OFL-1.1 | Self-hosted Latin variable numeric font |
+
+The complete OFL-1.1 text distributed with the fonts is available at
+`apps/web/public/licenses/OFL-1.1.txt`. The complete Lucide ISC notice and the
+MIT notice for Feather-derived icons are available at
+`apps/web/public/licenses/lucide-ISC.txt`. The MIT-licensed router and Radix
+packages retain their package license files in the installed dependency tree.
+
+Font copyright and source metadata:
+
+- Inter: Copyright 2016 The Inter Project Authors,
+  <https://github.com/rsms/inter>.
+- Space Grotesk: Copyright 2020 The Space Grotesk Project Authors,
+  <https://github.com/floriankarsten/space-grotesk>.
+- JetBrains Mono: Copyright 2020 The JetBrains Mono Project Authors,
+  <https://github.com/JetBrains/JetBrainsMono>.
 
 ## `@breezystack/lamejs` — LGPL-3.0-or-later
 

@@ -27,4 +27,22 @@ test.describe('accessibility', () => {
     await expect(page.locator('html')).toHaveAttribute('lang', 'en')
     await expect(page.getByRole('main')).toHaveCount(1)
   })
+
+  for (const theme of ['light', 'dark'] as const) {
+    for (const route of ['/', '/stems', '/pricing', '/profile', '/licenses']) {
+      test(`${route} is axe-clean in ${theme} theme`, async ({ page }) => {
+        await page.addInitScript((selectedTheme) => {
+          localStorage.setItem('cadence.v1.theme', selectedTheme)
+        }, theme)
+        await page.goto(route)
+        await expect(page.getByRole('main')).toBeVisible()
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+
+        const results = await new AxeBuilder({ page })
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+          .analyze()
+        expect(results.violations).toEqual([])
+      })
+    }
+  }
 })

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMixerController } from './mixerController'
 import type { MixerGraph } from './mixerGraph'
 import type { EffectNode } from '../plugins/types'
+import type { ProjectMix } from '../model/mix'
 
 function fakeGraph() {
   return {
@@ -84,6 +85,36 @@ describe('mixerController (state-only)', () => {
 
     mixer.removeInsert('t1', insertId)
     expect(mixer.listInserts('t1')).toHaveLength(0)
+  })
+
+  it('hydrates and replaces persisted track, insert, and master state', () => {
+    const mixer = createMixerController()
+    mixer.syncTracks([{ id: 't1', muted: true }, { id: 'old', muted: false }])
+    const mix: ProjectMix = {
+      tracks: {
+        t1: {
+          gainDb: -9,
+          pan: 0.35,
+          solo: true,
+          inserts: [
+            { id: 'missing', effectId: 'plugin.missing', enabled: true, params: { mix: 0.5 } },
+          ],
+        },
+      },
+      master: { gainDb: -2, limiterEnabled: true, limiterThresholdDb: -4 },
+    }
+
+    mixer.hydrate(mix)
+
+    expect(mixer.getSnapshot()).toEqual({
+      tracks: {
+        t1: { trackId: 't1', gainDb: -9, pan: 0.35, solo: true, muted: true },
+      },
+      master: { gainDb: -2, limiterEnabled: true, limiterThresholdDb: -4 },
+    })
+    expect(mixer.listInserts('t1')).toEqual([
+      { id: 'missing', effectId: 'plugin.missing', enabled: true, params: { mix: 0.5 } },
+    ])
   })
 
   it('ignores insert ops on unknown tracks/inserts', () => {
@@ -171,6 +202,21 @@ describe('mixerController (with graph)', () => {
     expect(graph.disposeChannel).toHaveBeenCalledWith('t1')
   })
 
+  it('disposes obsolete graph channels when hydrating a replacement mix', () => {
+    const mixer = createMixerController({ graph })
+    mixer.syncTracks([{ id: 'old', muted: false }])
+    graph.disposeChannel.mockClear()
+
+    mixer.hydrate({
+      tracks: {
+        current: { gainDb: 0, pan: 0, solo: false, inserts: [] },
+      },
+      master: { gainDb: 0, limiterEnabled: false, limiterThresholdDb: -1 },
+    })
+
+    expect(graph.disposeChannel).toHaveBeenCalledWith('old')
+  })
+
   it('folds mute + solo into per-channel audibility', () => {
     const mixer = createMixerController({ graph })
     mixer.syncTracks([{ id: 't1', muted: false }, { id: 't2', muted: false }])
@@ -196,6 +242,80 @@ describe('mixerController (with graph)', () => {
     expect(graph.setTrackPan).toHaveBeenCalledWith('t1', -0.5)
     expect(graph.setMasterGain).toHaveBeenCalledWith(-3)
     expect(graph.setLimiter).toHaveBeenCalledWith(true, -2)
+  })
+
+  it('applies hydrated state to the graph and bypasses unavailable effects', () => {
+    const mixer = createMixerController({ graph, createEffect: () => null })
+    mixer.syncTracks([{ id: 't1', muted: false }])
+    mixer.hydrate({
+      tracks: {
+        t1: {
+          gainDb: -12,
+          pan: -0.4,
+          solo: false,
+          inserts: [
+            { id: 'ghost', effectId: 'plugin.missing', enabled: true, params: {} },
+          ],
+        },
+      },
+      master: { gainDb: -3, limiterEnabled: true, limiterThresholdDb: -2 },
+    })
+
+    expect(graph.setTrackGain).toHaveBeenLastCalledWith('t1', -12)
+    expect(graph.setTrackPan).toHaveBeenLastCalledWith('t1', -0.4)
+    expect(graph.setTrackInserts).toHaveBeenLastCalledWith('t1', [])
+    expect(graph.setMasterGain).toHaveBeenLastCalledWith(-3)
+    expect(graph.setLimiter).toHaveBeenLastCalledWith(true, -2)
+  })
+
+  it('does not rebuild unchanged insert chains during gain hydration', () => {
+    const mixer = createMixerController({ graph, createEffect: () => fakeEffect() })
+    const initial: ProjectMix = {
+      tracks: {
+        t1: {
+          gainDb: -6,
+          pan: 0,
+          solo: false,
+          inserts: [{ id: 'verb', effectId: 'reverb', enabled: true, params: {} }],
+        },
+      },
+      master: { gainDb: 0, limiterEnabled: false, limiterThresholdDb: -1 },
+    }
+    mixer.hydrate(initial)
+    graph.setTrackInserts.mockClear()
+
+    mixer.hydrate({
+      ...initial,
+      tracks: {
+        t1: { ...initial.tracks.t1, gainDb: -12 },
+      },
+    })
+
+    expect(graph.setTrackGain).toHaveBeenLastCalledWith('t1', -12)
+    expect(graph.setTrackInserts).not.toHaveBeenCalled()
+  })
+
+  it('re-resolves insert chains when plugin availability changes', () => {
+    const createEffect = vi.fn(() => fakeEffect())
+    const mixer = createMixerController({ graph, createEffect })
+    mixer.hydrate({
+      tracks: {
+        t1: {
+          gainDb: 0,
+          pan: 0,
+          solo: false,
+          inserts: [{ id: 'verb', effectId: 'reverb', enabled: true, params: {} }],
+        },
+      },
+      master: { gainDb: 0, limiterEnabled: false, limiterThresholdDb: -1 },
+    })
+    createEffect.mockClear()
+    graph.setTrackInserts.mockClear()
+
+    mixer.refreshInserts()
+
+    expect(createEffect).toHaveBeenCalledWith('reverb')
+    expect(graph.setTrackInserts).toHaveBeenCalledWith('t1', [expect.anything()])
   })
 
   it('builds insert nodes from enabled inserts via createEffect', () => {

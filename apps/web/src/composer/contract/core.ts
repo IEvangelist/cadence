@@ -17,6 +17,12 @@ import type { ShareSnapshot } from '../formats/share'
 // ---------------------------------------------------------------------------
 
 export type { Pitch, InstrumentId, Note, Track, LoopRegion, Project } from '../model/project'
+export type {
+  ProjectMix,
+  ProjectMixInsert,
+  ProjectTrackMix,
+  ProjectMasterMix,
+} from '../model/mix'
 export {
   SCHEMA_VERSION,
   DEFAULT_PPQ,

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { coversInteractions } from '../../test/coversInteractions'
 import { MixerPanel } from './MixerPanel'
 import type { MixerViewModel, MixerTrackView } from '../hooks/useMixer'
 
@@ -57,6 +58,7 @@ function makeViewModel(overrides: Partial<MixerViewModel> = {}): MixerViewModel 
     writeAutomationPoint: vi.fn(),
     removeAutomationPoint: vi.fn(),
     clearAutomationLane: vi.fn(),
+    stopHistoryCapture: vi.fn(),
     ...overrides,
   }
 }
@@ -76,6 +78,12 @@ describe('MixerPanel', () => {
   })
 
   it('wires gain, pan, mute, and solo controls', () => {
+    coversInteractions(
+      'studio.mixer.track.gain',
+      'studio.mixer.track.pan',
+      'studio.mixer.track.mute',
+      'studio.mixer.track.solo',
+    )
     const mixer = makeViewModel()
     render(<MixerPanel mixer={mixer} />)
     fireEvent.change(leadStrip().getByRole('slider', { name: /Gain/ }), { target: { value: '3' } })
@@ -84,11 +92,19 @@ describe('MixerPanel', () => {
     fireEvent.click(leadStrip().getByRole('button', { name: 'Solo' }))
     expect(mixer.setTrackGain).toHaveBeenCalledWith('t1', 3)
     expect(mixer.setTrackPan).toHaveBeenCalledWith('t1', 0.5)
+    fireEvent.pointerUp(leadStrip().getByRole('slider', { name: /Gain/ }))
+    expect(mixer.stopHistoryCapture).toHaveBeenCalled()
     expect(mixer.toggleMute).toHaveBeenCalledWith('t1')
     expect(mixer.toggleSolo).toHaveBeenCalledWith('t1')
   })
 
   it('adds the selected insert and manages existing inserts', () => {
+    coversInteractions(
+      'studio.mixer.insert.select',
+      'studio.mixer.insert.add',
+      'studio.mixer.insert.toggle',
+      'studio.mixer.insert.remove',
+    )
     const mixer = makeViewModel()
     render(<MixerPanel mixer={mixer} />)
     const strip = leadStrip()
@@ -115,6 +131,11 @@ describe('MixerPanel', () => {
   })
 
   it('wires the master bus controls', () => {
+    coversInteractions(
+      'studio.mixer.master.gain',
+      'studio.mixer.master.limiter',
+      'studio.mixer.master.ceiling',
+    )
     const mixer = makeViewModel()
     render(<MixerPanel mixer={mixer} />)
     const master = masterStrip()

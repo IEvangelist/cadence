@@ -24,9 +24,11 @@ test.describe('acknowledgements', () => {
     await page.route('**/api/**', mockApi)
     await page.goto('/')
 
-    // Drive the entry point with the keyboard only: focus the footer control and
-    // activate it. This asserts the surface is keyboard-reachable from the shell.
-    const entry = page.getByRole('button', { name: 'Third-party licenses' })
+    // Drive the Studio Help entry point with the keyboard only.
+    const help = page.getByRole('button', { name: 'Help' })
+    await help.focus()
+    await page.keyboard.press('Enter')
+    const entry = page.getByRole('menuitem', { name: 'Third-party licenses' })
     await entry.focus()
     await expect(entry).toBeFocused()
     await page.keyboard.press('Enter')
@@ -40,6 +42,13 @@ test.describe('acknowledgements', () => {
     const table = page.getByRole('table', { name: /third-party components/i })
     await expect(table.getByText('@breezystack/lamejs')).toBeVisible()
     await expect(table.getByText('LGPL-3.0-or-later')).toBeVisible()
+    await expect(table.getByText('react-router-dom')).toBeVisible()
+    await expect(table.getByText('lucide-react')).toBeVisible()
+    await expect(table.getByText('@fontsource-variable/inter')).toBeVisible()
+    await expect(page.getByRole('link', { name: /SIL Open Font License/i })).toHaveAttribute(
+      'href',
+      '/licenses/OFL-1.1.txt',
+    )
 
     await expect(page.getByRole('link', { name: /lame project/i })).toHaveAttribute(
       'href',

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { coversInteractions } from '../test/coversInteractions'
 import type { AuthClient } from './authClient'
 import { AuthContext, type AuthContextValue } from './authContext'
 import { AuthBar } from './AuthBar'
@@ -20,10 +22,25 @@ function makeValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue 
   }
 }
 
-const renderBar = (value: AuthContextValue, profileActive = false, onShowProfile = vi.fn()) =>
+const renderBar = (
+  value: AuthContextValue,
+  {
+    profileActive = false,
+    signingOut = false,
+    onShowProfile = vi.fn(),
+    onShowSignIn = vi.fn(),
+    onSignOut = vi.fn(async () => undefined),
+  } = {},
+) =>
   render(
     <AuthContext value={value}>
-      <AuthBar onShowProfile={onShowProfile} profileActive={profileActive} />
+      <AuthBar
+        onShowSignIn={onShowSignIn}
+        onShowProfile={onShowProfile}
+        profileActive={profileActive}
+        signingOut={signingOut}
+        onSignOut={onSignOut}
+      />
     </AuthContext>,
   )
 
@@ -33,78 +50,47 @@ describe('AuthBar', () => {
     expect(container.querySelector('button')).toBeNull()
   })
 
-  it('shows the signed-in greeting and account actions', () => {
-    const signOut = vi.fn(async () => undefined)
+  it('shows the signed-in greeting and account actions', async () => {
+    coversInteractions('auth.profile.open', 'auth.sign-out')
+    const user = userEvent.setup()
+    const onSignOut = vi.fn(async () => undefined)
     const onShowProfile = vi.fn()
     renderBar(
       makeValue({
         status: 'authenticated',
         user: { id: '1', email: 'a@b.com', displayName: 'Ada', tier: 'Free' },
-        signOut,
       }),
-      false,
-      onShowProfile,
+      { onShowProfile, onSignOut },
     )
 
     expect(screen.getByText('Ada')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Profile' }))
+    await user.click(screen.getByRole('button', { name: 'Profile' }))
     expect(onShowProfile).toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
-    expect(signOut).toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Sign out' }))
+    expect(onSignOut).toHaveBeenCalled()
   })
 
-  it('opens the panel and submits local sign-in', () => {
-    const signIn = vi.fn(async () => undefined)
-    renderBar(makeValue({ signIn }))
+  it('disables account actions while sign-out is pending', () => {
+    renderBar(
+      makeValue({
+        status: 'authenticated',
+        user: { id: '1', email: 'a@b.com', displayName: 'Ada', tier: 'Free' },
+      }),
+      { signingOut: true },
+    )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@b.com' } })
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret12' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-
-    expect(signIn).toHaveBeenCalledWith('a@b.com', 'secret12')
+    expect(screen.getByRole('button', { name: 'Signing out…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Profile' })).toBeDisabled()
   })
 
-  it('toggles to register mode, submits, and confirms a verification email was sent', async () => {
-    const register = vi.fn(async () => undefined)
-    renderBar(makeValue({ register }))
+  it('opens the shared sign-in Dialog', async () => {
+    coversInteractions('auth.panel.toggle')
+    const user = userEvent.setup()
+    const onShowSignIn = vi.fn()
+    renderBar(makeValue(), { onShowSignIn })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-    fireEvent.click(screen.getByRole('button', { name: /Create an account/ }))
-    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Ada' } })
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@b.com' } })
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret12' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
-
-    expect(register).toHaveBeenCalledWith('a@b.com', 'secret12', 'Ada')
-    // #76: register does not sign in — the UI must tell the user to check their email.
-    expect(await screen.findByText(/Check your email/)).toBeInTheDocument()
-  })
-
-  it('requests a magic link and confirms it was sent', async () => {
-    const requestMagicLink = vi.fn(async () => undefined)
-    renderBar(makeValue({ requestMagicLink }))
-
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-    fireEvent.change(screen.getByLabelText(/magic sign-in link/), { target: { value: 'a@b.com' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Email me a link' }))
-
-    expect(requestMagicLink).toHaveBeenCalledWith('a@b.com')
-    expect(await screen.findByRole('status')).toHaveTextContent(/sign-in link is on its way/)
-  })
-
-  it('renders external provider links', () => {
-    renderBar(makeValue({ providers: ['GitHub'] }))
-
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-    const link = screen.getByRole('link', { name: 'GitHub' })
-    expect(link).toHaveAttribute('href', '/api/auth/external/GitHub')
-  })
-
-  it('shows the auth error', () => {
-    renderBar(makeValue({ error: 'Incorrect email or password.' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
-    expect(screen.getByRole('alert')).toHaveTextContent('Incorrect email or password.')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(onShowSignIn).toHaveBeenCalledOnce()
   })
 })

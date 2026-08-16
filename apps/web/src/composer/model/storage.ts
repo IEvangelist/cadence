@@ -18,6 +18,8 @@ export interface StoredProjectMeta {
 }
 
 export interface ProjectStore {
+  /** Atomically save and mark last-opened on one concrete backend when supported. */
+  persist?(project: Project): Promise<StoredProjectMeta>
   /** Insert or update a project; returns its listing metadata. */
   save(project: Project): Promise<StoredProjectMeta>
   /** Load a project by id, or null when it is absent/corrupt. */
@@ -39,7 +41,9 @@ const LAST_KEY = `${NS}.last`
 
 /** A minimal synchronous key/value backend (satisfied by `window.localStorage`). */
 export interface SyncStorage {
+  readonly length?: number
   getItem(key: string): string | null
+  key?(index: number): string | null
   setItem(key: string, value: string): void
   removeItem(key: string): void
 }
@@ -79,6 +83,12 @@ export class LocalStorageProjectStore implements ProjectStore {
     return meta
   }
 
+  async persist(project: Project): Promise<StoredProjectMeta> {
+    const meta = await this.save(project)
+    await this.setLast(project.id)
+    return meta
+  }
+
   async load(id: string): Promise<Project | null> {
     const raw = this.storage.getItem(projectKey(id))
     if (!raw) return null
@@ -115,8 +125,16 @@ export class LocalStorageProjectStore implements ProjectStore {
 export class MemoryStorage implements SyncStorage {
   private readonly map = new Map<string, string>()
 
+  get length(): number {
+    return this.map.size
+  }
+
   getItem(key: string): string | null {
     return this.map.has(key) ? (this.map.get(key) as string) : null
+  }
+
+  key(index: number): string | null {
+    return [...this.map.keys()][index] ?? null
   }
 
   setItem(key: string, value: string): void {

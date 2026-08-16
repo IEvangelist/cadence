@@ -3,16 +3,107 @@ import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+async function createBlankProject(page: import('@playwright/test').Page): Promise<void> {
+  await page.getByRole('button', { name: 'Project', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'New project' }).click()
+  await page.getByRole('button', { name: /Blank project/ }).click()
+}
+
+async function openExportMenu(page: import('@playwright/test').Page): Promise<void> {
+  await page.getByRole('button', { name: 'Export & share' }).click()
+}
+
 // Full composer flow against the production build: create a note, run the
 // transport, export a .mid download, then reload and confirm the note persisted
 // (localStorage autosave/restore). Exercises the audio engine, piano roll,
 // MIDI export, and persistence end to end.
 test.describe('composer', () => {
+  test('Space activates a focused Studio control instead of toggling transport', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    const rail = page.getByRole('complementary', { name: 'Track rail' })
+    const addTrack = rail.getByRole('button', { name: 'Add track' })
+    await addTrack.focus()
+    const before = await rail.locator('.track-rail__row').count()
+    await page.keyboard.press('Space')
+
+    await expect(rail.locator('.track-rail__row')).toHaveCount(before + 1)
+    await expect(page.locator('button.transport-play')).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+  })
+
+  test('moves focus to the remaining track after an immediate keyboard delete', async ({ page }) => {
+    await page.goto('/')
+    const rail = page.getByRole('complementary', { name: 'Track rail' })
+    const deletes = rail.locator('[data-interaction="studio.track.delete"]')
+    await expect(deletes.first()).toBeVisible()
+    const before = await deletes.count()
+    await rail.getByRole('button', { name: 'Add track' }).click()
+    await expect(deletes).toHaveCount(before + 1)
+    await deletes.last().focus()
+
+    await page.keyboard.press('Enter')
+
+    await expect(deletes).toHaveCount(before)
+    await expect(rail.locator('[data-interaction="studio.track.select"]').last()).toBeFocused()
+  })
+
+  test('shortcut help traps focus, blocks the Studio, and restores its trigger', async ({
+    page,
+  }) => {
+    await page.goto('/')
+    const trigger = page.getByRole('button', { name: 'Shortcuts' })
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled()
+    await expect(trigger).toBeEnabled()
+    await trigger.click()
+    const dialog = page.getByRole('dialog', { name: 'Keyboard shortcuts' })
+    const search = dialog.getByRole('searchbox', { name: 'Search commands' })
+    const close = dialog.getByRole('button', { name: 'Close' })
+    await expect(search).toBeFocused()
+
+    await page.keyboard.press('Shift+Tab')
+    await expect(close).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(search).toBeFocused()
+    await expect(page.locator('body')).toHaveCSS('pointer-events', 'none')
+    const backgroundAddTrack = page.locator('[data-interaction="studio.track.add"]')
+    expect(
+      await backgroundAddTrack.evaluate((control) => {
+        const rect = control.getBoundingClientRect()
+        const hit = document.elementFromPoint(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2,
+        )
+        return hit === control || control.contains(hit)
+      }),
+    ).toBe(false)
+
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    await expect(trigger).toBeFocused()
+
+    await trigger.click()
+    const closeButton = dialog.getByRole('button', { name: 'Close' })
+    await expect(closeButton).toBeVisible()
+    await closeButton.click()
+    await expect(trigger).toBeFocused()
+
+    const keyboardInvoker = page.locator('[data-interaction="studio.track.add"]')
+    await keyboardInvoker.focus()
+    await page.keyboard.press('?')
+    await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(keyboardInvoker).toBeFocused()
+  })
+
   test('create a note, play, export MIDI, and persist across reload', async ({ page }) => {
     await page.goto('/')
 
     // Start from a clean project so the assertions are unambiguous.
-    await page.getByRole('button', { name: 'New' }).click()
+    await createBlankProject(page)
     await expect(page.getByText('Your canvas is empty.')).toBeVisible()
 
     const grid = page.getByRole('application', { name: /Note grid/ })
@@ -30,7 +121,10 @@ test.describe('composer', () => {
     await page.getByRole('button', { name: 'Save' }).click()
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: 'Export MIDI' }).click(),
+      (async () => {
+        await openExportMenu(page)
+        await page.getByRole('menuitem', { name: 'Export MIDI' }).click()
+      })(),
     ])
     expect(download.suggestedFilename()).toMatch(/\.mid$/)
 
@@ -43,7 +137,7 @@ test.describe('composer', () => {
   test('round-trips a project through the portable .cadence.json file', async ({ page }) => {
     await page.goto('/')
 
-    await page.getByRole('button', { name: 'New' }).click()
+    await createBlankProject(page)
     await expect(page.getByText('Your canvas is empty.')).toBeVisible()
 
     const grid = page.getByRole('application', { name: /Note grid/ })
@@ -54,7 +148,10 @@ test.describe('composer', () => {
     // Export the portable project file and capture the download bytes.
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByLabel('Export as').selectOption('project'),
+      (async () => {
+        await openExportMenu(page)
+        await page.getByRole('menuitem', { name: /Export Project file/ }).click()
+      })(),
     ])
     expect(download.suggestedFilename()).toMatch(/\.cadence\.json$/)
     const dir = await mkdtemp(join(tmpdir(), 'cadence-e2e-'))
@@ -64,7 +161,7 @@ test.describe('composer', () => {
     expect(saved.format).toBe('cadence-project')
 
     // Wipe the canvas, then re-import the file and confirm the notes return.
-    await page.getByRole('button', { name: 'New' }).click()
+    await createBlankProject(page)
     await expect(page.locator('.pr-note')).toHaveCount(0)
 
     await page.getByLabel('Import project or MusicXML file').setInputFiles(filePath)
@@ -75,7 +172,7 @@ test.describe('composer', () => {
     // Build a self-contained shared project by exporting the portable file,
     // encoding it into the #project= fragment, then loading that URL fresh.
     await page.goto('/')
-    await page.getByRole('button', { name: 'New' }).click()
+    await createBlankProject(page)
     const grid = page.getByRole('application', { name: /Note grid/ })
     await grid.click({ position: { x: 72, y: 96 } })
     await expect(page.locator('.pr-note')).toHaveCount(1)
@@ -89,7 +186,8 @@ test.describe('composer', () => {
         return original(text)
       }
     })
-    await page.getByRole('button', { name: 'Share' }).click()
+    await openExportMenu(page)
+    await page.getByRole('menuitem', { name: 'Share snapshot' }).click()
     const shareUrl = await page.evaluate(
       () => (window as unknown as { __copied?: string }).__copied ?? '',
     )
