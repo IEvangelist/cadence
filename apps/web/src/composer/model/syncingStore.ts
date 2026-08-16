@@ -70,22 +70,35 @@ export class SyncingProjectStore implements ProjectStore {
 
     let synced = 0
     let newestSyncedLocalId: string | null = null
-    for (const meta of localMetas) {
-      const remote = remoteById.get(meta.id)
-      // Skip only when the server already has a copy that is at least as new.
-      if (remote && remote.updatedAt >= meta.updatedAt) continue
-      const project = await this.local.load(meta.id)
-      if (!project) continue
-      // remote.save() upserts (POST, falling back to PUT on conflict).
-      await this.remote.save(project)
-      newestSyncedLocalId ??= meta.id
-      synced += 1
+    let syncError: unknown
+    let restoreError: unknown
+    try {
+      for (const meta of localMetas) {
+        const remote = remoteById.get(meta.id)
+        // Skip only when the server already has a copy that is at least as new.
+        if (remote && remote.updatedAt >= meta.updatedAt) continue
+        const project = await this.local.load(meta.id)
+        if (!project) continue
+        // remote.save() upserts (POST, falling back to PUT on conflict).
+        await this.remote.save(project)
+        newestSyncedLocalId ??= meta.id
+        synced += 1
+      }
+    } catch (error) {
+      syncError = error
+    } finally {
+      try {
+        if (remoteLast) {
+          await this.remote.setLast(remoteLast.id)
+        } else if (newestSyncedLocalId) {
+          await this.remote.setLast(newestSyncedLocalId)
+        }
+      } catch (error) {
+        restoreError = error
+      }
     }
-    if (remoteLast) {
-      await this.remote.setLast(remoteLast.id)
-    } else if (newestSyncedLocalId) {
-      await this.remote.setLast(newestSyncedLocalId)
-    }
+    if (syncError !== undefined) throw syncError
+    if (restoreError !== undefined) throw restoreError
     return synced
   }
 }

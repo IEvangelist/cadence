@@ -358,6 +358,20 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   const skipNextProjectRevisionRef = useRef(false)
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const flushPromiseRef = useRef<Promise<void> | null>(null)
+  const resetPersistenceForProject = useCallback((persisted: boolean) => {
+    if (autosaveTimerRef.current !== null) {
+      clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
+    }
+    revisionRef.current = 0
+    savedRevisionRef.current = 0
+    failedRevisionRef.current = null
+    flushPromiseRef.current = null
+    skipNextProjectRevisionRef.current = persisted
+    setJoinedFailure(0)
+    setIsFlushing(false)
+    setSaveState(initialSaveState('clean'))
+  }, [])
   // #131 multi-track view: ids of tracks shown on the piano roll as read-only
   // context, in ADDITION to the always-visible selected track. Deliberately
   // EPHEMERAL — it is view state, so it stays out of the persisted `project`
@@ -509,8 +523,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
           : null
       if (shared) {
         if (!isCurrent()) return
-        revisionRef.current = 0
-        savedRevisionRef.current = 0
+        resetPersistenceForProject(false)
         dispatch({ type: 'load-project', project: { ...shared, id: newId('project') } })
         setHydration({ status: 'ready-with-project', source: 'shared' })
         announce('Opened shared project', 'success')
@@ -524,8 +537,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
           : null
         if (recovery) {
           if (!isCurrent()) return
-          revisionRef.current = 0
-          savedRevisionRef.current = 0
+          resetPersistenceForProject(false)
           dispatch({ type: 'load-project', project: recovery.project })
           setHydration({ status: 'ready-with-project', source: 'recovery' })
           announce('Recovered unsaved changes', 'success')
@@ -534,11 +546,8 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         const project = await store.loadLast()
         if (!isCurrent()) return
         if (project) {
-          revisionRef.current = 0
-          savedRevisionRef.current = 0
-          skipNextProjectRevisionRef.current = true
+          resetPersistenceForProject(true)
           dispatch({ type: 'load-project', project })
-          setSaveState(initialSaveState('clean'))
           setHydration({ status: 'ready-with-project', source: 'last' })
           return
         }
@@ -557,7 +566,13 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     }
     // Router hash cleanup must not trigger a second pass; identity/backend changes must.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store, hydrationAttempt, options.storeRevision, options.recoveryScope])
+  }, [
+    store,
+    hydrationAttempt,
+    options.storeRevision,
+    options.recoveryScope,
+    resetPersistenceForProject,
+  ])
 
   const retryHydration = useCallback(() => {
     setHydrationAttempt((attempt) => attempt + 1)
@@ -967,10 +982,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
         request.project ?? (request.loadId ? await store.load(request.loadId) : null)
       if (!project) throw new Error('Project not found')
       if (request.persisted) await store.setLast(project.id)
-      revisionRef.current = 0
-      savedRevisionRef.current = 0
-      skipNextProjectRevisionRef.current = request.persisted
-      setSaveState(initialSaveState('clean'))
+      resetPersistenceForProject(request.persisted)
       dispatch({ type: 'load-project', project })
       setHydration({ status: 'ready-with-project', source: 'created' })
       setReplacement({ status: 'idle' })
@@ -988,7 +1000,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
       )
       await refreshList()
     },
-    [announce, refreshList, store],
+    [announce, refreshList, resetPersistenceForProject, store],
   )
 
   const requestProjectReplacement = useCallback(

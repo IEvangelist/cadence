@@ -1030,6 +1030,10 @@ describe('useComposer — project hydration and replacement', () => {
     await waitFor(() => expect(hook.result.current.replacement.status).toBe('blocked'))
     await act(() => hook.result.current.discardProjectReplacement())
     await waitFor(() => expect(hook.result.current.project.tracks.length).toBeGreaterThan(1))
+    act(() => hook.result.current.setProjectName('Fresh project edit'))
+    await act(() => hook.result.current.flushAutosave())
+    expect(hook.result.current.saveState.status).toBe('saved')
+    expect(hook.result.current.isDirty).toBe(false)
   })
 
   it('flushes before opening the current stored id so latest edits are not replaced by stale data', async () => {

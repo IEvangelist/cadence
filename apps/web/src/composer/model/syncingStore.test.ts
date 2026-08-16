@@ -136,4 +136,39 @@ describe('SyncingProjectStore', () => {
       vi.useRealTimers()
     }
   })
+
+  it('restores the prior remote last project when a later upload fails', async () => {
+    await remote.save(createEmptyProject('remote-last'))
+    await remote.setLast('remote-last')
+    await local.save(createEmptyProject('older-local'))
+    await local.save(createEmptyProject('newest-local'))
+    const realSave = remote.save.bind(remote)
+    vi.spyOn(remote, 'save')
+      .mockImplementationOnce(realSave)
+      .mockRejectedValueOnce(new Error('second upload failed'))
+
+    await expect(store.syncLocalToRemote()).rejects.toThrow('second upload failed')
+
+    expect((await remote.loadLast())?.id).toBe('remote-last')
+  })
+
+  it('keeps the newest successful local as last when a later upload fails', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date(1_000))
+      await local.save(createEmptyProject('older-local'))
+      vi.setSystemTime(new Date(2_000))
+      await local.save(createEmptyProject('newest-local'))
+      const realSave = remote.save.bind(remote)
+      vi.spyOn(remote, 'save')
+        .mockImplementationOnce(realSave)
+        .mockRejectedValueOnce(new Error('second upload failed'))
+
+      await expect(store.syncLocalToRemote()).rejects.toThrow('second upload failed')
+
+      expect((await remote.loadLast())?.id).toBe('newest-local')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

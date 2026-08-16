@@ -37,6 +37,7 @@ export function AuthProvider({ children, client: injected, onAuthChange }: AuthP
   }, [onAuthChange])
 
   const applyUser = useCallback(async (next: Me | null) => {
+    setStatus('loading')
     try {
       await onAuthChangeRef.current?.(next !== null)
     } catch {

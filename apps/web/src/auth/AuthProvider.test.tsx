@@ -92,7 +92,7 @@ describe('AuthProvider / useAuth', () => {
 
     fireEvent.click(screen.getByText('signin'))
     await waitFor(() => expect(onAuthChange).toHaveBeenLastCalledWith(true))
-    expect(screen.getByTestId('status')).toHaveTextContent('anonymous')
+    expect(screen.getByTestId('status')).toHaveTextContent('loading')
     expect(screen.getByTestId('user')).toHaveTextContent('none')
 
     finishReconciliation()

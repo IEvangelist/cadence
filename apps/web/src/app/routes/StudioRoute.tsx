@@ -42,18 +42,20 @@ export function StudioRoute() {
       </section>
     )
   }
+  const persistenceIdentity =
+    authenticated && auth.user
+      ? `remote:${auth.user.id}`
+      : 'local:anonymous'
 
   return (
     <>
       <Composer
+        key={persistenceIdentity}
         options={{
           store,
           watermarkExports,
           storeRevision: auth.status,
-          recoveryScope:
-            authenticated && auth.user
-              ? `remote:${auth.user.id}`
-              : 'local:anonymous',
+          recoveryScope: persistenceIdentity,
           sharedProjectHash: location.hash,
           onSharedProjectConsumed: consumeSharedProject,
         }}

@@ -27,16 +27,16 @@ describe('project recovery', () => {
     writeProjectRecovery(storage, scope, project, 5)
 
     clearProjectRecovery(storage, scope, project.id, 4)
-    expect(storage.getItem(projectRecoveryKey(scope))).not.toBeNull()
+    expect(storage.getItem(projectRecoveryKey(scope, project.id))).not.toBeNull()
 
     clearProjectRecovery(storage, scope, project.id, 5)
-    expect(storage.getItem(projectRecoveryKey(scope))).toBeNull()
+    expect(storage.getItem(projectRecoveryKey(scope, project.id))).toBeNull()
   })
 
   it('ignores malformed recovery data', () => {
     const storage = new MemoryStorage()
-    storage.setItem(projectRecoveryKey(scope), '{"version":1,"project":"bad"}')
-    expect(readProjectRecovery(storage, scope)).toBeNull()
+    storage.setItem(projectRecoveryKey(scope, 'bad'), '{"version":1,"project":"bad"}')
+    expect(readProjectRecovery(storage, scope, 'bad')).toBeNull()
   })
 
   it('does not expose another identity recovery record', () => {
@@ -45,5 +45,21 @@ describe('project recovery', () => {
 
     expect(readProjectRecovery(storage, 'remote:user-b')).toBeNull()
     expect(readProjectRecovery(storage, 'local:anonymous')).toBeNull()
+  })
+
+  it('keeps independent project records and advances the active pointer', () => {
+    const storage = new MemoryStorage()
+    const first = createEmptyProject('first')
+    const second = createEmptyProject('second')
+    writeProjectRecovery(storage, scope, first, 2)
+    writeProjectRecovery(storage, scope, second, 3)
+
+    expect(readProjectRecovery(storage, scope)?.project.id).toBe('second')
+    expect(readProjectRecovery(storage, scope, 'first')?.revision).toBe(2)
+    expect(readProjectRecovery(storage, scope, 'second')?.revision).toBe(3)
+
+    clearProjectRecovery(storage, scope, 'second', 3)
+    expect(readProjectRecovery(storage, scope)?.project.id).toBe('first')
+    expect(readProjectRecovery(storage, scope, 'first')?.revision).toBe(2)
   })
 })
