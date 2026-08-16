@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it } from 'vitest'
+import { coversInteractions } from '../test/coversInteractions'
 import { StudioInspectorPanels } from './StudioInspectorPanels'
 
 function InspectorHarness() {
@@ -21,6 +22,7 @@ function InspectorHarness() {
 
 describe('<StudioInspectorPanels />', () => {
   it('mounts only the active contextual panel', async () => {
+    coversInteractions('studio.inspector.panel')
     const user = userEvent.setup()
     render(<InspectorHarness />)
 

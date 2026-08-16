@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it } from 'vitest'
+import { coversInteractions } from '../test/coversInteractions'
 import { StudioCommandProvider } from './StudioCommandProvider'
 import { StudioFrame, type StudioView } from './StudioFrame'
 import { useStudioCommands } from './studioCommands'
@@ -67,6 +68,7 @@ function CommandHarness({
 
 describe('<StudioFrame />', () => {
   it('switches between real Write and Mix workspace surfaces', async () => {
+    coversInteractions('studio.view.write', 'studio.view.mix')
     const user = userEvent.setup()
     render(<FrameHarness />)
 
@@ -81,6 +83,7 @@ describe('<StudioFrame />', () => {
   })
 
   it('removes closed auxiliary surfaces from the accessibility tree', async () => {
+    coversInteractions('studio.inspector.toggle')
     const user = userEvent.setup()
     const { rerender } = render(<FrameHarness />)
 

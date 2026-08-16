@@ -105,6 +105,11 @@ const share = traced(
 const track = traced('src/composer/components/TrackPanel.test.tsx', 'e2e/multitrack.spec.ts')
 const transport = traced('src/composer/components/TransportBar.test.tsx', 'e2e/audio.spec.ts')
 const composer = traced('src/composer/Composer.test.tsx', 'e2e/composer.spec.ts')
+const studioFrame = traced('src/studio/StudioFrame.test.tsx', 'e2e/studio-frame.spec.ts')
+const studioInspector = traced(
+  'src/studio/StudioInspectorPanels.test.tsx',
+  'e2e/studio-frame.spec.ts',
+)
 const examplePlugin = traced(
   'src/composer/plugins/examples/helloPlugin.test.tsx',
   'e2e/plugins.spec.ts',
@@ -1098,6 +1103,35 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'button',
     'Load a demo pattern',
     'Loads the demo pattern from the empty composer state.',
+  ),
+  studioFrame(
+    'studio.view.write',
+    'studio',
+    'button',
+    'Write',
+    'Switches the primary workspace to the persistent writing surface.',
+  ),
+  studioFrame(
+    'studio.view.mix',
+    'studio',
+    'button',
+    'Mix',
+    'Switches the primary workspace to the mixer without resetting transport state.',
+  ),
+  studioFrame(
+    'studio.inspector.toggle',
+    'studio',
+    'button',
+    'Inspector',
+    'Mounts or removes the contextual inspector and updates aria-expanded.',
+  ),
+  studioInspector(
+    'studio.inspector.panel',
+    'studio',
+    'tab',
+    '/Assistant|AI Studio|Extensions/',
+    'Switches the inspector to one mounted contextual panel.',
+    'repeated',
   ),
   traced('src/app/StudioNavigationGuard.test.tsx', 'e2e/routing.spec.ts')(
     'studio.autosave.retry',
