@@ -110,6 +110,7 @@ const studioInspector = traced(
   'src/studio/StudioInspectorPanels.test.tsx',
   'e2e/studio-frame.spec.ts',
 )
+const studioHelp = traced('src/studio/StudioHelpMenu.test.tsx', 'e2e/studio-frame.spec.ts')
 const examplePlugin = traced(
   'src/composer/plugins/examples/helloPlugin.test.tsx',
   'e2e/plugins.spec.ts',
@@ -1132,6 +1133,13 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     '/Assistant|AI Studio|Extensions/',
     'Switches the inspector to one mounted contextual panel.',
     'repeated',
+  ),
+  studioHelp(
+    'studio.help.toggle',
+    'studio',
+    'button',
+    'Help',
+    'Opens the Studio help menu and exposes secondary routed destinations.',
   ),
   traced('src/app/StudioNavigationGuard.test.tsx', 'e2e/routing.spec.ts')(
     'studio.autosave.retry',

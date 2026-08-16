@@ -1,5 +1,6 @@
 export { StudioCommandProvider } from './StudioCommandProvider'
 export { StudioFrame, type StudioFrameProps, type StudioView } from './StudioFrame'
+export { StudioHelpMenu } from './StudioHelpMenu'
 export {
   StudioInspectorPanels,
   type StudioInspectorPanel,
