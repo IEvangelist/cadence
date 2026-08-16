@@ -62,10 +62,6 @@ export function TrackRail({
         <div className="track-rail__header-actions">
           {project.tracks.length > 1 ? (
             <button
-              ref={(element) => {
-                if (element) trackSelectRefs.current.set(track.id, element)
-                else trackSelectRefs.current.delete(track.id)
-              }}
               type="button"
               className={`btn btn-sm${allVisible ? ' is-active' : ''}`}
               data-interaction="studio.track.visibility-all"
@@ -96,6 +92,10 @@ export function TrackRail({
               style={{ '--track-color': track.color } as CSSProperties}
             >
               <button
+                ref={(element) => {
+                  if (element) trackSelectRefs.current.set(track.id, element)
+                  else trackSelectRefs.current.delete(track.id)
+                }}
                 type="button"
                 className="track-rail__select"
                 data-interaction="studio.track.select"

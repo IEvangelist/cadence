@@ -594,6 +594,57 @@ describe('useCollaboration — collaborative undo/redo (#156)', () => {
     expect(notes.map((note) => note.id)).toContain('remote-batch')
   })
 
+  it('keeps rapid loop toggles as separate Yjs undo items without removing remote edits', () => {
+    const initialProject = seedProject()
+    const store = new LocalStorageProjectStore(new MemoryStorage())
+    const { result } = renderHook(() =>
+      useIntegratedComposerCollaboration(initialProject, store),
+    )
+
+    const remote = readProject(providers[0].doc)
+    remote.tracks[0].notes.push(createNote({ pitch: 72, start: 4 }, 'remote-loop'))
+    act(() => reconcileDoc(providers[0].doc, remote, 'remote-peer'))
+
+    act(() => {
+      result.current.controller.toggleLoop()
+      result.current.controller.toggleLoop()
+    })
+    expect(readProject(providers[0].doc).loop.enabled).toBe(false)
+
+    act(() => result.current.collaboration.undo())
+    expect(readProject(providers[0].doc).loop.enabled).toBe(true)
+    expect(readProject(providers[0].doc).tracks[0].notes.map((note) => note.id))
+      .toContain('remote-loop')
+    act(() => result.current.collaboration.undo())
+    expect(readProject(providers[0].doc).loop.enabled).toBe(false)
+
+    act(() => result.current.collaboration.redo())
+    expect(readProject(providers[0].doc).loop.enabled).toBe(true)
+    act(() => result.current.collaboration.redo())
+    expect(readProject(providers[0].doc).loop.enabled).toBe(false)
+  })
+
+  it('keeps one local gesture capture across a remote sync', () => {
+    const initialProject = seedProject()
+    const store = new LocalStorageProjectStore(new MemoryStorage())
+    const { result } = renderHook(() =>
+      useIntegratedComposerCollaboration(initialProject, store),
+    )
+    const trackId = result.current.controller.selectedTrackId
+
+    act(() => result.current.controller.updateNote(trackId, 'n1', { start: 0.1 }))
+    const remote = readProject(providers[0].doc)
+    remote.tracks[0].notes.push(createNote({ pitch: 72, start: 4 }, 'remote-mid-gesture'))
+    act(() => reconcileDoc(providers[0].doc, remote, 'remote-peer'))
+    act(() => result.current.controller.updateNote(trackId, 'n1', { start: 0.2 }))
+
+    act(() => result.current.collaboration.undo())
+    const afterUndo = readProject(providers[0].doc)
+    expect(afterUndo.tracks[0].notes.find((note) => note.id === 'n1')?.start).toBe(0)
+    expect(afterUndo.tracks[0].notes.map((note) => note.id)).toContain('remote-mid-gesture')
+    expect(result.current.collaboration.canUndo).toBe(false)
+  })
+
   it('publishes every local whole-project replacement and suppresses sync-remote echo', async () => {
     const initialProject = seedProject()
     const store = new LocalStorageProjectStore(new MemoryStorage())

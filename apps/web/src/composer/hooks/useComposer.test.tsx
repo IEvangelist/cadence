@@ -418,6 +418,26 @@ describe('useComposer — single-user undo/redo history (#156)', () => {
     expect(hook.result.current.project.tracks[0].notes).toHaveLength(0)
   })
 
+  it('keeps rapid loop toggles as discrete undo and redo items', () => {
+    const { hook } = setup()
+
+    act(() => {
+      hook.result.current.toggleLoop()
+      hook.result.current.toggleLoop()
+    })
+    expect(hook.result.current.project.loop.enabled).toBe(false)
+
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.loop.enabled).toBe(true)
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.loop.enabled).toBe(false)
+
+    act(() => hook.result.current.redo())
+    expect(hook.result.current.project.loop.enabled).toBe(true)
+    act(() => hook.result.current.redo())
+    expect(hook.result.current.project.loop.enabled).toBe(false)
+  })
+
   it('keeps two discrete commands separate when React batches them in one event', () => {
     const { hook } = setup()
     const trackId = hook.result.current.selectedTrackId

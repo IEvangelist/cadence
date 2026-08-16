@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { ComposerController } from '../hooks/useComposer'
 import { createNote, createTrack, type Project } from '../model/project'
@@ -113,6 +114,28 @@ describe('<TrackRail />', () => {
     await user.click(screen.getByRole('button', { name: 'Delete track' }))
     expect(value.removeTrack).toHaveBeenCalledWith('written')
     expect(screen.getByRole('heading', { name: 'Tracks' })).toHaveFocus()
+  })
+
+  it('moves keyboard focus to the next track after an immediate delete', async () => {
+    const user = userEvent.setup()
+    function StatefulRail() {
+      const [project, setProject] = useState(projectWithTracks)
+      const value = controller(project)
+      value.removeTrack = (trackId) =>
+        setProject((current) => ({
+          ...current,
+          tracks: current.tracks.filter((track) => track.id !== trackId),
+        }))
+      return <TrackRail controller={value} />
+    }
+
+    render(<StatefulRail />)
+    const deleteClean = screen.getByRole('button', { name: 'Delete Clean' })
+    deleteClean.focus()
+    await user.keyboard('{Enter}')
+
+    expect(screen.queryByRole('button', { name: 'Delete Clean' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Selected Written' })).toHaveFocus()
   })
 
   it('detects automation and non-default mixer state as destructive data', () => {

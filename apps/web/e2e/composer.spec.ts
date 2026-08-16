@@ -35,6 +35,21 @@ test.describe('composer', () => {
     )
   })
 
+  test('moves focus to the remaining track after an immediate keyboard delete', async ({ page }) => {
+    await page.goto('/')
+    const rail = page.getByRole('complementary', { name: 'Track rail' })
+    const deletes = rail.locator('[data-interaction="studio.track.delete"]')
+    const before = await deletes.count()
+    await rail.getByRole('button', { name: 'Add track' }).click()
+    await expect(deletes).toHaveCount(before + 1)
+    await deletes.last().focus()
+
+    await page.keyboard.press('Enter')
+
+    await expect(deletes).toHaveCount(before)
+    await expect(rail.locator('[data-interaction="studio.track.select"]').last()).toBeFocused()
+  })
+
   test('shortcut help traps focus, blocks the Studio, and restores its trigger', async ({
     page,
   }) => {

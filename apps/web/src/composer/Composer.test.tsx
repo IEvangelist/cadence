@@ -213,4 +213,31 @@ describe('<Composer />', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Shortcuts' }))
     expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument()
   })
+
+  it('restores shortcut help to its toolbar trigger when opened from the document body', async () => {
+    const user = userEvent.setup()
+    localStorage.setItem('cadence.v1.onboarding.seen', '1')
+    render(<Composer options={options()} />)
+    document.body.focus()
+
+    fireEvent.keyDown(document.body, { key: '?' })
+    expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('button', { name: 'Shortcuts' })).toHaveFocus()
+  })
+
+  it('restores shortcut help to an interactive keyboard invoker', async () => {
+    const user = userEvent.setup()
+    localStorage.setItem('cadence.v1.onboarding.seen', '1')
+    render(<Composer options={options()} />)
+    const addTrack = screen.getByRole('button', { name: 'Add track' })
+    addTrack.focus()
+
+    fireEvent.keyDown(addTrack, { key: '?' })
+    expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    expect(addTrack).toHaveFocus()
+  })
 })
