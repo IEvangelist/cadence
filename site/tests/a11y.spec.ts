@@ -9,6 +9,7 @@ const pages = [
   { name: 'landing page', path: '/cadence/' },
   { name: 'docs overview', path: '/cadence/docs/' },
   { name: 'docs article', path: '/cadence/docs/getting-started/' },
+  { name: 'license acknowledgements', path: '/cadence/docs/acknowledgements/' },
 ];
 
 for (const p of pages) {

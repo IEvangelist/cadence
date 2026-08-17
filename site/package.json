@@ -8,7 +8,8 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "check:preflight": "node scripts/check-preflight.mjs",
+    "check:licenses": "node scripts/check-runtime-notices.mjs",
+    "check:preflight": "node scripts/check-preflight.mjs && npm run check:licenses",
     "test": "npm run check:preflight && playwright test",
     "test:install": "playwright install --with-deps chromium",
     "verify": "astro build && npm test"

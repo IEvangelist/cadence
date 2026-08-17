@@ -164,6 +164,25 @@ test('landing metadata and base-aware assets preserve the Pages contract', async
   expect(assetPaths.every((path) => path.startsWith('/cadence/'))).toBe(true);
 });
 
+test('deployed acknowledgements expose complete browser runtime notices', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'license content contract runs once');
+  await page.goto('/cadence/docs/acknowledgements/', { waitUntil: 'networkidle' });
+
+  await expect(
+    page.getByRole('heading', { name: 'Landing site browser runtime' }),
+  ).toBeVisible();
+  const notice = page.getByRole('link', { name: 'landing site browser runtime notice' });
+  await expect(notice).toHaveAttribute(
+    'href',
+    'https://github.com/IEvangelist/cadence/blob/main/THIRD-PARTY-NOTICES.md#landing-site-browser-runtime',
+  );
+  await expect(page.getByRole('cell', { name: 'react', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'motion', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'tslib', exact: true })).toBeVisible();
+});
+
 test('homepage claims match the shipped Free and Pro product surface', async ({
   page,
 }, testInfo) => {
@@ -176,6 +195,7 @@ test('homepage claims match the shipped Free and Pro product surface', async ({
   await expect(page.getByText(/on-device AI beside you/)).toBeVisible();
   await expect(page.getByText(/server-side AI/i)).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Studio', exact: true })).toHaveCount(0);
+  await expect(page.getByText('Priority updates', { exact: true })).toHaveCount(0);
 });
 
 test('visible copy and repeated CTA intents pass the design copy gate', async ({
