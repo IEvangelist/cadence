@@ -40,6 +40,17 @@ const fontCssUrl = href('/fonts/fonts.css');
     <link rel="canonical" href={canonical} />
     <link rel="icon" href={href('/favicon.svg')} type="image/svg+xml" />
     <meta name="theme-color" content="#7a2ff0" />
+    <script is:inline>
+      try {
+        const preference = localStorage.getItem('cadence.v1.theme');
+        if (preference === 'light' || preference === 'dark') {
+          document.documentElement.dataset.theme = preference;
+          document.documentElement.style.colorScheme = preference;
+        }
+      } catch {
+        // System preference remains the safe default when storage is unavailable.
+      }
+    </script>
 
     <!-- Self-hosted fonts: preload the active pair, then register all faces. -->
     <link rel="preload" href={fontDisplayUrl} as="font" type="font/woff2" crossorigin />

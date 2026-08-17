@@ -1,6 +1,7 @@
 ---
 import Mark from './Mark.astro';
 import Icon from './Icon.astro';
+import ThemeToggle from './ThemeToggle';
 import { href } from '../lib/href';
 
 const repo = 'https://github.com/IEvangelist/cadence';
@@ -13,20 +14,58 @@ const repo = 'https://github.com/IEvangelist/cadence';
       <span class="brand-name">Cadence</span>
     </a>
 
-    <nav class="nav-desktop" aria-label="Primary">
-      <a href={href('/#features')}>Features</a>
-      <a href={href('/#pricing')}>Pricing</a>
-      <a href={href('/docs/')}>Docs</a>
-      <a href={repo} rel="noopener">GitHub</a>
-      <a class="btn btn-primary btn-sm" href={href('/#download')}>
-        <Icon name="download" size={18} />
-        Download
-      </a>
-    </nav>
+    <div class="header-actions">
+      <nav class="nav-desktop" aria-label="Primary">
+        <a data-interaction="nav.features" href={href('/#features')}>Features</a>
+        <a data-interaction="nav.pricing" href={href('/#pricing')}>Pricing</a>
+        <a data-interaction="nav.docs" href={href('/docs/')}>Docs</a>
+        <a data-interaction="nav.github" href={repo} rel="noopener">GitHub</a>
+        <a
+          class="btn btn-primary btn-sm"
+          data-interaction="nav.download"
+          href={href('/#download')}
+        >
+          <Icon name="download" size={18} />
+          Download
+        </a>
+      </nav>
 
-    <a class="btn btn-primary btn-sm nav-mobile-cta" href={href('/docs/')}>Docs</a>
+      <ThemeToggle client:load />
+
+      <details class="nav-mobile" data-mobile-nav>
+        <summary data-interaction="nav.mobile.toggle">Menu</summary>
+        <nav aria-label="Mobile primary">
+          <a data-interaction="nav.mobile.features" href={href('/#features')}>Features</a>
+          <a data-interaction="nav.mobile.pricing" href={href('/#pricing')}>Pricing</a>
+          <a data-interaction="nav.mobile.docs" href={href('/docs/')}>Docs</a>
+          <a data-interaction="nav.mobile.github" href={repo} rel="noopener">GitHub</a>
+          <a
+            class="btn btn-primary btn-sm"
+            data-interaction="nav.mobile.download"
+            href={href('/#download')}
+          >
+            Download
+          </a>
+        </nav>
+      </details>
+    </div>
   </div>
 </header>
+
+<script>
+  const menu = document.querySelector<HTMLDetailsElement>('[data-mobile-nav]');
+  if (menu) {
+    menu.querySelectorAll('a').forEach((link) => {
+      link.addEventListener('click', () => menu.removeAttribute('open'));
+    });
+    menu.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        menu.removeAttribute('open');
+        menu.querySelector('summary')?.focus();
+      }
+    });
+  }
+</script>
 
 <style>
   /* The mark is a child component (Mark.astro) with its own style scope, so its
@@ -50,12 +89,87 @@ const repo = 'https://github.com/IEvangelist/cadence';
     font-size: var(--font-size-sm);
   }
 
-  .nav-mobile-cta {
-    display: inline-flex;
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .nav-desktop {
+    display: none;
+    align-items: center;
+    gap: var(--space-5);
+    white-space: nowrap;
+  }
+
+  .nav-desktop a:not(.btn),
+  .nav-mobile a:not(.btn) {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .nav-desktop a:not(.btn):hover,
+  .nav-mobile a:not(.btn):hover {
+    color: var(--color-text);
+    text-decoration: none;
+  }
+
+  .nav-mobile {
+    position: relative;
+  }
+
+  .nav-mobile summary {
+    list-style: none;
+    min-width: 3.5rem;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-pill);
+    color: var(--color-text);
+    font-family: var(--font-display);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    text-align: center;
+    cursor: pointer;
+  }
+
+  .nav-mobile summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .nav-mobile[open] summary {
+    border-color: var(--color-primary);
+  }
+
+  .nav-mobile nav {
+    position: absolute;
+    top: calc(100% + var(--space-3));
+    right: 0;
+    display: grid;
+    width: min(18rem, calc(100vw - var(--space-8)));
+    gap: var(--space-1);
+    padding: var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface-raised);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .nav-mobile nav a:not(.btn) {
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+  }
+
+  .nav-mobile nav a:not(.btn):hover {
+    background: var(--color-surface-sunken);
   }
 
   @media (min-width: 48rem) {
-    .nav-mobile-cta {
+    .nav-desktop {
+      display: flex;
+    }
+
+    .nav-mobile {
       display: none;
     }
   }
