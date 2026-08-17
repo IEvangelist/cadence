@@ -1,5 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
+import react from '@astrojs/react';
+import tailwindcss from '@tailwindcss/vite';
 
 /**
  * Make code blocks keyboard-focusable so a horizontally-scrollable <pre>
@@ -28,7 +30,11 @@ function rehypeFocusableCodeBlocks() {
 export default defineConfig({
   site: 'https://ievangelist.github.io',
   base: '/cadence',
-  trailingSlash: 'ignore',
+  trailingSlash: 'always',
+  integrations: [react()],
+  vite: {
+    plugins: [tailwindcss()],
+  },
   // When the Aspire AppHost launches this site it injects the port to listen on
   // via PORT and reaches the dev server through its proxy, so honor PORT (and
   // bind all interfaces so the proxy can connect) whenever it is set. A plain

@@ -1,754 +1,961 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Icon from '../components/Icon.astro';
+import LandingMotion from '../components/LandingMotion';
 import { href } from '../lib/href';
 
 const repo = 'https://github.com/IEvangelist/cadence';
 const releases = `${repo}/releases`;
 
-const features = [
-  {
-    icon: 'sparkles',
-    title: 'AI composition assistant',
-    body: 'Suggest chords, harmonize a line, or continue a phrase. Runs in your browser offline on the free tier; premium taps larger server-side models.',
-  },
-  {
-    icon: 'piano',
-    title: 'A composer that feels instant',
-    body: 'Piano-roll editing, transport, metronome, and a rich instrument set on a low-latency Web Audio engine — 60fps canvas, keyboard-first.',
-  },
-  {
-    icon: 'stems',
-    title: 'Stem separation',
-    body: 'Split any track into bass, drums, vocals, guitar, keys, and synth. Each stem lands as an editable track with its own solo, mute, and gain.',
-  },
-  {
-    icon: 'users',
-    title: 'Live collaboration',
-    body: 'Edit the same project together in real time with presence and conflict-free CRDT sync. Share with owner, editor, or viewer roles.',
-  },
-  {
-    icon: 'share',
-    title: 'Import, export & share',
-    body: 'MIDI and MusicXML round-trip, WAV and MP3 export, portable .cadence.json projects, and shareable listen links.',
-  },
-  {
-    icon: 'shield',
-    title: 'Accounts done right',
-    body: 'ASP.NET Core Identity with GitHub, Google, and Microsoft OAuth plus passwordless magic links. Hardened cookies, no secrets in the repo.',
-  },
-];
-
-// Real product screenshots captured from the running web app (see
-// scripts/capture-screenshots.mjs). Intrinsic dimensions are set on each <img>
-// to reserve layout space (no CLS) and every shot carries descriptive alt text.
-const shots = [
-  {
-    icon: 'piano',
-    src: '/screenshots/piano-roll.webp',
-    width: 1200,
-    height: 710,
-    title: 'Compose on a real piano roll',
-    body:
-      'Draw and drag notes on a snapping grid, set tempo and loop points, and audition instantly on the Web Audio engine. Keyboard-first, 60fps, and offline by default.',
-    alt: "Cadence's piano-roll editor showing violet note blocks across a beat grid, with C4–C5 pitch guides.",
-  },
-  {
-    icon: 'sparkles',
-    src: '/screenshots/ai-assistant.webp',
-    width: 704,
-    height: 834,
-    title: 'An AI assistant that runs on your device',
-    body:
-      'Continue a melody, generate a fresh idea, or harmonize under the tune. The free tier runs in your browser — 50 generations a day, offline — while Pro unlocks unlimited server-side AI.',
-    alt: 'The Cadence AI assistant panel with Continue / Generate / Harmonize actions, temperature and length controls, and a "Free · on-device" badge.',
-  },
-  {
-    icon: 'puzzle',
-    src: '/screenshots/plugins.webp',
-    width: 704,
-    height: 386,
-    title: 'Extensible by design',
-    body:
-      'Toggle built-in and community plugins to add instruments, export formats, and commands. Everything sits behind a typed extension seam with its own keyboard shortcuts.',
-    alt: 'The Cadence extensions panel listing installable plugins with enable toggles.',
-  },
-  {
-    icon: 'share',
-    src: '/screenshots/import-export-share.webp',
-    width: 1600,
-    height: 68,
-    // This capture is an extra-wide, short project toolbar. It reads as a
-    // full-width strip below its copy rather than squeezed into a grid column.
-    wide: true,
-    title: 'Yours to take anywhere',
-    body:
-      'Round-trip MIDI and MusicXML, export WAV and MP3, save portable .cadence.json projects, and hand someone a shareable listen link — all from the project toolbar.',
-    alt: 'The Cadence project toolbar with New, Demo, Save, Open, Import file, Export, Share, Import MIDI, and Export MIDI actions.',
-  },
-];
+// Product media is copied from the authoritative Linux Chromium baselines in
+// apps/web/e2e/final-gate/__screenshots__. Reproduce it with apps/web's
+// `npm run e2e:visual`; these are product captures, not marketing mockups.
+const formats = ['MIDI', 'MusicXML', 'WAV', 'MP3', '.cadence.json'];
 
 const plans = [
   {
     name: 'Free',
     price: '$0',
     cadence: 'forever',
-    featured: false,
-    cta: 'Download Cadence',
-    ctaHref: releases,
+    description: 'A complete place to start writing music.',
     features: [
-      'Full composer, piano roll & playback',
-      'In-browser AI assistant — 50 generations/day',
-      'MIDI & MusicXML import / export',
-      'Up to 10 projects, offline-first',
-      'Audible watermark on exports',
-      'Community support',
+      'Up to 10 saved projects',
+      'Composer, piano roll, mixer, and playback',
+      '50 on-device AI generations each day',
+      'MIDI, MusicXML, WAV, and MP3 export',
+      'Shareable listen links',
     ],
   },
   {
     name: 'Pro',
     price: '$12',
     cadence: 'per month',
-    featured: true,
-    cta: 'Start with Pro',
-    ctaHref: href('/docs/getting-started/'),
+    description: 'More room to create, collaborate, and export.',
     features: [
-      'Everything in Free',
-      'No watermark — hi-fi WAV & MP3 export',
-      'Unlimited projects & server-side AI',
-      'Cloud sync + revision history',
-      'Live collaboration (up to 5 seats)',
+      'Unlimited projects and AI generations',
+      'Watermark-free audio exports',
+      'Stem separation',
+      'Up to 5 collaboration seats',
       'Priority updates',
-    ],
-  },
-  {
-    name: 'Studio',
-    price: '$19',
-    cadence: 'per month',
-    featured: false,
-    cta: 'Go Studio',
-    ctaHref: href('/docs/getting-started/'),
-    features: [
-      'Everything in Pro',
-      'Stem separation (all sources)',
-      'Priority server AI queue',
-      'Team collaboration & share roles',
-      'Priority support',
     ],
   },
 ];
 
-// Rich, side-by-side comparison — the AI-consumption rows are the headline, so
-// each tier spells out its exact generation limit and where inference runs.
-const compareCols = ['Free', 'Pro', 'Studio'];
-const compareRows = [
+const faq = [
   {
-    icon: 'sparkles',
-    label: 'AI generations',
-    highlight: true,
-    values: ['50 / day · on-device', 'Unlimited · server-side', 'Unlimited · priority queue'],
+    question: 'Does the AI upload my music?',
+    answer:
+      'No. Cadence AI generation runs on your device today, so ideas stay local and keep working offline.',
   },
   {
-    icon: 'folder',
-    label: 'Saved projects',
-    values: ['Up to 10', 'Unlimited', 'Unlimited'],
+    question: 'What can I import and export?',
+    answer:
+      'Cadence round-trips MIDI and MusicXML, exports WAV and MP3, and saves portable .cadence.json project files.',
   },
   {
-    icon: 'piano',
-    label: 'Composer, piano roll & playback',
-    values: [true, true, true],
+    question: 'Can people edit a project together?',
+    answer:
+      'Yes. Paid collaboration uses owner, editor, and viewer roles with conflict-free real-time sync.',
   },
   {
-    icon: 'music',
-    label: 'MIDI & MusicXML import / export',
-    values: [true, true, true],
+    question: 'Can I self-host Cadence?',
+    answer:
+      'Yes. The backend is modeled with Aspire and can be deployed to Azure Container Apps with azd.',
   },
   {
-    icon: 'verified',
-    label: 'Watermark-free WAV / MP3 export',
-    values: [false, true, true],
-  },
-  {
-    icon: 'stems',
-    label: 'Advanced formats & stem separation',
-    values: [false, 'Soon', true],
-  },
-  {
-    icon: 'users',
-    label: 'Live collaboration seats',
-    values: [false, 'Up to 5', 'Team'],
-  },
-  {
-    icon: 'zap',
-    label: 'Priority server AI queue',
-    values: [false, false, true],
-  },
-  {
-    icon: 'support',
-    label: 'Support',
-    values: ['Community', 'Priority', 'Priority'],
+    question: 'Is pricing final?',
+    answer:
+      'The Free plan stays free. The paid price shown here is indicative while Cadence remains in active development.',
   },
 ];
 
 const description =
-  'Cadence is an AI-powered, cross-platform music creation studio. Compose with an AI assistant, split songs into stems, collaborate live, and export anywhere.';
+  'Cadence is an open, cross-platform music studio with on-device AI, a fast piano roll, live collaboration, stems, and portable exports.';
 ---
 
 <BaseLayout title="Cadence" description={description}>
-  <!-- Hero -->
-  <section class="hero container">
-    <p class="badge"><span class="dot"></span> Every idea, resolved.</p>
-    <h1>
-      The music studio that helps you{' '}
-      <span class="text-gradient">land the idea</span>.
-    </h1>
-    <p class="lede">
-      An AI-powered, cross-platform creation studio — stupid-easy for newcomers,
-      endlessly extensible for pros. Compose, separate stems, and collaborate in
-      real time.
-    </p>
-    <div class="cta">
-      <a class="btn btn-primary" href="#download">
-        <Icon name="download" size={20} /> Download for desktop
-      </a>
-      <a class="btn btn-secondary" href={href('/docs/')}>
-        <Icon name="book" size={20} /> Read the docs
-      </a>
-    </div>
+  <LandingMotion client:load />
 
-    <figure class="hero-shot">
-      <div class="app-frame">
-        <span class="app-chrome" aria-hidden="true">
-          <i></i><i></i><i></i>
-        </span>
-        <img
-          src={href('/screenshots/composer.webp')}
-          width="1600"
-          height="639"
-          alt="The Cadence composer: a project toolbar with import, export and share actions above a transport bar and a two-track piano roll of violet note blocks."
-          decoding="async"
-          fetchpriority="high"
-        />
+  <section class="landing-hero relative overflow-hidden">
+    <div class="hero-orbit hero-orbit--one" aria-hidden="true"></div>
+    <div class="hero-orbit hero-orbit--two" aria-hidden="true"></div>
+
+    <div class="container hero-grid grid grid-cols-1 items-center gap-10 lg:grid-cols-[0.82fr_1.18fr]">
+      <div class="hero-copy">
+        <p class="hero-hook" data-hero-reveal>Every idea, resolved.</p>
+        <h1 data-hero-reveal>Make the idea land.</h1>
+        <p class="hero-lede" data-hero-reveal>
+          Write, shape, and share music in one open studio, with on-device AI beside you.
+        </p>
+        <div class="hero-actions" data-hero-reveal>
+          <a
+            class="btn btn-primary"
+            data-interaction="hero.download"
+            href="#download"
+          >
+            <Icon name="download" size={20} />
+            Download
+          </a>
+          <a
+            class="btn btn-secondary"
+            data-interaction="hero.docs"
+            href={href('/docs/')}
+          >
+            <Icon name="book" size={20} />
+            Docs
+          </a>
+        </div>
       </div>
-      <figcaption>The Cadence composer — a real capture, not a mockup.</figcaption>
-    </figure>
-  </section>
 
-  <!-- Features -->
-  <section id="features" class="container">
-    <div class="section-head">
-      <p class="eyebrow">Everything in one canvas</p>
-      <h2>From first idea to finished track</h2>
-      <p>
-        A focused desktop app backed by an Aspire service graph. The hard
-        parts — AI, audio, collaboration, export — already fit together.
-      </p>
-    </div>
-    <div class="grid grid-2 grid-3">
-      {
-        features.map((f) => (
-          <div class="card feature">
-            <span class="icon"><Icon name={f.icon as any} /></span>
-            <h3>{f.title}</h3>
-            <p>{f.body}</p>
-          </div>
-        ))
-      }
+      <figure class="hero-media" data-hero-reveal>
+        <div class="media-frame">
+          <img
+            src={href('/screenshots/studio-write-default.png')}
+            width="1440"
+            height="900"
+            alt="Cadence Write view with three tracks, transport controls, a piano roll, and velocity editing."
+            decoding="async"
+            fetchpriority="high"
+          />
+        </div>
+        <figcaption>A real capture of Cadence in Write view.</figcaption>
+      </figure>
     </div>
   </section>
 
-  <!-- Product gallery — real screenshots -->
-  <section id="gallery" class="container">
-    <div class="section-head">
-      <p class="eyebrow"><Icon name="disc" size={16} /> See it in action</p>
-      <h2>Real surfaces from the real app</h2>
-      <p>
-        Every image below is a live capture of Cadence running — the composer, the
-        on-device AI assistant, extensions, and the export toolbar.
-      </p>
-    </div>
-    <div class="showcase">
-      {
-        shots.map((s) => (
-          <article class={`showcase-row${'wide' in s && s.wide ? ' showcase-row--wide' : ''}`}>
-            <figure class="shot">
-              <img
-                src={href(s.src)}
-                width={s.width}
-                height={s.height}
-                alt={s.alt}
-                loading="lazy"
-                decoding="async"
-              />
-            </figure>
-            <div class="showcase-copy">
-              <span class="icon"><Icon name={s.icon as any} /></span>
-              <h3>{s.title}</h3>
-              <p>{s.body}</p>
-            </div>
-          </article>
-        ))
-      }
+  <section id="features" class="studio-story">
+    <div class="container">
+      <div class="story-intro" data-reveal>
+        <h2>Stay in the musical moment.</h2>
+        <p>
+          Cadence keeps writing, arranging, mixing, and sharing in one focused
+          workspace, so the tool never outruns the idea.
+        </p>
+      </div>
+
+      <div class="story-line" data-reveal>
+        <article>
+          <span class="story-icon"><Icon name="piano" size={24} /></span>
+          <h3>Write at full speed</h3>
+          <p>Shape notes on a responsive piano roll with transport, quantize, velocity, and automation close at hand.</p>
+        </article>
+        <article>
+          <span class="story-icon"><Icon name="sliders" size={24} /></span>
+          <h3>Move into the mix</h3>
+          <p>Balance tracks, add effects, automate changes, and keep the same project moving from sketch to playback.</p>
+        </article>
+        <article>
+          <span class="story-icon"><Icon name="share" size={24} /></span>
+          <h3>Let the work travel</h3>
+          <p>Save portable projects, export standard formats, or send a listen link without rebuilding the session.</p>
+        </article>
+      </div>
     </div>
   </section>
 
-  <!-- Pricing -->
-  <section id="pricing" class="container">
-    <div class="section-head">
-      <p class="eyebrow">Simple, honest pricing</p>
-      <h2>Start free. Upgrade when you ship.</h2>
-      <p>
-        The free tier is a real music studio — with an audible watermark on
-        exports and a few limits. Paid tiers remove the watermark and unlock
-        server-side AI, hi-fi export, and stems.
-      </p>
-    </div>
-    <div class="grid grid-3 pricing-grid">
-      {
-        plans.map((plan) => (
-          <div class={`card plan${plan.featured ? ' featured' : ''}`}>
-            {plan.featured && <span class="tag">Most popular</span>}
-            <h3>{plan.name}</h3>
-            <p class="price">
-              {plan.price} <span>{plan.cadence}</span>
-            </p>
-            <ul>
-              {plan.features.map((item) => (
-                <li>
-                  <Icon name="check" size={18} />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-            <a
-              class={`btn ${plan.featured ? 'btn-primary' : 'btn-secondary'}`}
-              href={plan.ctaHref}
-            >
-              {plan.cta}
-            </a>
-          </div>
-        ))
-      }
-    </div>
+  <section class="ai-story">
+    <div class="container ai-grid grid grid-cols-1 items-center gap-10 md:grid-cols-[1.08fr_0.92fr]">
+      <figure class="product-media product-media--ai" data-reveal>
+        <img
+          src={href('/screenshots/ai-basic-suggestion.png')}
+          width="1440"
+          height="900"
+          alt="Cadence AI Assistant suggesting melody notes beside the piano roll."
+          loading="lazy"
+          decoding="async"
+        />
+      </figure>
 
-    <div class="compare-head">
-      <h3>Compare every plan</h3>
-      <p>
-        The numbers that matter — especially how much AI you get and where it runs.
-      </p>
-    </div>
-    <div class="compare-wrap" role="region" aria-label="Plan comparison" tabindex="0">
-      <table class="compare">
-        <caption class="visually-hidden">
-          Cadence plan comparison across Free, Pro, and Studio tiers.
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">Feature</th>
-            {
-              plans.map((plan) => (
-                <th scope="col" class={plan.featured ? 'is-featured' : undefined}>
-                  <span class="col-name">{plan.name}</span>
-                  <span class="col-price">
-                    {plan.price}<span>/{plan.cadence.replace('per ', '').replace('forever', 'free')}</span>
-                  </span>
-                </th>
-              ))
-            }
-          </tr>
-        </thead>
-        <tbody>
-          {
-            compareRows.map((row) => (
-              <tr class={row.highlight ? 'is-highlight' : undefined}>
-                <th scope="row">
-                  <Icon name={row.icon as any} size={18} />
-                  <span>{row.label}</span>
-                </th>
-                {
-                  row.values.map((v, i) => (
-                    <td class={compareCols[i] === 'Pro' ? 'is-featured' : undefined}>
-                      {v === true ? (
-                        <>
-                          <Icon name="check" size={18} class="yes" />
-                          <span class="visually-hidden">Included</span>
-                        </>
-                      ) : v === false ? (
-                        <>
-                          <span class="dash" aria-hidden="true">—</span>
-                          <span class="visually-hidden">Not included</span>
-                        </>
-                      ) : (
-                        <span>{v}</span>
-                      )}
-                    </td>
-                  ))
-                }
-              </tr>
-            ))
-          }
-        </tbody>
-      </table>
-    </div>
-
-    <p class="pricing-note">
-      Pricing is indicative for the preview and not final. The free tier is
-      always free.
-    </p>
-  </section>
-
-  <!-- Download / CTA -->
-  <section id="download" class="cta-band container">
-    <div class="inner">
-      <h2>Get Cadence</h2>
-      <p>
-        Signed installers for macOS, Windows, and Linux ship with every tagged
-        release. Grab the latest build and start composing.
-      </p>
-      <div class="cta" style="justify-content:center;display:flex;gap:var(--space-4);flex-wrap:wrap;">
-        <a class="btn btn-on-brand" href={releases} rel="noopener">
-          <Icon name="download" size={20} /> Download the latest release
+      <div class="ai-copy" data-reveal>
+        <span class="section-symbol" aria-hidden="true"><Icon name="sparkles" size={28} /></span>
+        <h2>AI that joins the session.</h2>
+        <p>
+          Continue a melody, generate a fresh phrase, or harmonize what is
+          already there. Inference runs on your device today.
+        </p>
+        <a class="text-link" href={href('/docs/features/')}>
+          Explore AI in the docs
+          <span aria-hidden="true">→</span>
         </a>
-        <a class="btn btn-secondary btn-on-brand-outline" href={repo} rel="noopener">
-          <Icon name="github" size={20} /> View source
+      </div>
+    </div>
+  </section>
+
+  <section class="workflow">
+    <div class="container">
+      <div class="workflow-heading" data-reveal>
+        <h2>One project, many ways forward.</h2>
+        <p>
+          Work in the view the track needs, then move it into tools other musicians already use.
+        </p>
+      </div>
+
+      <div class="workflow-grid grid grid-cols-1 gap-5 md:grid-cols-[1.25fr_0.75fr]">
+        <figure class="product-media product-media--mix" data-reveal>
+          <img
+            src={href('/screenshots/studio-mix.png')}
+            width="1440"
+            height="900"
+            alt="Cadence Mix view with track gain, pan, effects, automation, and master bus controls."
+            loading="lazy"
+            decoding="async"
+          />
+        </figure>
+
+        <div class="format-panel" data-reveal>
+          <span class="section-symbol" aria-hidden="true"><Icon name="interop" size={28} /></span>
+          <h3>Open formats in. Open formats out.</h3>
+          <p>
+            Cadence fits an existing music workflow instead of trapping the project inside one app.
+          </p>
+          <ul class="format-list" aria-label="Supported formats">
+            {formats.map((format) => <li>{format}</li>)}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="open-story">
+    <div class="container open-grid grid grid-cols-1 gap-8 md:grid-cols-[0.72fr_1.28fr]">
+      <div class="open-lead" data-reveal>
+        <span class="section-symbol" aria-hidden="true"><Icon name="puzzle" size={28} /></span>
+        <h2>Open by design.</h2>
+        <p>
+          Extend the studio, run it locally, or deploy the service graph yourself.
+        </p>
+      </div>
+
+      <div class="open-paths" data-reveal>
+        <a href={href('/docs/plugin-sdk/')}>
+          <span>
+            <strong>Build on the Plugin SDK</strong>
+            Add instruments, effects, formats, commands, AI providers, and panels through typed seams.
+          </span>
+          <span aria-hidden="true">→</span>
         </a>
+        <a href={href('/docs/self-hosting/')}>
+          <span>
+            <strong>Self-host the backend</strong>
+            Run the Aspire model locally or publish its services to Azure Container Apps.
+          </span>
+          <span aria-hidden="true">→</span>
+        </a>
+        <a href={repo} rel="noopener">
+          <span>
+            <strong>Read the source</strong>
+            Inspect the MIT-licensed code, follow development, and contribute on GitHub.
+          </span>
+          <span aria-hidden="true">→</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section id="pricing" class="pricing-story">
+    <div class="container">
+      <div class="pricing-heading" data-reveal>
+        <h2>Start with the whole instrument.</h2>
+        <p>
+          Free is a working studio. Pro removes limits, unlocks stems, and adds room for collaboration.
+        </p>
+      </div>
+
+      <div class="plans-grid grid grid-cols-1 gap-5 md:grid-cols-[0.82fr_1.18fr]">
+        {
+          plans.map((plan, index) => (
+            <article class:list={['plan-card', index === 1 && 'plan-card--pro']} data-reveal>
+              <div class="plan-heading">
+                <h3>{plan.name}</h3>
+                <p class="plan-price">
+                  <span>{plan.price}</span>
+                  {plan.cadence}
+                </p>
+              </div>
+              <p class="plan-description">{plan.description}</p>
+              <ul>
+                {plan.features.map((feature) => (
+                  <li>
+                    <Icon name="check" size={18} />
+                    <span>{feature}</span>
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))
+        }
+      </div>
+      <p class="pricing-note" data-reveal>
+        The Free plan stays free. Paid pricing is indicative during active development.
+      </p>
+    </div>
+  </section>
+
+  <section class="faq-story">
+    <div class="container faq-grid grid grid-cols-1 gap-10 md:grid-cols-[0.72fr_1.28fr]">
+      <div class="faq-heading" data-reveal>
+        <h2>Before you press play.</h2>
+        <p>Practical answers, backed by the product and its documentation.</p>
+      </div>
+
+      <div class="faq-list" data-reveal>
+        {
+          faq.map((item, index) => (
+            <details open={index === 0}>
+              <summary data-interaction="faq.toggle">
+                <span>{item.question}</span>
+                <span class="faq-plus" aria-hidden="true">+</span>
+              </summary>
+              <p>{item.answer}</p>
+            </details>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section id="download" class="download-story">
+    <div class="container">
+      <div class="download-panel" data-reveal>
+        <div>
+          <h2>Give the idea somewhere to land.</h2>
+          <p>Get the latest Cadence build, or explore the source before you begin.</p>
+        </div>
+        <div class="download-actions">
+          <a
+            class="btn btn-on-brand"
+            data-interaction="download.release"
+            href={releases}
+            rel="noopener"
+          >
+            <Icon name="download" size={20} />
+            Download
+          </a>
+          <a
+            class="btn btn-on-brand-secondary"
+            data-interaction="download.github"
+            href={repo}
+            rel="noopener"
+          >
+            <Icon name="github" size={20} />
+            GitHub
+          </a>
+        </div>
       </div>
     </div>
   </section>
 </BaseLayout>
 
 <style>
-  /* Eyebrow that carries a small leading icon. */
-  .section-head .eyebrow {
-    display: inline-flex;
+  .landing-hero {
+    display: flex;
     align-items: center;
-    gap: var(--space-2);
-    justify-content: center;
+    min-height: calc(100dvh - 4.5rem);
+    padding-block: clamp(var(--space-10), 7vw, var(--space-20));
+    isolation: isolate;
   }
 
-  /* ---------------------------------------------------- App screenshot frame */
-  .app-frame {
+  .hero-grid {
     position: relative;
-    background: var(--color-surface-raised);
+    z-index: 1;
+  }
+
+  .hero-copy {
+    max-width: 34rem;
+  }
+
+  .hero-hook {
+    margin-bottom: var(--space-5);
+    color: var(--color-accent-text);
+    font-family: var(--font-display);
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .hero-copy h1 {
+    max-width: 10ch;
+    font-size: clamp(3.4rem, 7vw, 6rem);
+    line-height: 0.92;
+    text-wrap: balance;
+  }
+
+  .hero-lede {
+    max-width: 31rem;
+    margin-top: var(--space-6);
+    color: var(--color-text-muted);
+    font-size: clamp(var(--font-size-md), 2vw, var(--font-size-xl));
+  }
+
+  .hero-actions,
+  .download-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-top: var(--space-8);
+  }
+
+  .hero-media {
+    position: relative;
+    margin: 0;
+  }
+
+  .hero-media::before {
+    content: '';
+    position: absolute;
+    inset: 12% -4% -8% 18%;
+    z-index: -1;
+    border-radius: var(--radius-xl);
+    background: var(--gradient-brand);
+    opacity: 0.22;
+    filter: blur(40px);
+  }
+
+  .media-frame,
+  .product-media {
+    overflow: hidden;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
+    background: var(--color-surface-sunken);
     box-shadow: var(--shadow-lg);
-    overflow: hidden;
-    text-align: left;
   }
 
-  .app-chrome {
-    display: flex;
-    gap: var(--space-2);
-    align-items: center;
-    padding: var(--space-3) var(--space-4);
-    border-bottom: 1px solid var(--color-border);
+  .hero-media .media-frame {
+    transform: rotate(1.5deg);
+  }
+
+  .media-frame img,
+  .product-media img {
+    width: 100%;
+    height: auto;
+  }
+
+  .hero-media figcaption {
+    margin-top: var(--space-4);
+    color: var(--color-text-subtle);
+    font-size: var(--font-size-sm);
+    text-align: right;
+  }
+
+  .hero-orbit {
+    position: absolute;
+    z-index: -1;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 18%, transparent);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .hero-orbit--one {
+    top: 3%;
+    right: -8rem;
+    width: 28rem;
+    height: 28rem;
+  }
+
+  .hero-orbit--two {
+    right: 4%;
+    bottom: -12rem;
+    width: 36rem;
+    height: 36rem;
+  }
+
+  .studio-story {
     background: var(--color-surface);
   }
 
-  .app-chrome i {
-    width: 0.7rem;
-    height: 0.7rem;
-    border-radius: var(--radius-pill);
-    background: var(--color-border-strong);
+  .story-intro,
+  .workflow-heading,
+  .pricing-heading {
+    max-width: 46rem;
   }
 
-  .app-chrome i:nth-child(1) { background: var(--color-violet-500); }
-  .app-chrome i:nth-child(2) { background: var(--color-blue-500); }
-  .app-chrome i:nth-child(3) { background: var(--color-cyan-400); }
-
-  .app-frame img {
-    display: block;
-    width: 100%;
-    height: auto;
+  .story-intro h2,
+  .workflow-heading h2,
+  .pricing-heading h2,
+  .faq-heading h2,
+  .open-lead h2 {
+    font-size: clamp(2.25rem, 5vw, 4rem);
+    text-wrap: balance;
   }
 
-  /* ------------------------------------------------------------------- Hero */
-  .hero-shot {
-    position: relative;
-    max-width: 60rem;
-    margin: clamp(var(--space-10), 6vw, var(--space-16)) auto 0;
-  }
-
-  /* Soft brand glow behind the hero capture (decorative). */
-  .hero-shot::before {
-    content: '';
-    position: absolute;
-    inset: -12% -6% 0;
-    background: var(--gradient-brand);
-    opacity: 0.18;
-    filter: blur(48px);
-    border-radius: var(--radius-xl);
-    z-index: -1;
-  }
-
-  .hero-shot figcaption {
+  .story-intro p,
+  .workflow-heading p,
+  .pricing-heading p,
+  .faq-heading p,
+  .open-lead p {
+    max-width: 38rem;
     margin-top: var(--space-4);
-    text-align: center;
-    color: var(--color-text-subtle);
-    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-lg);
   }
 
-  /* -------------------------------------------------------- Product showcase */
-  .showcase {
-    display: flex;
-    flex-direction: column;
-    gap: clamp(var(--space-10), 6vw, var(--space-16));
-  }
-
-  .showcase-row {
+  .story-line {
     display: grid;
-    gap: clamp(var(--space-6), 4vw, var(--space-10));
-    align-items: center;
     grid-template-columns: 1fr;
+    gap: var(--space-8);
+    margin-top: clamp(var(--space-10), 6vw, var(--space-16));
   }
 
-  @media (min-width: 52rem) {
-    .showcase-row {
-      grid-template-columns: 1.15fr 1fr;
-    }
-    /* Alternate the image side down the column. */
-    .showcase-row:nth-child(even) .shot {
-      order: 2;
-    }
-    /* The wide row opts out of the split — it stays a single full-width column. */
-    .showcase-row--wide {
-      grid-template-columns: 1fr;
-    }
+  .story-line article {
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--color-border-strong);
   }
 
-  .shot {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: var(--space-4);
-    background: var(--color-surface-sunken);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-sm);
-    overflow: hidden;
-  }
-
-  .shot img {
-    max-width: 100%;
-    max-height: 28rem;
-    width: auto;
-    height: auto;
-    border-radius: var(--radius-md);
-  }
-
-  /* One showcase row ("Yours to take anywhere") opts out of the two-column
-     layout: the copy stacks on top and the extra-wide toolbar capture spans the
-     full content width below it. The intrinsic width/height attrs stay on the
-     <img> (no CLS); we only lift the height cap so it reads as a full-width strip. */
-  .showcase-row--wide .showcase-copy {
-    order: 1;
-  }
-
-  .showcase-row--wide .shot {
-    order: 2;
-  }
-
-  .showcase-row--wide .shot img {
-    width: 100%;
-    max-height: none;
-  }
-
-  /* Scroll-linked reveal for the wide row: it sweeps in from the right, holds
-     centered while it's in view, then drifts out to the left — driven by the
-     element's own view() timeline, no JS. Only transform + opacity (GPU-friendly).
-     Browsers without view() support (Firefox/Safari) and anyone who prefers
-     reduced motion fall back to the row simply being static and fully visible. */
-  @keyframes showcase-wide-reveal {
-    0% {
-      opacity: 0;
-      transform: translate3d(3rem, 0, 0);
-    }
-    35%,
-    65% {
-      opacity: 1;
-      transform: translate3d(0, 0, 0);
-    }
-    100% {
-      opacity: 0;
-      transform: translate3d(-3rem, 0, 0);
-    }
-  }
-
-  @supports (animation-timeline: view()) {
-    @media (prefers-reduced-motion: no-preference) {
-      /* Clip the horizontal sweep so it can never widen the page (the responsive
-         suite asserts no horizontal overflow from mobile to desktop). overflow:
-         clip does not create a scroll container, so the row's view() timeline
-         still resolves against the viewport. */
-      .showcase {
-        overflow-x: clip;
-      }
-
-      .showcase-row--wide {
-        animation-name: showcase-wide-reveal;
-        animation-fill-mode: both;
-        animation-timing-function: linear;
-        animation-timeline: view();
-      }
-    }
-  }
-
-  .showcase-copy .icon {
+  .story-icon,
+  .section-symbol {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 3rem;
     height: 3rem;
+    margin-bottom: var(--space-5);
     border-radius: var(--radius-md);
     background: color-mix(in srgb, var(--color-primary) 12%, transparent);
     color: var(--color-primary-text);
-    margin-bottom: var(--space-4);
   }
 
-  .showcase-copy h3 {
-    font-size: var(--font-size-2xl);
-    margin-bottom: var(--space-3);
+  .story-line h3,
+  .format-panel h3 {
+    font-size: var(--font-size-xl);
   }
 
-  .showcase-copy p {
+  .story-line p,
+  .format-panel p {
+    margin-top: var(--space-3);
+    color: var(--color-text-muted);
+  }
+
+  .ai-story {
+    position: relative;
+  }
+
+  .ai-story::before {
+    content: '';
+    position: absolute;
+    inset: 12% 0 18% 42%;
+    z-index: -1;
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--color-primary) 10%, transparent),
+      color-mix(in srgb, var(--color-accent) 8%, transparent)
+    );
+  }
+
+  .product-media {
+    margin: 0;
+  }
+
+  .product-media--ai {
+    transform: rotate(-1deg);
+  }
+
+  .ai-copy {
+    max-width: 31rem;
+  }
+
+  .ai-copy h2 {
+    font-size: clamp(2.5rem, 5vw, 4.5rem);
+    text-wrap: balance;
+  }
+
+  .ai-copy > p {
+    margin-top: var(--space-5);
     color: var(--color-text-muted);
     font-size: var(--font-size-lg);
   }
 
-  /* ----------------------------------------------------- Pricing comparison */
-  .compare-head {
-    text-align: center;
-    margin: clamp(var(--space-12), 7vw, var(--space-20)) auto var(--space-8);
+  .text-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-6);
+    color: var(--color-primary-text);
+    font-family: var(--font-display);
+    font-weight: var(--font-weight-semibold);
   }
 
-  .compare-head h3 {
+  .text-link:hover span {
+    transform: translateX(0.25rem);
+  }
+
+  .text-link span {
+    transition: transform var(--duration-fast) var(--ease-emphasized);
+  }
+
+  .workflow {
+    background: var(--color-surface-sunken);
+  }
+
+  .workflow-grid {
+    margin-top: clamp(var(--space-10), 6vw, var(--space-16));
+    align-items: stretch;
+  }
+
+  .product-media--mix {
+    min-height: 22rem;
+  }
+
+  .product-media--mix img {
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .format-panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(var(--space-6), 5vw, var(--space-10));
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface-raised);
+  }
+
+  .format-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: var(--space-8);
+    padding: 0;
+    list-style: none;
+  }
+
+  .format-list li {
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-md);
+    color: var(--color-text);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+  }
+
+  .open-grid {
+    align-items: start;
+  }
+
+  .open-lead {
+    position: sticky;
+    top: 7rem;
+  }
+
+  .open-paths {
+    display: grid;
+    gap: var(--space-4);
+  }
+
+  .open-paths a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-6);
+    padding: clamp(var(--space-6), 5vw, var(--space-8));
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+    color: var(--color-text);
+    transition:
+      border-color var(--duration-base) var(--ease-standard),
+      transform var(--duration-base) var(--ease-emphasized);
+  }
+
+  .open-paths a:hover {
+    border-color: var(--color-primary);
+    text-decoration: none;
+    transform: translateX(0.25rem);
+  }
+
+  .open-paths strong {
+    display: block;
+    margin-bottom: var(--space-2);
+    font-family: var(--font-display);
+    font-size: var(--font-size-xl);
+  }
+
+  .open-paths span:first-child {
+    max-width: 42rem;
+    color: var(--color-text-muted);
+  }
+
+  .open-paths strong,
+  .open-paths span:last-child {
+    color: var(--color-text);
+  }
+
+  .pricing-story {
+    background: var(--color-surface);
+  }
+
+  .plans-grid {
+    margin-top: clamp(var(--space-10), 6vw, var(--space-16));
+    align-items: stretch;
+  }
+
+  .plan-card {
+    padding: clamp(var(--space-6), 5vw, var(--space-10));
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface-raised);
+  }
+
+  .plan-card--pro {
+    border-color: color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+    background:
+      linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--color-primary) 10%, var(--color-surface-raised)),
+        var(--color-surface-raised) 65%
+      );
+    box-shadow: var(--shadow-md);
+  }
+
+  .plan-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+
+  .plan-heading h3 {
     font-size: var(--font-size-2xl);
   }
 
-  .compare-head p {
-    color: var(--color-text-muted);
-    margin-top: var(--space-2);
-  }
-
-  /* Focusable, horizontally-scrollable region so the wide table never forces
-     page overflow on small screens (and stays keyboard-reachable — WCAG 2.1.1). */
-  .compare-wrap {
-    overflow-x: auto;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .compare {
-    width: 100%;
-    border-collapse: collapse;
+  .plan-price {
+    color: var(--color-text-subtle);
     font-size: var(--font-size-sm);
-    /* Mobile: fixed layout keeps the table inside the viewport (cells wrap)
-       — the scroll wrapper alone can't stop a min-content table from forcing
-       document-level horizontal scroll on the narrowest screens. */
-    table-layout: fixed;
+    text-align: right;
   }
 
-  /* From 48rem up there's room for the natural, comfortable table width; the
-     .compare-wrap still scrolls it should a viewport ever land in between. */
-  @media (min-width: 48rem) {
-    .compare {
-      table-layout: auto;
-      min-width: 44rem;
-    }
-  }
-
-  .compare th,
-  .compare td {
-    padding: var(--space-3) var(--space-4);
-    border-bottom: 1px solid var(--color-border);
-    text-align: center;
-    vertical-align: middle;
-    overflow-wrap: break-word;
-  }
-
-  .compare thead th {
-    background: var(--color-surface);
-    border-bottom: 2px solid var(--color-border-strong);
-  }
-
-  .compare thead .col-name {
+  .plan-price span {
     display: block;
+    color: var(--color-text);
     font-family: var(--font-display);
-    font-size: var(--font-size-md);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text);
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-bold);
   }
 
-  .compare thead .col-price {
-    display: block;
-    margin-top: var(--space-1);
-    font-size: var(--font-size-xs);
-    color: var(--color-text-subtle);
-    font-weight: var(--font-weight-regular);
+  .plan-description {
+    margin-top: var(--space-6);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-lg);
   }
 
-  .compare tbody th[scope='row'] {
+  .plan-card ul {
+    display: grid;
+    gap: var(--space-3);
+    margin-top: var(--space-8);
+    padding: 0;
+    list-style: none;
+  }
+
+  .plan-card li {
     display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    text-align: left;
-    font-weight: var(--font-weight-medium);
-    color: var(--color-text);
+    align-items: flex-start;
+    gap: var(--space-3);
+    color: var(--color-text-muted);
   }
 
-  .compare tbody th[scope='row'] svg {
+  .plan-card li svg {
     flex: none;
+    margin-top: 0.2em;
     color: var(--color-accent-text);
-  }
-
-  /* Featured (Pro) column tint — pairs with the "Most popular" card. */
-  .compare th.is-featured,
-  .compare td.is-featured {
-    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
-  }
-
-  .compare thead th.is-featured .col-name {
-    color: var(--color-primary-text);
-  }
-
-  /* The AI-consumption row is the headline of the comparison. */
-  .compare tr.is-highlight td,
-  .compare tr.is-highlight th[scope='row'] {
-    background: color-mix(in srgb, var(--color-accent) 8%, transparent);
-    font-weight: var(--font-weight-semibold);
-  }
-
-  .compare tr.is-highlight td.is-featured {
-    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
-  }
-
-  .compare .yes {
-    color: var(--color-accent-text);
-  }
-
-  .compare .dash {
-    color: var(--color-text-subtle);
   }
 
   .pricing-note {
-    text-align: center;
-    margin-top: var(--space-8);
+    margin-top: var(--space-6);
     color: var(--color-text-subtle);
     font-size: var(--font-size-sm);
   }
 
-  /* Solid deep-violet so white label clears WCAG-AA anywhere on the
-     violet->cyan gradient band (a transparent fill over the cyan end fails). */
-  .btn-on-brand-outline {
-    background: var(--color-violet-700);
-    color: var(--color-neutral-0);
-    border-color: color-mix(in srgb, var(--color-neutral-0) 45%, transparent);
+  .faq-grid {
+    align-items: start;
   }
 
-  .btn-on-brand-outline:hover {
+  .faq-list details {
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .faq-list summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-5);
+    padding-block: var(--space-6);
+    color: var(--color-text);
+    font-family: var(--font-display);
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .faq-list summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .faq-list p {
+    max-width: 42rem;
+    padding: 0 var(--space-10) var(--space-6) 0;
+    color: var(--color-text-muted);
+  }
+
+  .faq-plus {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-pill);
+    transition: transform var(--duration-base) var(--ease-emphasized);
+  }
+
+  details[open] .faq-plus {
+    transform: rotate(45deg);
+  }
+
+  .download-story {
+    padding-top: var(--space-8);
+  }
+
+  .download-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-8);
+    padding: clamp(var(--space-8), 7vw, var(--space-16));
+    border-radius: var(--radius-xl);
+    background: var(--gradient-brand);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .download-panel h2 {
+    max-width: 13ch;
+    color: var(--color-neutral-0);
+    font-size: clamp(2.5rem, 6vw, 4.75rem);
+    text-wrap: balance;
+  }
+
+  .download-panel p {
+    max-width: 34rem;
+    margin-top: var(--space-4);
+    color: color-mix(in srgb, var(--color-neutral-0) 90%, transparent);
+    font-size: var(--font-size-lg);
+  }
+
+  .download-actions {
+    margin-top: 0;
+  }
+
+  .btn-on-brand {
+    background: var(--color-neutral-0);
+    color: var(--color-violet-800);
+  }
+
+  .btn-on-brand:hover {
+    background: var(--color-violet-50);
+  }
+
+  .btn-on-brand-secondary {
+    border-color: color-mix(in srgb, var(--color-neutral-0) 65%, transparent);
     background: var(--color-violet-800);
+    color: var(--color-neutral-0);
+  }
+
+  .btn-on-brand-secondary:hover {
     border-color: var(--color-neutral-0);
+    background: var(--color-violet-900);
+  }
+
+  @media (min-width: 48rem) {
+    .story-line {
+      grid-template-columns: 1.25fr 0.8fr 0.95fr;
+    }
+
+    .story-line article:nth-child(2) {
+      margin-top: var(--space-12);
+    }
+
+    .download-panel {
+      flex-direction: row;
+      align-items: flex-end;
+    }
+  }
+
+  @media (max-width: 63.99rem) {
+    .landing-hero {
+      min-height: auto;
+    }
+
+    .hero-copy {
+      max-width: 40rem;
+    }
+
+    .hero-copy h1 {
+      max-width: 11ch;
+    }
+
+    .hero-media {
+      max-width: 50rem;
+    }
+  }
+
+  @media (max-width: 47.99rem) {
+    .landing-hero {
+      padding-top: var(--space-10);
+    }
+
+    .hero-copy h1 {
+      font-size: clamp(3rem, 15vw, 4.5rem);
+    }
+
+    .hero-media .media-frame,
+    .product-media--ai {
+      transform: none;
+    }
+
+    .hero-media figcaption {
+      text-align: left;
+    }
+
+    .hero-orbit--one {
+      right: -18rem;
+    }
+
+    .hero-orbit--two {
+      display: none;
+    }
+
+    .open-lead {
+      position: static;
+    }
+
+    .product-media--mix {
+      min-height: 14rem;
+    }
+
+    .format-panel {
+      padding: var(--space-6);
+    }
+
+    .plan-heading {
+      align-items: center;
+    }
+
+    .download-panel {
+      border-radius: var(--radius-lg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hero-media .media-frame,
+    .product-media--ai {
+      transform: none;
+    }
+
+    .text-link span,
+    .open-paths a,
+    .faq-plus {
+      transition: none;
+    }
   }
 </style>

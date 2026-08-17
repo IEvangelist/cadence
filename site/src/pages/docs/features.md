@@ -42,9 +42,8 @@ generations per day**; paid tiers lift that cap. The assistant sits behind a
 typed provider seam (part of the [Plugin SDK](../plugin-sdk/)), so the runtime can
 evolve without changing the UI.
 
-> **On-device only, today.** Larger **server-side** models are marketed as a paid
-> enhancement but are **not yet shipped** — there is no server-side AI generation
-> service in the backend. All AI generation currently happens in the browser.
+> **On-device only, today.** There is no server-side AI generation service in the
+> backend. All AI generation currently happens in the browser.
 
 <figure>
   <img
@@ -121,26 +120,23 @@ limits. Paid tiers remove the watermark and lift the caps. The table reflects
 what the backend **enforces today**, mapped onto the editions shown on the
 [pricing page](/cadence/#pricing).
 
-| Capability | Free | Pro | Studio |
-|---|:--:|:--:|:--:|
-| Composer, piano roll, mixer | ✅ | ✅ | ✅ |
-| On-device (offline) AI assistant | ✅ | ✅ | ✅ |
-| AI generations per day | 50 | Unlimited | Unlimited |
-| MIDI & MusicXML import / export | ✅ | ✅ | ✅ |
-| WAV & MP3 export | ✅ (watermarked) | ✅ | ✅ |
-| Watermark-free export | — | ✅ | ✅ |
-| Cloud projects | Up to 10 | Unlimited | Unlimited |
-| Live collaboration (seats) | 1 | 5 | 5 |
-| Stem separation | — | ✅ | ✅ |
+| Capability | Free | Pro |
+|---|:--:|:--:|
+| Composer, piano roll, mixer | ✅ | ✅ |
+| On-device (offline) AI assistant | ✅ | ✅ |
+| AI generations per day | 50 | Unlimited |
+| MIDI & MusicXML import / export | ✅ | ✅ |
+| WAV & MP3 export | ✅ (watermarked) | ✅ |
+| Watermark-free export | — | ✅ |
+| Cloud projects | Up to 10 | Unlimited |
+| Live collaboration (seats) | 1 | 5 |
+| Stem separation | — | ✅ |
 
 > **What's enforced today.** Cadence's entitlement engine implements two enforced
-> levels — **Free** and **paid**. The **Pro** and **Studio** editions on the
-> pricing page currently resolve to the *same* unlocked entitlement set
-> (watermark-free export, unlimited projects and AI, stem separation, and 5
-> collaboration seats); the finer Studio-vs-Pro packaging (e.g. team perks) isn't
-> separately gated yet. **Server-side AI generation** is shown on the pricing page
-> but is **not yet shipped** — today AI runs on-device. Rendered-audio export
-> ships as both **WAV** (lossless PCM) and **MP3**. Pricing is indicative for the preview and
-> not final; the free tier is always free. The subscription **tier** is a claim
-> (default `Free`) resolved through the entitlement seam described in
+> levels: **Free** and **Pro**. Pro unlocks watermark-free export, unlimited
+> projects and AI generations, stem separation, and 5 collaboration seats.
+> AI runs on-device in both tiers. Rendered-audio export ships as both **WAV**
+> (lossless PCM) and **MP3**. Pricing is indicative during active development;
+> the free tier is always free. The subscription **tier** is a claim (default
+> `Free`) resolved through the entitlement seam described in
 > [Authentication](../auth/).

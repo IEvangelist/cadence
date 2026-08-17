@@ -3,7 +3,7 @@ import { defineConfig } from '@playwright/test';
 // The site is served under the `/cadence` base by `astro preview`. Keep baseURL
 // at the origin and use absolute `/cadence/...` paths in tests so link
 // resolution matches what ships to GitHub Pages.
-const PORT = 4321;
+const PORT = 4397;
 
 export default defineConfig({
   testDir: './tests',
@@ -18,12 +18,12 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   projects: [
-    { name: 'desktop', use: { viewport: { width: 1280, height: 800 } } },
+    { name: 'desktop', use: { viewport: { width: 1440, height: 900 } } },
     { name: 'tablet', use: { viewport: { width: 768, height: 1024 } } },
-    { name: 'mobile', use: { viewport: { width: 375, height: 812 } } },
+    { name: 'mobile', use: { viewport: { width: 390, height: 844 } } },
   ],
   webServer: {
-    command: `npm run preview -- --port ${PORT}`,
+    command: `npx --no-install astro preview --port ${PORT}`,
     env: {
       ASTRO_PREVIEW_BACKGROUND: '0',
     },

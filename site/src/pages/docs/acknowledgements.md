@@ -14,6 +14,14 @@ authoritative, complete list — with the full license texts — lives in
 [`THIRD-PARTY-NOTICES.md`](https://github.com/IEvangelist/cadence/blob/main/THIRD-PARTY-NOTICES.md)
 at the root of the repository.
 
+## Landing site design reference
+
+The landing site's composition and motion language adapt the MIT-licensed
+[PowerAI Astro](https://github.com/sitepins/powerai-astro) reference by Sitepins.
+Cadence keeps its own brand, product copy, media, fonts, and deployment model.
+The complete copyright and permission notice is preserved in
+[`THIRD-PARTY-NOTICES.md`](https://github.com/IEvangelist/cadence/blob/main/THIRD-PARTY-NOTICES.md).
+
 ## MP3 export — the LAME encoder
 
 Cadence's **MP3 export** is powered by the **LAME** MP3 encoder, via
