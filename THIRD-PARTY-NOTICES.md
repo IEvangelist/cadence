@@ -32,7 +32,6 @@ different license.
 | [`framer-motion`](https://www.npmjs.com/package/framer-motion) | 12.43.0 | MIT | Motion React runtime |
 | [`motion-dom`](https://www.npmjs.com/package/motion-dom) | 12.43.0 | MIT | Motion DOM runtime |
 | [`motion-utils`](https://www.npmjs.com/package/motion-utils) | 12.39.0 | MIT | Shared Motion utilities |
-| [`tslib`](https://www.npmjs.com/package/tslib) | 2.8.1 | 0BSD | TypeScript runtime helpers used by Motion |
 
 The complete OFL-1.1 text distributed with the fonts is available at
 `apps/web/public/licenses/OFL-1.1.txt`. The complete Lucide ISC notice and the
@@ -57,8 +56,8 @@ the Astro React renderer, React, and Motion. The exact production graph is:
 - `astro@7.1.6` and `@astrojs/react@6.0.2` provide the island custom element and
   React renderer loaded by the page.
 - `react@19.2.8` and `react-dom@19.2.8` load `scheduler@0.27.0`.
-- `motion@12.43.0` loads `framer-motion@12.43.0` and `tslib@2.8.1`;
-  Framer Motion loads `motion-dom@12.43.0`, `motion-utils@12.39.0`, and tslib.
+- `motion@12.43.0` loads `framer-motion@12.43.0`; Framer Motion loads
+  `motion-dom@12.43.0` and `motion-utils@12.39.0`.
 
 Astro's build pipeline, Tailwind CSS, Vite plugins, and their dependency trees
 do not run in the deployed page, so they are not listed as browser-runtime
@@ -231,25 +230,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-```
-
-### tslib
-
-`tslib@2.8.1` is licensed under the Zero-Clause BSD license:
-
-```text
-Copyright (c) Microsoft Corporation.
-
-Permission to use, copy, modify, and/or distribute this software for any
-purpose with or without fee is hereby granted.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
-AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
-LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
-OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
-PERFORMANCE OF THIS SOFTWARE.
 ```
 
 ## PowerAI Astro design reference

@@ -180,7 +180,7 @@ test('deployed acknowledgements expose complete browser runtime notices', async 
   );
   await expect(page.getByRole('cell', { name: 'react', exact: true })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'motion', exact: true })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'tslib', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'tslib', exact: true })).toHaveCount(0);
 });
 
 test('homepage claims match the shipped Free and Pro product surface', async ({

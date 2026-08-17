@@ -26,8 +26,8 @@ The complete copyright and permission notice is preserved in
 
 The deployed landing page redistributes browser code from Astro's island
 runtime and React renderer, React and React DOM, Scheduler, Motion and its
-Framer Motion packages, and tslib. Their exact versions, dependency graph,
-copyright notices, and complete license terms are preserved in the
+Framer Motion packages. Their exact versions, dependency graph, copyright
+notices, and complete license terms are preserved in the
 [landing site browser runtime notice](https://github.com/IEvangelist/cadence/blob/main/THIRD-PARTY-NOTICES.md#landing-site-browser-runtime).
 Build-only packages such as Tailwind CSS and Vite plugins are not shipped to
 the browser and are excluded from that runtime notice.
@@ -71,7 +71,6 @@ MP3 export possible.
 | [`framer-motion`](https://www.npmjs.com/package/framer-motion) | 12.43.0 | MIT |
 | [`motion-dom`](https://www.npmjs.com/package/motion-dom) | 12.43.0 | MIT |
 | [`motion-utils`](https://www.npmjs.com/package/motion-utils) | 12.39.0 | MIT |
-| [`tslib`](https://www.npmjs.com/package/tslib) | 2.8.1 | 0BSD |
 
 Radix Dialog provides Cadence's accessible project/replacement dialogs.
 

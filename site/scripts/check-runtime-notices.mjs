@@ -23,13 +23,18 @@ const expectedRuntimeNames = [
   'react',
   'react-dom',
   'scheduler',
-  'tslib',
 ];
 
 const packagePath = (name) =>
   join(siteRoot, 'node_modules', ...name.split('/'));
 
 const packages = new Map();
+const skippedManifestOnlyDependencies = new Set();
+// Motion and Framer Motion declare tslib for alternate distribution targets,
+// but the published ESM modules consumed by this site use native syntax. The
+// production `_astro` chunks contain neither a tslib import nor its helper
+// identifiers, so tslib is tree-shaken and is not redistributed by the site.
+const manifestOnlyDependencies = new Set(['tslib']);
 const siteManifest = JSON.parse(
   await readFile(join(siteRoot, 'package.json'), 'utf8'),
 );
@@ -57,6 +62,10 @@ async function readPackage(name) {
 }
 
 async function visitRuntimeDependency(name) {
+  if (manifestOnlyDependencies.has(name)) {
+    skippedManifestOnlyDependencies.add(name);
+    return;
+  }
   if (packages.has(name)) return;
   const info = await readPackage(name);
   packages.set(name, info);
@@ -88,12 +97,37 @@ if (actualRuntimeNames.join('\n') !== expectedRuntimeNames.join('\n')) {
     ].join('\n'),
   );
 }
+for (const name of manifestOnlyDependencies) {
+  if (!skippedManifestOnlyDependencies.has(name)) {
+    throw new Error(`Stale manifest-only exclusion: ${name} is no longer reachable`);
+  }
+}
 
 const [notice, acknowledgements] = await Promise.all([
   readFile(noticePath, 'utf8'),
   readFile(acknowledgementsPath, 'utf8'),
 ]);
 const normalizedNotice = notice.replace(/\s+/g, ' ').trim();
+
+const builtAssetDirectory = join(siteRoot, 'dist', '_astro');
+const builtJavaScript = (
+  await Promise.all(
+    (await readdir(builtAssetDirectory))
+      .filter((file) => file.endsWith('.js'))
+      .map((file) => readFile(join(builtAssetDirectory, file), 'utf8')),
+  )
+).join('\n');
+const tslibBundleMarkers = [
+  /\btslib\b/,
+  /\b__extends\b/,
+  /\b__assign\b/,
+  /\b__awaiter\b/,
+  /\b__generator\b/,
+  /\b__spreadArray\b/,
+];
+if (tslibBundleMarkers.some((marker) => marker.test(builtJavaScript))) {
+  throw new Error('tslib is marked manifest-only but appears in the built browser chunks');
+}
 
 for (const info of packages.values()) {
   const rowPrefix = `| [\`${info.name}\`]`;
@@ -124,10 +158,18 @@ const noticeLink =
 if (!acknowledgements.includes(noticeLink)) {
   throw new Error('Deployed acknowledgements do not link to the runtime notice');
 }
+for (const surface of [
+  ['root notice', notice],
+  ['deployed acknowledgements', acknowledgements],
+]) {
+  if (surface[1].includes('| [`tslib`]') || surface[1].includes('`tslib@')) {
+    throw new Error(`${surface[0]} incorrectly claims tree-shaken tslib is deployed`);
+  }
+}
 
 console.log(
   `Runtime notices passed: ${[...packages.values()]
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((info) => `${info.name}@${info.version}`)
-    .join(', ')}.`,
+    .join(', ')}; manifest-only exclusions: ${[...manifestOnlyDependencies].join(', ')}.`,
 );
