@@ -24,6 +24,9 @@ export default defineConfig({
   ],
   webServer: {
     command: `npm run preview -- --port ${PORT}`,
+    env: {
+      ASTRO_PREVIEW_BACKGROUND: '0',
+    },
     url: `http://localhost:${PORT}/cadence/`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
