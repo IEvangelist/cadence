@@ -3,6 +3,9 @@ using Cadence.Data.Stems;
 using Cadence.SeparationWorker;
 using Microsoft.Extensions.Options;
 
+// ONNX Runtime reads this during native initialization, before its managed API can disable telemetry.
+Environment.SetEnvironmentVariable("ORT_DISABLE_TELEMETRY", "1");
+
 var builder = Host.CreateApplicationBuilder(args);
 
 // Aspire service defaults: telemetry, health checks, service discovery, resilience.
