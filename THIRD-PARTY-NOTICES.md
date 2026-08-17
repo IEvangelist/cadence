@@ -23,7 +23,7 @@ different license.
 | [`@fontsource-variable/inter`](https://www.npmjs.com/package/@fontsource-variable/inter) | 5.3.0 | OFL-1.1 | Self-hosted Latin variable UI font |
 | [`@fontsource-variable/space-grotesk`](https://www.npmjs.com/package/@fontsource-variable/space-grotesk) | 5.3.0 | OFL-1.1 | Self-hosted Latin variable display font |
 | [`@fontsource-variable/jetbrains-mono`](https://www.npmjs.com/package/@fontsource-variable/jetbrains-mono) | 5.3.0 | OFL-1.1 | Self-hosted Latin variable numeric font |
-| [`astro`](https://www.npmjs.com/package/astro) | 7.1.6 | MIT | Landing-site island runtime |
+| [`astro`](https://www.npmjs.com/package/astro) | 7.2.0 | MIT | Landing-site island runtime |
 | [`@astrojs/react`](https://www.npmjs.com/package/@astrojs/react) | 6.0.2 | MIT | React island renderer |
 | [`react`](https://www.npmjs.com/package/react) | 19.2.8 | MIT | Landing-site component runtime |
 | [`react-dom`](https://www.npmjs.com/package/react-dom) | 19.2.8 | MIT | Landing-site DOM renderer |
@@ -53,7 +53,7 @@ Font copyright and source metadata:
 The deployed landing page includes browser code from the Astro island runtime,
 the Astro React renderer, React, and Motion. The exact production graph is:
 
-- `astro@7.1.6` and `@astrojs/react@6.0.2` provide the island custom element and
+- `astro@7.2.0` and `@astrojs/react@6.0.2` provide the island custom element and
   React renderer loaded by the page.
 - `react@19.2.8` and `react-dom@19.2.8` load `scheduler@0.27.0`.
 - `motion@12.43.0` loads `framer-motion@12.43.0`; Framer Motion loads
@@ -65,7 +65,7 @@ redistributions here.
 
 ### Astro and Astro React
 
-The `astro@7.1.6` and `@astrojs/react@6.0.2` packages contain the same license
+The `astro@7.2.0` and `@astrojs/react@6.0.2` packages contain the same license
 file. It is reproduced once here for both packages:
 
 ```text
