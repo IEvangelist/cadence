@@ -55,13 +55,13 @@
   <ItemGroup Label="Stem separation (Blob storage, ONNX Runtime)">
     <PackageVersion Include="Azure.Storage.Blobs" Version="12.29.1" />
     <PackageVersion Include="Aspire.Azure.Storage.Blobs" Version="13.4.6" />
-    <PackageVersion Include="Microsoft.ML.OnnxRuntime" Version="1.28.0" />
+    <PackageVersion Include="Microsoft.ML.OnnxRuntime" Version="1.29.0" />
   </ItemGroup>
 
   <ItemGroup Label="Data &amp; persistence (EF Core, Identity, Npgsql)">
-    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.11" />
     <!--
       Transitive pin: Microsoft.EntityFrameworkCore.Sqlite 10.0.10 pulls in
       SQLitePCLRaw.lib.e_sqlite3 2.1.11, which carries GHSA-2m69-gcr7-jv3q
@@ -75,14 +75,14 @@
   </ItemGroup>
 
   <ItemGroup Label="Authentication (external OAuth providers)">
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.MicrosoftAccount" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.MicrosoftAccount" Version="10.0.11" />
     <PackageVersion Include="AspNet.Security.OAuth.GitHub" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup Label="Service defaults (telemetry, resilience, discovery)">
-    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.8.0" />
-    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.8.0" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.9.0" />
+    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.9.0" />
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.17.0" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.17.0" />
@@ -91,7 +91,7 @@
   </ItemGroup>
 
   <ItemGroup Label="API">
-    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
     <!--
       Transitive pin: Microsoft.AspNetCore.OpenApi 10.0.10 pulls in
       Microsoft.OpenApi 2.0.0, which carries GHSA-v5pm-xwqc-g5wc (NU1903,
@@ -102,19 +102,19 @@
     <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
     <!-- Scalar: human-facing interactive API reference UI rendered over the
          OpenAPI document. net10.0 target carries no package dependencies. -->
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.16.18" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.16.20" />
   </ItemGroup>
 
   <ItemGroup Label="Billing (Stripe)">
-    <PackageVersion Include="Stripe.net" Version="52.2.0" />
+    <PackageVersion Include="Stripe.net" Version="52.3.0" />
   </ItemGroup>
 
   <ItemGroup Label="Testing">
     <PackageVersion Include="Aspire.Hosting.Testing" Version="13.4.6" />
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />
     <PackageVersion Include="coverlet.msbuild" Version="10.0.1" />
   </ItemGroup>
