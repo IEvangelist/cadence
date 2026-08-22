@@ -102,7 +102,7 @@
     <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
     <!-- Scalar: human-facing interactive API reference UI rendered over the
          OpenAPI document. net10.0 target carries no package dependencies. -->
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.16.20" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.17.1" />
   </ItemGroup>
 
   <ItemGroup Label="Billing (Stripe)">
