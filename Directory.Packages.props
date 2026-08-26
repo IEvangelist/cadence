@@ -6,8 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup Label="Aspire hosting integrations">
-    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.4.6" />
-    <PackageVersion Include="Aspire.Hosting.Redis" Version="13.4.6" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.5.2" />
+    <PackageVersion Include="Aspire.Hosting.Redis" Version="13.5.2" />
     <!--
       Azure managed variants for go-live. The AppHost calls
       AddAzurePostgresFlexibleServer(...).RunAsContainer() and
@@ -15,18 +15,18 @@
       managed Azure resources (data survives ACA revision restarts) while
       `aspire run` continues to use local Postgres/Redis containers.
     -->
-    <PackageVersion Include="Aspire.Hosting.Azure.PostgreSQL" Version="13.4.6" />
-    <PackageVersion Include="Aspire.Hosting.Azure.Redis" Version="13.4.6" />
-    <PackageVersion Include="Aspire.Hosting.Azure.Storage" Version="13.4.6" />
+    <PackageVersion Include="Aspire.Hosting.Azure.PostgreSQL" Version="13.5.2" />
+    <PackageVersion Include="Aspire.Hosting.Azure.Redis" Version="13.5.2" />
+    <PackageVersion Include="Aspire.Hosting.Azure.Storage" Version="13.5.2" />
     <!-- Redis client integration: registers IConnectionMultiplexer wired to the
          "redis" resource, used to back the auth rate limiters with a distributed
          (cross-replica) fixed-window store. Pulls StackExchange.Redis transitively. -->
-    <PackageVersion Include="Aspire.StackExchange.Redis" Version="13.4.6" />
+    <PackageVersion Include="Aspire.StackExchange.Redis" Version="13.5.2" />
     <!--
       Node.js hosting integration (AddNpmApp) for the apps/web dev server. The
       curated feed publishes this package only up to 9.5.2 (the core Aspire
-      hosting packages are 13.4.6); 9.5.2 is the latest available stable and its
-      npm-app surface binds cleanly against the 13.4.6 host — verified by a live
+      hosting packages are 13.5.2); 9.5.2 is the latest available stable and its
+      npm-app surface binds cleanly against the 13.5.2 host — verified by a live
       `aspire run` smoke (the web resource starts Vite and serves the SPA).
     -->
     <PackageVersion Include="Aspire.Hosting.NodeJs" Version="9.5.2" />
@@ -35,9 +35,10 @@
       LOCAL Ollama container + model into `aspire run` — run mode only and
       explicit-start (see AppHost.cs), so nothing Ollama-related enters the
       published manifest or is ever deployed. 13.4.0 is the latest stable the
-      restore feed publishes and aligns with the 13.4.x Aspire host; its AppHost
-      surface binds cleanly against the 13.4.6 core packages. The consuming
-      server-side AI endpoint (and its #71 daily cap) is tracked separately in #140.
+      restore feed publishes and remains compatible with the 13.5.x Aspire host;
+      its AppHost surface binds cleanly against the 13.5.2 core packages. The
+      consuming server-side AI endpoint (and its #71 daily cap) is tracked
+      separately in #140.
     -->
     <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Ollama" Version="13.4.0" />
     <!--
@@ -45,16 +46,17 @@
       by Cadence.Api's optional, default-off server-side AI endpoint (#140). Registers
       an OllamaSharp IOllamaApiClient and a Microsoft.Extensions.AI IChatClient bound
       to the Aspire-referenced "ollama-model" resource, so the endpoint depends on the
-      mockable IChatClient abstraction. 13.4.0 matches the hosting package above and
-      the 13.4.x Aspire line; it is only resolved when the feature flag is enabled and
-      the model's connection string is present (a developer started the local Ollama).
+      mockable IChatClient abstraction. 13.4.0 matches the hosting package above
+      and remains compatible with the 13.5.x Aspire line; it is only resolved when
+      the feature flag is enabled and the model's connection string is present
+      (a developer started the local Ollama).
     -->
     <PackageVersion Include="CommunityToolkit.Aspire.OllamaSharp" Version="13.4.0" />
   </ItemGroup>
 
   <ItemGroup Label="Stem separation (Blob storage, ONNX Runtime)">
     <PackageVersion Include="Azure.Storage.Blobs" Version="12.29.1" />
-    <PackageVersion Include="Aspire.Azure.Storage.Blobs" Version="13.4.6" />
+    <PackageVersion Include="Aspire.Azure.Storage.Blobs" Version="13.5.2" />
     <PackageVersion Include="Microsoft.ML.OnnxRuntime" Version="1.29.0" />
   </ItemGroup>
 
@@ -71,7 +73,7 @@
     -->
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.12" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
-    <PackageVersion Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.4.6" />
+    <PackageVersion Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.5.2" />
   </ItemGroup>
 
   <ItemGroup Label="Authentication (external OAuth providers)">
@@ -83,11 +85,11 @@
   <ItemGroup Label="Service defaults (telemetry, resilience, discovery)">
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.9.0" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.9.0" />
-    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.17.0" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.18.0" />
   </ItemGroup>
 
   <ItemGroup Label="API">
@@ -102,7 +104,7 @@
     <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
     <!-- Scalar: human-facing interactive API reference UI rendered over the
          OpenAPI document. net10.0 target carries no package dependencies. -->
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.16.20" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.17.1" />
   </ItemGroup>
 
   <ItemGroup Label="Billing (Stripe)">
@@ -110,7 +112,7 @@
   </ItemGroup>
 
   <ItemGroup Label="Testing">
-    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.4.6" />
+    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.5.2" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.11" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
