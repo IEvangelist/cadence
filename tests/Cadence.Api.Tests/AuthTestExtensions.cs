@@ -44,9 +44,54 @@ internal static class AuthTestExtensions
     }
 
     /// <summary>Sign in with a local account.</summary>
-    public static Task<HttpResponseMessage> LoginAsync(
-        this HttpClient client, string email, string password = ValidPassword) =>
-        client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, password));
+    public static async Task<HttpResponseMessage> LoginAsync(
+        this HttpClient client, string email, string password = ValidPassword)
+    {
+        var response = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest(email, password));
+        if (!response.IsSuccessStatusCode)
+        {
+            return response;
+        }
+
+        var tokenResponse = await client.GetAsync("/api/auth/csrf");
+        if (tokenResponse.StatusCode == HttpStatusCode.Unauthorized &&
+            response.Headers.TryGetValues("Set-Cookie", out var setCookies))
+        {
+            // HandleCookies=false is used by WebSocket tests so they can forward the
+            // auth cookie onto an upgrade. Supply it manually to obtain the token.
+            var cookie = string.Join("; ", setCookies.Select(value => value.Split(';')[0]));
+            client.DefaultRequestHeaders.Remove("Cookie");
+            client.DefaultRequestHeaders.Add("Cookie", cookie);
+            tokenResponse.Dispose();
+            tokenResponse = await client.GetAsync("/api/auth/csrf");
+        }
+
+        tokenResponse.EnsureSuccessStatusCode();
+        var token = await tokenResponse.Content.ReadFromJsonAsync<AntiforgeryTokenResponse>();
+        if (client.DefaultRequestHeaders.TryGetValues("Cookie", out var existingCookies) &&
+            tokenResponse.Headers.TryGetValues("Set-Cookie", out var antiforgeryCookies))
+        {
+            var cookie = string.Join("; ", existingCookies.Concat(
+                antiforgeryCookies.Select(value => value.Split(';')[0])));
+            client.DefaultRequestHeaders.Remove("Cookie");
+            client.DefaultRequestHeaders.Add("Cookie", cookie);
+        }
+        client.DefaultRequestHeaders.Remove(CadenceAntiforgery.HeaderName);
+        client.DefaultRequestHeaders.Add(CadenceAntiforgery.HeaderName, token!.RequestToken);
+        tokenResponse.Dispose();
+        return response;
+    }
+
+    /// <summary>Refresh the authenticated client's antiforgery header.</summary>
+    public static async Task<string> RefreshAntiforgeryAsync(this HttpClient client)
+    {
+        var response = await client.GetAsync("/api/auth/csrf");
+        response.EnsureSuccessStatusCode();
+        var token = (await response.Content.ReadFromJsonAsync<AntiforgeryTokenResponse>())!.RequestToken;
+        client.DefaultRequestHeaders.Remove(CadenceAntiforgery.HeaderName);
+        client.DefaultRequestHeaders.Add(CadenceAntiforgery.HeaderName, token);
+        return token;
+    }
 
     /// <summary>Register a fresh user and return the authenticated client's identity.</summary>
     public static async Task<MeResponse> RegisterAndReadMeAsync(

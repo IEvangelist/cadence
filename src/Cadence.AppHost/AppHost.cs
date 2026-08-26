@@ -72,8 +72,9 @@ builder.AddProject<Projects.Cadence_SeparationWorker>("separation")
 //      Aspire.Hosting.Testing also runs in run mode, but that Docker-only job
 //      never installs the web deps, so it must not try to launch Vite.
 // It waits for the API and reaches it same-origin through a Vite dev proxy (see
-// apps/web/vite.config.ts) so the SPA's relative /api/* calls and the /api/collab
-// WebSocket need no CORS. Aspire assigns the listen port via the PORT env var and
+// apps/web/vite.config.ts) so the SPA's relative /api/* calls are same-origin. The
+// /api/collab WebSocket still validates its browser Origin explicitly (CORS does
+// not govern upgrades). Aspire assigns the listen port via the PORT env var and
 // injects the API address via service discovery (WithReference).
 var repoRoot = Path.Combine(builder.AppHostDirectory, "..", "..");
 if (builder.ExecutionContext.IsRunMode)

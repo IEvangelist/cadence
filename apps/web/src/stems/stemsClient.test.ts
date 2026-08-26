@@ -7,6 +7,10 @@ const json = (body: unknown, status = 200): Response =>
     headers: { 'Content-Type': 'application/json' },
   })
 
+const withCsrf = (response: Response) => vi.fn(async (input: RequestInfo | URL) =>
+  String(input).endsWith('/api/auth/csrf') ? json({ requestToken: 'test-csrf' }) : response,
+)
+
 const sampleJob: StemJob = {
   id: 'job-1',
   status: 'Queued',
@@ -26,29 +30,30 @@ function wavFile(name = 'mix.wav', type = 'audio/wav'): File {
 
 describe('StemsClient', () => {
   it('createJob() posts the raw file with the auth cookie and returns the job', async () => {
-    const fetchImpl = vi.fn(async () => json(sampleJob, 202))
+    const fetchImpl = withCsrf(json(sampleJob, 202))
     const client = new StemsClient(fetchImpl, '')
 
     const result = await client.createJob(wavFile())
 
     expect(result).toEqual(sampleJob)
-    const [path, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit]
+    const [path, init] = fetchImpl.mock.calls[1] as unknown as [string, RequestInit]
     expect(path).toBe('/api/stems/jobs?name=mix.wav')
     expect(init.method).toBe('POST')
     expect(init.credentials).toBe('include')
-    expect((init.headers as Record<string, string>)['Content-Type']).toBe('audio/wav')
+    expect(new Headers(init.headers).get('Content-Type')).toBe('audio/wav')
+    expect(new Headers(init.headers).get('X-CSRF-TOKEN')).toBe('test-csrf')
     expect(init.body).toBeInstanceOf(File)
   })
 
   it('createJob() falls back to octet-stream and a default name', async () => {
-    const fetchImpl = vi.fn(async () => json(sampleJob, 202))
+    const fetchImpl = withCsrf(json(sampleJob, 202))
     const client = new StemsClient(fetchImpl, '')
 
     await client.createJob(new File([new Uint8Array([1])], '', { type: '' }))
 
-    const [path, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit]
+    const [path, init] = fetchImpl.mock.calls[1] as unknown as [string, RequestInit]
     expect(path).toBe('/api/stems/jobs?name=mix')
-    expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/octet-stream')
+    expect(new Headers(init.headers).get('Content-Type')).toBe('application/octet-stream')
   })
 
   it.each([
@@ -58,7 +63,7 @@ describe('StemsClient', () => {
     [415, /format isn’t supported/i],
     [500, /couldn’t start/i],
   ])('createJob() maps %i to a StemsError', async (status, matcher) => {
-    const client = new StemsClient(async () => new Response(null, { status }), '')
+    const client = new StemsClient(withCsrf(new Response(null, { status })), '')
 
     const error = await client.createJob(wavFile()).catch((caught) => caught)
 
@@ -105,12 +110,12 @@ describe('StemsClient', () => {
   })
 
   it('honours a configured base URL for uploads', async () => {
-    const fetchImpl = vi.fn(async () => json(sampleJob, 202))
+    const fetchImpl = withCsrf(json(sampleJob, 202))
     const client = new StemsClient(fetchImpl, 'https://api.example.com')
 
     await client.createJob(wavFile())
 
-    const [path] = fetchImpl.mock.calls[0] as unknown as [string]
+    const [path] = fetchImpl.mock.calls[1] as unknown as [string]
     expect(path).toBe('https://api.example.com/api/stems/jobs?name=mix.wav')
   })
 })

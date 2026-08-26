@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { test, expect, type Browser, type Route } from '@playwright/test'
 import { openStudioDestination } from './studioActions'
+import { mockAntiforgery } from './mockAntiforgery'
 
 // Live-collaboration e2e. Two authenticated browser contexts open the SAME
 // project through a share link and sync over the standalone Yjs relay
@@ -23,6 +24,7 @@ interface Identity {
 function mockApi(user: Identity) {
   let savedProject: Record<string, unknown> | null = null
   return async (route: Route): Promise<void> => {
+    if (await mockAntiforgery(route)) return
     const request = route.request()
     const url = new URL(request.url())
     const path = url.pathname

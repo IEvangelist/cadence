@@ -11,6 +11,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace Cadence.Api.Tests;
 
@@ -85,6 +86,9 @@ public sealed class CadenceApiFactory : WebApplicationFactory<Program>
     /// </summary>
     public IChatClient? ChatClient { get; init; }
 
+    /// <summary>Optional logger provider for security-log assertions.</summary>
+    public ILoggerProvider? LoggerProvider { get; init; }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -106,6 +110,11 @@ public sealed class CadenceApiFactory : WebApplicationFactory<Program>
         if (ConfigOverrides is { Count: > 0 } overrides)
         {
             builder.ConfigureAppConfiguration(config => config.AddInMemoryCollection(overrides));
+        }
+
+        if (LoggerProvider is { } loggerProvider)
+        {
+            builder.ConfigureLogging(logging => logging.AddProvider(loggerProvider));
         }
 
         builder.ConfigureServices(services =>

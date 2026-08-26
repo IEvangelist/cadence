@@ -18,6 +18,7 @@ import {
   buildInteractionCoverageReport,
   writeInteractionCoverageReport,
 } from './final-gate/interaction-report'
+import { mockAntiforgery } from './mockAntiforgery'
 
 const interactiveSelector = [
   'button',
@@ -78,6 +79,7 @@ async function mockApi(
   authenticated: boolean,
   pro = authenticated,
 ): Promise<void> {
+  if (await mockAntiforgery(route)) return
   const request = route.request()
   const path = new URL(request.url()).pathname
   const method = request.method()

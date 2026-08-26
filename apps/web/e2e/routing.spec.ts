@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test'
 import { chooseExport, createBlankProject } from './projectActions'
 import { openStudioDestination } from './studioActions'
+import { mockAntiforgery } from './mockAntiforgery'
 
 interface MockProjectState {
   saved?: Record<string, unknown>
@@ -12,6 +13,7 @@ async function mockAuthenticatedApi(
   saveDelayMs = 0,
   failSave = false,
 ) {
+  if (await mockAntiforgery(route)) return
   const request = route.request()
   const path = new URL(request.url()).pathname
   const method = request.method()

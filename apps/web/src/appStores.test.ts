@@ -22,6 +22,12 @@ describe('appStores wiring', () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
       const method = init?.method ?? 'GET'
+      if (url.endsWith('/api/auth/csrf')) {
+        return new Response(JSON.stringify({ requestToken: 'test-csrf' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
       if (url.endsWith('/api/projects') && method === 'GET') {
         return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } })
       }

@@ -1,5 +1,6 @@
 import type { Page, Route } from '@playwright/test'
 import type { Project } from '../../src/composer/model/project'
+import { mockAntiforgery } from '../mockAntiforgery'
 
 export type FinalGateTheme = 'light' | 'dark'
 export type FinalGateAccount = 'anonymous' | 'free' | 'pro'
@@ -182,6 +183,7 @@ async function mockFinalGateApi(
   account: FinalGateAccount,
   state: FinalGateMockState,
 ): Promise<void> {
+  if (await mockAntiforgery(route)) return
   const request = route.request()
   const url = new URL(request.url())
   const path = url.pathname

@@ -107,7 +107,10 @@ public class CollaborationPersistenceTests(CadenceApiFactory factory) : IClassFi
         var response = await client.RegisterAsync(email);
         response.EnsureSuccessStatusCode();
         var cookie = string.Join("; ", response.Headers.GetValues("Set-Cookie").Select(c => c.Split(';')[0]));
-        client.DefaultRequestHeaders.Add("Cookie", cookie);
+        if (!client.DefaultRequestHeaders.Contains("Cookie"))
+        {
+            client.DefaultRequestHeaders.Add("Cookie", cookie);
+        }
         return (client, cookie);
     }
 
@@ -122,7 +125,11 @@ public class CollaborationPersistenceTests(CadenceApiFactory factory) : IClassFi
     private async Task<WebSocket> ConnectAsync(string cookie, string projectId, string? token)
     {
         var wsClient = _factory.Server.CreateWebSocketClient();
-        wsClient.ConfigureRequest = request => request.Headers["Cookie"] = cookie;
+        wsClient.ConfigureRequest = request =>
+        {
+            request.Headers["Cookie"] = cookie;
+            request.Headers["Origin"] = CadenceCors.DefaultOrigin;
+        };
         var uri = new UriBuilder(_factory.Server.BaseAddress)
         {
             Path = $"/api/collab/{projectId}",

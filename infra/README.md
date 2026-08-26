@@ -146,6 +146,35 @@ Do these once, in order, before the first deploy:
    time if needed. The run pauses for the required reviewer, then azd logs in via
    OIDC, creates/selects the environment, and runs `azd provision` + `azd deploy`.
 
+### Self-hosted Pages/API security and rollout
+
+Before exposing an API to a browser SPA on another site, configure these as a
+single reviewed change:
+
+```text
+Auth__Cookie__SameSite=None
+Cors__AllowedOrigins=https://your-spa.example
+Security__Antiforgery__Enforced=true
+```
+
+Both origins must be HTTPS. `None` forces `Secure` on the auth, external-login,
+and `HttpOnly` antiforgery cookies. Never use a wildcard CORS origin with
+credentials. The same origin allow-list also gates WebSocket upgrades because
+CORS itself does not protect WebSockets.
+
+For the first upgrade of an existing deployment, use the three-step report-only
+rollout in [`docs/auth-setup.md`](../docs/auth-setup.md#safe-rollout-for-an-existing-self-host):
+temporarily deploy the API with antiforgery enforcement `false`, deploy and
+cache-purge the token-aware SPA, then restore enforcement to `true` (the default)
+on every replica. Verify before promotion:
+
+- `OPTIONS /api/projects` from the SPA origin allows credentials, `POST`,
+  `content-type`, and `X-CSRF-TOKEN`;
+- the same preflight from an unlisted origin has no allow-origin/header response;
+- a valid cookie/header pair mutates successfully and missing/invalid pairs fail
+  with the typed `400`;
+- a WebSocket upgrade from an unlisted or missing `Origin` is rejected.
+
 > **No secrets are committed.** Credentials live only in the protected
 > environment. `appsettings.json` ships empty auth/billing placeholders; supply
 > real provider secrets through the environment or Key Vault (see

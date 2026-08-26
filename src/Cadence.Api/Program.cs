@@ -39,6 +39,10 @@ builder.AddCadencePersistence();
 // ASP.NET Core Identity, cookie auth, external OAuth, magic-link, tier claims.
 builder.AddCadenceIdentity();
 
+// Double-submit antiforgery protection for every authenticated API mutation.
+// Its cookie follows the auth cookie's configured SameSite/Secure topology.
+builder.AddCadenceAntiforgery();
+
 // Entitlement catalog + Stripe billing seams (checkout, portal, webhook).
 builder.AddCadenceBilling();
 
@@ -124,6 +128,7 @@ app.UseRateLimiter();
 app.UseWebSockets();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseCadenceAntiforgery();
 
 app.MapGet("/api/info", () => new ApiInfo("Cadence.Api", "0.0.0"))
     .WithName("GetApiInfo");

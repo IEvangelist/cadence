@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Http;
 
 namespace Cadence.Api;
 
@@ -56,5 +57,54 @@ public static class CadenceCors
         }
 
         return [DefaultOrigin];
+    }
+
+    /// <summary>
+    /// Validate the browser-controlled Origin on a WebSocket upgrade. CORS does not
+    /// govern WebSockets, so this explicit check prevents cross-site WebSocket
+    /// hijacking when the authentication cookie uses SameSite=None.
+    /// </summary>
+    public static bool IsAllowedWebSocketOrigin(
+        HttpRequest request,
+        IConfiguration configuration,
+        bool allowLoopback = false)
+    {
+        var origin = request.Headers.Origin.ToString();
+        if (!TryNormalizeOrigin(origin, out var normalized))
+        {
+            return false;
+        }
+
+        if (allowLoopback && new Uri(normalized).IsLoopback)
+        {
+            return true;
+        }
+
+        var sameOrigin = $"{request.Scheme}://{request.Host}";
+        if (string.Equals(normalized, sameOrigin, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return ResolveAllowedOrigins(configuration)
+            .Select(candidate => TryNormalizeOrigin(candidate, out var value) ? value : null)
+            .Any(candidate => string.Equals(candidate, normalized, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool TryNormalizeOrigin(string? value, out string normalized)
+    {
+        normalized = string.Empty;
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+            !string.IsNullOrEmpty(uri.UserInfo) ||
+            uri.AbsolutePath != "/" ||
+            !string.IsNullOrEmpty(uri.Query) ||
+            !string.IsNullOrEmpty(uri.Fragment))
+        {
+            return false;
+        }
+
+        normalized = uri.GetLeftPart(UriPartial.Authority);
+        return true;
     }
 }

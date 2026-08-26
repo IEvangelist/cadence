@@ -7,6 +7,10 @@ const json = (body: unknown, status = 200): Response =>
     headers: { 'Content-Type': 'application/json' },
   })
 
+const withCsrf = (response: Response) => vi.fn(async (input: RequestInfo | URL) =>
+  String(input).endsWith('/api/auth/csrf') ? json({ requestToken: 'test-csrf' }) : response,
+)
+
 const freeEntitlements = {
   tier: 'Free',
   watermarkExports: true,
@@ -34,35 +38,36 @@ describe('EntitlementsClient', () => {
   })
 
   it('startCheckout() posts and returns the redirect URL', async () => {
-    const fetchImpl = vi.fn(async () => json({ url: 'https://stripe.test/checkout' }))
+    const fetchImpl = withCsrf(json({ url: 'https://stripe.test/checkout' }))
     const client = new EntitlementsClient(fetchImpl, '')
 
     const url = await client.startCheckout()
 
     expect(url).toBe('https://stripe.test/checkout')
-    const [path, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit]
+    const [path, init] = fetchImpl.mock.calls[1] as unknown as [string, RequestInit]
     expect(path).toBe('/api/billing/checkout')
     expect(init.method).toBe('POST')
     expect(init.credentials).toBe('include')
+    expect(new Headers(init.headers).get('X-CSRF-TOKEN')).toBe('test-csrf')
   })
 
   it('startCheckout() throws a BillingError when unavailable', async () => {
-    const client = new EntitlementsClient(async () => new Response(null, { status: 503 }), '')
+    const client = new EntitlementsClient(withCsrf(new Response(null, { status: 503 })), '')
     await expect(client.startCheckout()).rejects.toMatchObject({ status: 503 })
   })
 
   it('openPortal() posts and returns the portal URL', async () => {
-    const fetchImpl = vi.fn(async () => json({ url: 'https://stripe.test/portal' }))
+    const fetchImpl = withCsrf(json({ url: 'https://stripe.test/portal' }))
     const client = new EntitlementsClient(fetchImpl, '')
 
     const url = await client.openPortal()
 
     expect(url).toBe('https://stripe.test/portal')
-    expect((fetchImpl.mock.calls[0] as unknown as [string])[0]).toBe('/api/billing/portal')
+    expect((fetchImpl.mock.calls[1] as unknown as [string])[0]).toBe('/api/billing/portal')
   })
 
   it('openPortal() maps 402 (paid-only) to a BillingError', async () => {
-    const client = new EntitlementsClient(async () => new Response(null, { status: 402 }), '')
+    const client = new EntitlementsClient(withCsrf(new Response(null, { status: 402 })), '')
     await expect(client.openPortal()).rejects.toMatchObject({ status: 402 })
   })
 

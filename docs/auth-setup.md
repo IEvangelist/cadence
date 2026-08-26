@@ -67,10 +67,10 @@ user-secrets — never in `apphost.json` or source.
 
 ## Cookie topology & cross-site hosting
 
-Today Cadence runs **same-origin**: locally the SPA reaches the API through the
-Vite dev proxy, and the cloud plan serves the SPA from GitHub Pages while the API
-opts that origin into credentialed CORS. The default cookie topology matches that:
-`SameSite=Lax` with `Secure` derived from the environment (see above).
+Cadence runs **same-origin locally**: the SPA reaches the API through the Vite
+proxy, so the default is `SameSite=Lax` with `Secure` derived from the environment.
+A Pages SPA and an API on a different registrable domain are cross-site and must
+use the `None` configuration below.
 
 If the SPA is ever hosted **cross-site** (a genuinely different site from the API,
 so the auth cookie rides on cross-site requests), flip a single setting — no code
@@ -110,6 +110,57 @@ Cors__AllowedOrigins           # scalar env var: https://app.example,https://pre
 When unset it defaults to the public Pages origin (`https://ievangelist.github.io`).
 For a cross-site deployment, list every browser origin that must reach the API here
 and set `Auth:Cookie:SameSite=None` so the credentialed requests carry the cookie.
+
+## Cross-site request forgery protection
+
+Cookie-authenticated mutations use ASP.NET Core antiforgery protection:
+
+1. An authenticated SPA calls `GET /api/auth/csrf` with
+   `credentials: include`. The no-store response sets the opaque, `HttpOnly`
+   `cadence.csrf` cookie and returns `{ "requestToken": "..." }`.
+2. The SPA caches the request token in memory and sends it as `X-CSRF-TOKEN` on
+   every authenticated `POST`, `PUT`, `PATCH`, and `DELETE`.
+3. The API requires a valid cookie/header pair before the handler runs. Missing,
+   invalid, or mismatched pairs return `400 application/problem+json` with type
+   `https://cadence.app/problems/invalid-csrf-token`.
+
+The antiforgery cookie deliberately uses the **same configured SameSite and
+Secure policy as the auth cookie**; it is not hard-coded to `Lax`.
+`Auth:Cookie:SameSite=None` therefore produces
+`cadence.csrf; SameSite=None; Secure; HttpOnly`, allowing the pair to work from
+the Pages SPA without making the cookie readable by JavaScript. CORS allows the
+custom header only to explicit `Cors:AllowedOrigins`; a hostile origin cannot
+read the token endpoint or pass preflight.
+
+On the typed invalid-token response, the SPA discards its cached token, obtains a
+new pair, and retries the same mutation **once**. It does not retry unrelated
+`400`s, follow redirects carrying the token, send the token to non-API URLs, or
+fall back to an unprotected request.
+
+Public account entry points (`register`, `login`, and magic-link request/verify)
+remain usable before a session exists. The Stripe webhook remains anonymous and
+is authenticated by its Stripe signature. All authenticated mutations,
+including logout, profile/project/share CRUD, billing, optional server-side AI,
+and raw stem uploads, require antiforgery.
+
+### Safe rollout for an existing self-host
+
+Protection defaults to enforced. To avoid breaking a cached old SPA during a
+multi-revision rollout:
+
+1. Deploy the new API with `Security__Antiforgery__Enforced=false`. This exposes
+   the token endpoint/cookie/header contract while logging invalid or missing
+   tokens; keep this temporary exception narrowly time-boxed.
+2. Deploy the new SPA, purge/invalidate its CDN cache, and verify that mutation
+   preflights include `X-CSRF-TOKEN` and API logs no longer show report-only
+   failures.
+3. Set `Security__Antiforgery__Enforced=true` (or remove the override, since
+   `true` is the default), deploy/restart every API replica, and verify a
+   token-less authenticated mutation returns the typed `400`.
+
+Do not set the temporary switch to `false` as a permanent compatibility mode.
+Rollback must roll back both SPA and API, or return to step 1 only long enough to
+redeploy a compatible SPA.
 
 ## Registering the OAuth apps
 
@@ -250,6 +301,7 @@ database required). The API remains the runtime startup that applies them.
 | `POST /api/auth/login` | anon | Local sign in |
 | `POST /api/auth/logout` | user | Sign out |
 | `GET  /api/auth/me` | user | Current identity summary (id, email, display name, tier) |
+| `GET  /api/auth/csrf` | user | Issue the no-store antiforgery cookie/request-token pair |
 | `POST /api/auth/magic-link` | anon | Request a passwordless sign-in link |
 | `GET  /api/auth/magic-link/verify` | anon | Consume a link and sign in |
 | `GET  /api/auth/external/{provider}` | anon | Start an OAuth challenge |

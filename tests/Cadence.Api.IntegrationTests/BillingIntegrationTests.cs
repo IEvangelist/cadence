@@ -59,6 +59,7 @@ public class BillingIntegrationTests
             password = "Passw0rd!",
         });
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        await client.AddAntiforgeryAsync();
         var me = await login.Content.ReadFromJsonAsync<MeResponse>();
         Assert.Equal("Free", me!.Tier);
 

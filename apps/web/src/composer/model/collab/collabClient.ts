@@ -6,6 +6,7 @@
  * and revokes them for the project owner, and formats the shareable URL.
  */
 import type { CollaborationRole } from './useCollaboration'
+import { CsrfClient, type FetchLike } from '../../../api/csrfClient'
 
 /** A server-issued share link for a project. */
 export interface ShareLink {
@@ -13,8 +14,6 @@ export interface ShareLink {
   role: CollaborationRole
   createdAt: string
 }
-
-type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
 function defaultBaseUrl(): string {
   const configured = import.meta.env?.VITE_API_BASE_URL as string | undefined
@@ -35,10 +34,12 @@ export function shareLinkUrl(origin: string, projectId: string, share: ShareLink
 export class CollabShareClient {
   private readonly fetchImpl: FetchLike
   private readonly baseUrl: string
+  private readonly csrf: CsrfClient
 
   constructor(fetchImpl?: FetchLike, baseUrl?: string) {
     this.fetchImpl = fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
     this.baseUrl = baseUrl ?? defaultBaseUrl()
+    this.csrf = new CsrfClient(this.fetchImpl, this.baseUrl)
   }
 
   private url(projectId: string, suffix = ''): string {
@@ -52,9 +53,8 @@ export class CollabShareClient {
   }
 
   async create(projectId: string, role: CollaborationRole): Promise<ShareLink> {
-    const response = await this.fetchImpl(this.url(projectId), {
+    const response = await this.csrf.mutation(`/api/projects/${encodeURIComponent(projectId)}/shares`, {
       method: 'POST',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role }),
     })
@@ -63,9 +63,9 @@ export class CollabShareClient {
   }
 
   async revoke(projectId: string, token: string): Promise<void> {
-    const response = await this.fetchImpl(
-      this.url(projectId, `/${encodeURIComponent(token)}`),
-      { method: 'DELETE', credentials: 'include' },
+    const response = await this.csrf.mutation(
+      `/api/projects/${encodeURIComponent(projectId)}/shares/${encodeURIComponent(token)}`,
+      { method: 'DELETE' },
     )
     if (!response.ok && response.status !== 404) {
       throw new Error(`Failed to revoke share link (${response.status}).`)
