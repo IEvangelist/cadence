@@ -80,8 +80,8 @@
       },
       "Aspire.Dashboard.Sdk.win-x64": {
         "type": "Transitive",
-        "resolved": "13.4.6",
-        "contentHash": "IoN5kv4uMniYyETegmD3/5lW2TpsA4RXRZfgIEAD7gN93P92hhkUiqa+0DC2GrJLD3Voz1/Drmpnq/pQ5WzBow=="
+        "resolved": "13.5.2",
+        "contentHash": "51dqyjliPxjr18ePR+Gwrg+sOdkI2ZoCnP5yW7MOM6eD84cgi5I99prFXfizknPVTiP5kUMxGYmB/zMBbUkQkw=="
       },
       "Aspire.Hosting": {
         "type": "Transitive",
@@ -251,8 +251,8 @@
       },
       "Aspire.Hosting.Orchestration.win-x64": {
         "type": "Transitive",
-        "resolved": "13.4.6",
-        "contentHash": "TjpiZb4VAr7w/ViDq08kX2lXVo5eSDaQpGaLFMRas/0Q2jmuVOWoYFidmuXMbTf2InXVJO0pVjtwhJI2nNXihw=="
+        "resolved": "13.5.2",
+        "contentHash": "vTxtjg54DN364UsTCc9P71yeCjYlHWlOnXtaIsrbyEGsoBjzIVxW3Md5HKDogVCYS+gVOeKvJGyoP4wsU1BJMg=="
       },
       "AspNetCore.HealthChecks.Azure.Storage.Blobs": {
         "type": "Transitive",
@@ -1448,13 +1448,13 @@
       "cadence.apphost": {
         "type": "Project",
         "dependencies": {
-          "Aspire.Dashboard.Sdk.win-x64": "[13.4.6, )",
-          "Aspire.Hosting.AppHost": "[13.4.6, )",
+          "Aspire.Dashboard.Sdk.win-x64": "[13.5.2, )",
+          "Aspire.Hosting.AppHost": "[13.5.2, )",
           "Aspire.Hosting.Azure.PostgreSQL": "[13.5.2, )",
           "Aspire.Hosting.Azure.Redis": "[13.5.2, )",
           "Aspire.Hosting.Azure.Storage": "[13.5.2, )",
           "Aspire.Hosting.NodeJs": "[9.5.2, )",
-          "Aspire.Hosting.Orchestration.win-x64": "[13.4.6, )",
+          "Aspire.Hosting.Orchestration.win-x64": "[13.5.2, )",
           "Aspire.Hosting.PostgreSQL": "[13.5.2, )",
           "Aspire.Hosting.Redis": "[13.5.2, )",
           "CommunityToolkit.Aspire.Hosting.Ollama": "[13.4.0, )"
