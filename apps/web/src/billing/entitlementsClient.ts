@@ -7,6 +7,7 @@
  * authoritative for entitlements — this client only reads them and kicks off the
  * hosted Stripe Checkout / Customer Portal flows.
  */
+import { CsrfClient, type FetchLike } from '../api/csrfClient'
 
 /** The caller's current tier and the typed entitlements it grants. */
 export interface Entitlements {
@@ -30,8 +31,6 @@ export class BillingError extends Error {
   }
 }
 
-type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
-
 function defaultBaseUrl(): string {
   const configured = import.meta.env?.VITE_API_BASE_URL as string | undefined
   return (configured ?? '').replace(/\/+$/, '')
@@ -41,10 +40,12 @@ function defaultBaseUrl(): string {
 export class EntitlementsClient {
   private readonly fetchImpl: FetchLike
   private readonly baseUrl: string
+  private readonly csrf: CsrfClient
 
   constructor(fetchImpl?: FetchLike, baseUrl?: string) {
     this.fetchImpl = fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
     this.baseUrl = baseUrl ?? defaultBaseUrl()
+    this.csrf = new CsrfClient(this.fetchImpl, this.baseUrl)
   }
 
   private url(path: string): string {
@@ -79,9 +80,8 @@ export class EntitlementsClient {
   }
 
   private async billingUrl(path: string, fallback: string): Promise<string> {
-    const response = await this.fetchImpl(this.url(path), {
+    const response = await this.csrf.mutation(path, {
       method: 'POST',
-      credentials: 'include',
     })
     if (!response.ok) {
       throw new BillingError(response.status, fallback)

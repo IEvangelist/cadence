@@ -10,6 +10,7 @@
 import { type Project } from './project'
 import { parseProject, serializeProject } from './persistence'
 import { type ProjectStore, type StoredProjectMeta } from './storage'
+import { CsrfClient, type FetchLike } from '../../api/csrfClient'
 
 interface ProjectSummaryDto {
   id: string
@@ -22,8 +23,6 @@ interface ProjectSummaryDto {
 interface ProjectDetailDto extends ProjectSummaryDto {
   data: string
 }
-
-type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
 function defaultBaseUrl(): string {
   const configured = import.meta.env?.VITE_API_BASE_URL as string | undefined
@@ -40,11 +39,13 @@ const toMeta = (dto: ProjectSummaryDto): StoredProjectMeta => ({
 export class RemoteProjectStore implements ProjectStore {
   private readonly fetchImpl: FetchLike
   private readonly baseUrl: string
+  private readonly csrf: CsrfClient
   private lastId: string | null = null
 
   constructor(fetchImpl?: FetchLike, baseUrl?: string) {
     this.fetchImpl = fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
     this.baseUrl = baseUrl ?? defaultBaseUrl()
+    this.csrf = new CsrfClient(this.fetchImpl, this.baseUrl)
   }
 
   private url(path: string): string {
@@ -60,17 +61,15 @@ export class RemoteProjectStore implements ProjectStore {
     }
 
     // Upsert: try to create, and fall back to update when the id already exists.
-    let response = await this.fetchImpl(this.url('/api/projects'), {
+    let response = await this.csrf.mutation('/api/projects', {
       method: 'POST',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
 
     if (response.status === 409) {
-      response = await this.fetchImpl(this.url(`/api/projects/${encodeURIComponent(project.id)}`), {
+      response = await this.csrf.mutation(`/api/projects/${encodeURIComponent(project.id)}`, {
         method: 'PUT',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
@@ -114,9 +113,8 @@ export class RemoteProjectStore implements ProjectStore {
   }
 
   async remove(id: string): Promise<void> {
-    const response = await this.fetchImpl(this.url(`/api/projects/${encodeURIComponent(id)}`), {
+    const response = await this.csrf.mutation(`/api/projects/${encodeURIComponent(id)}`, {
       method: 'DELETE',
-      credentials: 'include',
     })
     if (!response.ok && response.status !== 404) {
       throw new Error(`Failed to delete project (${response.status}).`)

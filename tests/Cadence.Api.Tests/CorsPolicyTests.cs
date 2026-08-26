@@ -36,6 +36,37 @@ public class CorsPolicyTests(CadenceApiFactory factory)
     }
 
     [Fact]
+    public async Task Mutation_preflight_allows_antiforgery_header_only_for_allowlisted_origin()
+    {
+        var client = _factory.CreateClient();
+        using var allowed = new HttpRequestMessage(HttpMethod.Options, "/api/projects");
+        allowed.Headers.Add("Origin", PagesOrigin);
+        allowed.Headers.Add("Access-Control-Request-Method", "POST");
+        allowed.Headers.Add(
+            "Access-Control-Request-Headers",
+            $"content-type,{CadenceAntiforgery.HeaderName.ToLowerInvariant()}");
+
+        var allowedResponse = await client.SendAsync(allowed);
+
+        Assert.Equal(HttpStatusCode.NoContent, allowedResponse.StatusCode);
+        Assert.Equal(PagesOrigin, Single(allowedResponse, "Access-Control-Allow-Origin"));
+        Assert.Contains(
+            CadenceAntiforgery.HeaderName,
+            Single(allowedResponse, "Access-Control-Allow-Headers"),
+            StringComparison.OrdinalIgnoreCase);
+
+        using var denied = new HttpRequestMessage(HttpMethod.Options, "/api/projects");
+        denied.Headers.Add("Origin", "https://malicious.example");
+        denied.Headers.Add("Access-Control-Request-Method", "POST");
+        denied.Headers.Add("Access-Control-Request-Headers", CadenceAntiforgery.HeaderName);
+
+        var deniedResponse = await client.SendAsync(denied);
+
+        Assert.False(deniedResponse.Headers.Contains("Access-Control-Allow-Origin"));
+        Assert.False(deniedResponse.Headers.Contains("Access-Control-Allow-Headers"));
+    }
+
+    [Fact]
     public async Task Simple_get_from_pages_origin_carries_cors_headers()
     {
         var client = _factory.CreateClient();

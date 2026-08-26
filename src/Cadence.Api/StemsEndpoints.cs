@@ -26,10 +26,7 @@ public static class StemsEndpoints
         var group = app.MapGroup("/api/stems").WithTags("Stems").RequireAuthorization();
 
         group.MapPost("/jobs", CreateJobAsync)
-            .WithName("CreateStemJob")
-            // The mix is streamed as the raw request body; disable antiforgery so the
-            // JSON-cookie SPA can upload without a form token (auth is still required).
-            .DisableAntiforgery();
+            .WithName("CreateStemJob");
         group.MapGet("/jobs", ListJobsAsync);
         group.MapGet("/jobs/{id}", GetJobAsync);
         group.MapGet("/jobs/{id}/stems/{label}", DownloadStemAsync);

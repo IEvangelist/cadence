@@ -7,6 +7,14 @@ const json = (body: unknown, status = 200): Response =>
     headers: { 'Content-Type': 'application/json' },
   })
 
+const withCsrf = (
+  handler: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
+) => vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+  String(input).endsWith('/api/auth/csrf')
+    ? json({ requestToken: 'test-csrf' })
+    : handler(input, init),
+)
+
 describe('AuthClient', () => {
   it('never submits credentials when backend access is disabled', async () => {
     const fetchImpl = vi.fn()
@@ -26,7 +34,7 @@ describe('AuthClient', () => {
   })
 
   it('me() returns the user on 200', async () => {
-    const fetchImpl = vi.fn(async () =>
+    const fetchImpl = withCsrf(async () =>
       json({ id: '1', email: 'a@b.com', displayName: 'A', tier: 'Free' }),
     )
     const client = new AuthClient(fetchImpl, '')
@@ -125,7 +133,7 @@ describe('AuthClient', () => {
   })
 
   it('updateProfile() PUTs the patch and returns the profile', async () => {
-    const fetchImpl = vi.fn(async () =>
+    const fetchImpl = withCsrf(async () =>
       json({
         id: '1',
         displayName: 'New',
@@ -141,9 +149,10 @@ describe('AuthClient', () => {
     const profile = await client.updateProfile({ displayName: 'New' })
 
     expect(profile.displayName).toBe('New')
-    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit?]
+    const [url, init] = fetchImpl.mock.calls[1] as unknown as [string, RequestInit?]
     expect(url).toBe('/api/profile')
     expect(init?.method).toBe('PUT')
+    expect(new Headers(init?.headers).get('X-CSRF-TOKEN')).toBe('test-csrf')
   })
 
   it('getProfile() throws on error', async () => {

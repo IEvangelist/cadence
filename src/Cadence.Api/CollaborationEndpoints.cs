@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace Cadence.Api;
 
@@ -134,11 +135,25 @@ public static class CollaborationEndpoints
         UserManager<ApplicationUser> users,
         CadenceDbContext db,
         CollabHub hub,
-        ICollabDocumentStore documents)
+        ICollabDocumentStore documents,
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
         if (!context.WebSockets.IsWebSocketRequest)
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+
+        // Browsers do not apply CORS to WebSockets and cannot attach the antiforgery
+        // header used by HTTP mutations. The browser-controlled Origin is therefore
+        // the upgrade's CSRF boundary; missing and non-allow-listed origins fail closed.
+        if (!CadenceCors.IsAllowedWebSocketOrigin(
+                context.Request,
+                configuration,
+                allowLoopback: environment.IsDevelopment() || environment.IsEnvironment("Testing")))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
             return;
         }
 

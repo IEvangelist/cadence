@@ -8,6 +8,7 @@
  * origin during local development. Backend-disabled builds reject before fetch.
  */
 import { backendConfig } from '../platform/backendConfig'
+import { CsrfClient, type FetchLike } from '../api/csrfClient'
 
 /** The signed-in user's identity summary (mirror of the API's MeResponse). */
 export interface Me {
@@ -46,8 +47,6 @@ export class AuthError extends Error {
   }
 }
 
-type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
-
 async function readError(response: Response, fallback: string): Promise<string> {
   try {
     const problem = (await response.json()) as { title?: string; errors?: Record<string, string[]> }
@@ -67,11 +66,13 @@ export class AuthClient {
   private readonly fetchImpl: FetchLike
   private readonly baseUrl: string
   private readonly available: boolean
+  private readonly csrf: CsrfClient
 
   constructor(fetchImpl?: FetchLike, baseUrl?: string, available?: boolean) {
     this.fetchImpl = fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
     this.baseUrl = (baseUrl ?? backendConfig.apiBaseUrl).replace(/\/+$/, '')
     this.available = available ?? (baseUrl !== undefined || backendConfig.available)
+    this.csrf = new CsrfClient(this.fetchImpl, this.baseUrl)
   }
 
   private url(path: string): string {
@@ -120,13 +121,18 @@ export class AuthClient {
     const response = await this.postJson('/api/auth/login', { email, password })
     if (response.status === 401) throw new AuthError(401, 'Incorrect email or password.')
     if (!response.ok) throw new AuthError(response.status, await readError(response, 'Sign in failed.'))
+    this.csrf.clear()
     return (await response.json()) as Me
   }
 
   /** Sign out the current session. */
   async logout(): Promise<void> {
     this.assertAvailable()
-    await this.fetchImpl(this.url('/api/auth/logout'), { method: 'POST', credentials: 'include' })
+    try {
+      await this.csrf.mutation('/api/auth/logout', { method: 'POST' })
+    } finally {
+      this.csrf.clear()
+    }
   }
 
   /** Request a passwordless magic-link email (always resolves; never enumerates). */
@@ -160,9 +166,8 @@ export class AuthClient {
   /** Update the current user's profile. */
   async updateProfile(patch: ProfilePatch): Promise<Profile> {
     this.assertAvailable()
-    const response = await this.fetchImpl(this.url('/api/profile'), {
+    const response = await this.csrf.mutation('/api/profile', {
       method: 'PUT',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     })

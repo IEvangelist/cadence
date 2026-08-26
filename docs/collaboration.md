@@ -117,6 +117,14 @@ viewer is strictly read-only. **The client is never trusted to enforce this.**
 - **Connections are authenticated.** The relay endpoint is
   `RequireAuthorization()`, so an unauthenticated WebSocket upgrade is rejected
   before the socket is accepted.
+- **Upgrades are origin-gated.** Browsers do not apply CORS to WebSockets and
+  cannot add the HTTP antiforgery header. The relay therefore requires the
+  browser-controlled `Origin` to match the API origin or an explicit
+  `Cors:AllowedOrigins` entry. Missing and unlisted origins are rejected before
+  `AcceptWebSocketAsync`, preventing cross-site WebSocket hijacking when
+  `cadence.auth` uses `SameSite=None`. No token is put in a query string or log.
+- Owner-only share-link `POST`/`DELETE` uses the normal antiforgery
+  cookie + `X-CSRF-TOKEN` pair.
 - **Role is resolved on the server**, never taken from a client claim.
   `ResolveRoleAsync` grants `Owner` when the caller owns the project, otherwise
   requires a share token that maps to the **same** project; anything else denies

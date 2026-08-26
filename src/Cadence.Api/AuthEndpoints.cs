@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Antiforgery;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 
@@ -41,6 +42,8 @@ public static class AuthEndpoints
             .RequireRateLimiting(LoginRateLimitPolicy);
         group.MapPost("/logout", LogoutAsync).RequireAuthorization();
         group.MapGet("/me", MeAsync).RequireAuthorization();
+        group.MapGet("/csrf", IssueAntiforgeryToken)
+            .RequireAuthorization();
         group.MapPost("/magic-link", RequestMagicLinkAsync)
             .RequireRateLimiting(MagicLinkSendRateLimitPolicy);
         group.MapGet("/magic-link/verify", VerifyMagicLinkAsync)
@@ -50,6 +53,13 @@ public static class AuthEndpoints
         group.MapGet("/providers", ListProviders);
 
         return app;
+    }
+
+    private static IResult IssueAntiforgeryToken(HttpContext context, IAntiforgery antiforgery)
+    {
+        var tokens = antiforgery.GetAndStoreTokens(context);
+        context.Response.Headers.CacheControl = "no-store";
+        return Results.Ok(new AntiforgeryTokenResponse(tokens.RequestToken!));
     }
 
     private static async Task<IResult> RegisterAsync(

@@ -15,27 +15,21 @@ const detail = (id: string, name: string, data: string, updatedAt = '2024-01-02T
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 
+const withCsrf = (
+  handler: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
+) => vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+  String(input).endsWith('/api/auth/csrf')
+    ? json({ requestToken: 'test-csrf' })
+    : handler(input, init),
+)
+
 describe('RemoteProjectStore', () => {
   it('save() creates via POST', async () => {
     const project = createEmptyProject('p1')
-    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+    const fetchImpl = withCsrf(async (_url: RequestInfo | URL, init?: RequestInit) => {
       expect(init?.method).toBe('POST')
+      expect(new Headers(init?.headers).get('X-CSRF-TOKEN')).toBe('test-csrf')
       return json(detail('p1', project.name, serializeProject(project)), 201)
-    })
-    const store = new RemoteProjectStore(fetchImpl, '')
-
-    const meta = await store.save(project)
-
-    expect(meta.id).toBe('p1')
-    expect(fetchImpl).toHaveBeenCalledTimes(1)
-  })
-
-  it('save() upserts via PUT when POST reports a conflict', async () => {
-    const project = createEmptyProject('p1')
-    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === 'POST') return new Response(null, { status: 409 })
-      expect(init?.method).toBe('PUT')
-      return json(detail('p1', project.name, serializeProject(project)))
     })
     const store = new RemoteProjectStore(fetchImpl, '')
 
@@ -45,8 +39,26 @@ describe('RemoteProjectStore', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2)
   })
 
+  it('save() upserts via PUT when POST reports a conflict', async () => {
+    const project = createEmptyProject('p1')
+    const fetchImpl = withCsrf(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') return new Response(null, { status: 409 })
+      expect(init?.method).toBe('PUT')
+      return json(detail('p1', project.name, serializeProject(project)))
+    })
+    const store = new RemoteProjectStore(fetchImpl, '')
+
+    const meta = await store.save(project)
+
+    expect(meta.id).toBe('p1')
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
+  })
+
   it('save() throws on an unexpected error', async () => {
-    const store = new RemoteProjectStore(async () => new Response(null, { status: 500 }), '')
+    const store = new RemoteProjectStore(
+      withCsrf(async () => new Response(null, { status: 500 })),
+      '',
+    )
     await expect(store.save(createEmptyProject('p1'))).rejects.toThrow(/Failed to save/)
   })
 
@@ -90,12 +102,18 @@ describe('RemoteProjectStore', () => {
   })
 
   it('remove() tolerates a 404', async () => {
-    const store = new RemoteProjectStore(async () => new Response(null, { status: 404 }), '')
+    const store = new RemoteProjectStore(
+      withCsrf(async () => new Response(null, { status: 404 })),
+      '',
+    )
     await expect(store.remove('missing')).resolves.toBeUndefined()
   })
 
   it('remove() throws on server error', async () => {
-    const store = new RemoteProjectStore(async () => new Response(null, { status: 500 }), '')
+    const store = new RemoteProjectStore(
+      withCsrf(async () => new Response(null, { status: 500 })),
+      '',
+    )
     await expect(store.remove('x')).rejects.toThrow(/Failed to delete/)
   })
 

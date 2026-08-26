@@ -8,6 +8,7 @@
  * ownership — this client only uploads a mix, reads job status, and resolves the
  * owner-scoped download URLs the API returns.
  */
+import { CsrfClient, type FetchLike } from '../api/csrfClient'
 
 /** Lifecycle states a separation job moves through, mirroring the server enum. */
 export type StemJobStatus = 'Queued' | 'Processing' | 'Completed' | 'Failed'
@@ -55,8 +56,6 @@ export class StemsError extends Error {
   }
 }
 
-type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
-
 function defaultBaseUrl(): string {
   const configured = import.meta.env?.VITE_API_BASE_URL as string | undefined
   return (configured ?? '').replace(/\/+$/, '')
@@ -66,10 +65,12 @@ function defaultBaseUrl(): string {
 export class StemsClient {
   private readonly fetchImpl: FetchLike
   private readonly baseUrl: string
+  private readonly csrf: CsrfClient
 
   constructor(fetchImpl?: FetchLike, baseUrl?: string) {
     this.fetchImpl = fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
     this.baseUrl = baseUrl ?? defaultBaseUrl()
+    this.csrf = new CsrfClient(this.fetchImpl, this.baseUrl)
   }
 
   private url(path: string): string {
@@ -83,9 +84,8 @@ export class StemsClient {
    */
   async createJob(file: File): Promise<StemJob> {
     const name = encodeURIComponent(file.name || 'mix')
-    const response = await this.fetchImpl(this.url(`/api/stems/jobs?name=${name}`), {
+    const response = await this.csrf.mutation(`/api/stems/jobs?name=${name}`, {
       method: 'POST',
-      credentials: 'include',
       headers: { 'Content-Type': file.type || 'application/octet-stream' },
       body: file,
     })

@@ -4,6 +4,14 @@ import { CollabShareClient, shareLinkUrl, type ShareLink } from './collabClient'
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 
+const withCsrf = (
+  handler: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
+) => vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+  String(input).endsWith('/api/auth/csrf')
+    ? json({ requestToken: 'test-csrf' })
+    : handler(input, init),
+)
+
 const link = (token: string, role: ShareLink['role']): ShareLink => ({
   token,
   role,
@@ -23,9 +31,10 @@ describe('CollabShareClient', () => {
   })
 
   it('creates a share link with the requested role', async () => {
-    const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+    const fetchImpl = withCsrf(async (url: RequestInfo | URL, init?: RequestInit) => {
       expect(String(url)).toBe('/api/projects/p1/shares')
       expect(init?.method).toBe('POST')
+      expect(new Headers(init?.headers).get('X-CSRF-TOKEN')).toBe('test-csrf')
       expect(JSON.parse(String(init?.body))).toEqual({ role: 'viewer' })
       return json(link('newtok', 'viewer'), 201)
     })
@@ -35,7 +44,7 @@ describe('CollabShareClient', () => {
   })
 
   it('revokes a share link by token', async () => {
-    const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+    const fetchImpl = withCsrf(async (url: RequestInfo | URL, init?: RequestInit) => {
       expect(String(url)).toBe('/api/projects/p1/shares/tok')
       expect(init?.method).toBe('DELETE')
       return new Response(null, { status: 204 })
@@ -45,7 +54,10 @@ describe('CollabShareClient', () => {
   })
 
   it('treats a 404 on revoke as success (idempotent)', async () => {
-    const client = new CollabShareClient(async () => new Response(null, { status: 404 }), '')
+    const client = new CollabShareClient(
+      withCsrf(async () => new Response(null, { status: 404 })),
+      '',
+    )
     await expect(client.revoke('p1', 'gone')).resolves.toBeUndefined()
   })
 

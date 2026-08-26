@@ -54,6 +54,8 @@ public sealed record ShareLinkResponse(string Token, string Role, DateTimeOffset
 /// <summary>The external providers currently wired (for rendering sign-in buttons).</summary>
 public sealed record ProvidersResponse(IReadOnlyList<string> Providers);
 
+public sealed record AntiforgeryTokenResponse(string RequestToken);
+
 /// <summary>The caller's current tier and the typed entitlements it grants.</summary>
 public sealed record EntitlementsResponse(
     string Tier,

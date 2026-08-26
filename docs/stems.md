@@ -38,7 +38,12 @@ so a cross-owner id returns `404` (no IDOR).
 ## API
 
 All routes require authentication (the hardened `HttpOnly` session cookie) and are
-owner-scoped.
+owner-scoped. The raw upload `POST` also requires the antiforgery cookie plus
+`X-CSRF-TOKEN`. Its `audio/*`/`application/octet-stream` content type and custom
+header make a cross-origin upload non-simple, so the browser must pass the
+credentialed CORS preflight from an explicit allow-listed origin before it can
+send bytes. A hostile origin cannot bypass that preflight or read a token; the API
+still validates the pair before reading the raw request body.
 
 | Method | Route | Behavior |
 |---|---|---|
@@ -154,8 +159,8 @@ The UI lives in its own area, `apps/web/src/stems/`, deliberately **separate fro
 the composer** (`apps/web/src/composer/**` is untouched):
 
 - `stemsClient.ts` — a typed client mirroring `billing/entitlementsClient.ts`
-  (injectable `fetch` + base URL, `credentials: 'include'`). Maps `402/413/415`
-  to a typed `StemsError`.
+  (injectable `fetch` + base URL, `credentials: 'include'`), using the shared
+  antiforgery client for upload. Maps `402/413/415` to a typed `StemsError`.
 - `StemsPage.tsx` — gates on `useEntitlements().stemSeparation`; shows an
   accessible upgrade CTA to free users; for entitled users, uploads a mix, polls
   job progress, and previews (`<audio controls>`) and downloads each stem.

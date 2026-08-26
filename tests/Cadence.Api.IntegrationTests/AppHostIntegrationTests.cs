@@ -93,6 +93,7 @@ public class AppHostIntegrationTests
             password = "Passw0rd!",
         });
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        await client.AddAntiforgeryAsync();
 
         var create = await client.PostAsJsonAsync("/api/projects", new
         {

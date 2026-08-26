@@ -36,7 +36,10 @@ public class CollaborationRelayTests(CadenceApiFactory factory) : IClassFixture<
         var response = await client.RegisterAsync(email);
         response.EnsureSuccessStatusCode();
         var cookie = string.Join("; ", response.Headers.GetValues("Set-Cookie").Select(c => c.Split(';')[0]));
-        client.DefaultRequestHeaders.Add("Cookie", cookie);
+        if (!client.DefaultRequestHeaders.Contains("Cookie"))
+        {
+            client.DefaultRequestHeaders.Add("Cookie", cookie);
+        }
         return (client, cookie);
     }
 
@@ -53,7 +56,11 @@ public class CollaborationRelayTests(CadenceApiFactory factory) : IClassFixture<
     private async Task<WebSocket> ConnectAsync(string cookie, string projectId, string? token)
     {
         var wsClient = _factory.Server.CreateWebSocketClient();
-        wsClient.ConfigureRequest = request => request.Headers["Cookie"] = cookie;
+        wsClient.ConfigureRequest = request =>
+        {
+            request.Headers["Cookie"] = cookie;
+            request.Headers["Origin"] = CadenceCors.DefaultOrigin;
+        };
         var uri = new UriBuilder(_factory.Server.BaseAddress)
         {
             Path = $"/api/collab/{projectId}",
@@ -189,6 +196,7 @@ public class CollaborationRelayTests(CadenceApiFactory factory) : IClassFixture<
         await (await owner.PostAsJsonAsync("/api/projects", NewProject("relay-c"))).AssertOkAsync();
 
         var wsClient = _factory.Server.CreateWebSocketClient();
+        wsClient.ConfigureRequest = request => request.Headers["Origin"] = CadenceCors.DefaultOrigin;
         var uri = new UriBuilder(_factory.Server.BaseAddress) { Path = "/api/collab/relay-c" }.Uri;
 
         // No auth cookie → the authorization middleware rejects the upgrade (401),
@@ -207,6 +215,30 @@ public class CollaborationRelayTests(CadenceApiFactory factory) : IClassFixture<
         // Authenticated, but neither the owner nor a share-token holder → 403,
         // so the socket is never accepted.
         await Assert.ThrowsAnyAsync<Exception>(() => ConnectAsync(intruderCookie, "relay-d", token: null));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("https://malicious.example")]
+    public async Task Authenticated_upgrade_with_missing_or_disallowed_origin_is_rejected(string? origin)
+    {
+        var (owner, cookie) = await RegisterAsync($"relay.origin.{Guid.NewGuid():N}@example.com");
+        await (await owner.PostAsJsonAsync("/api/projects", NewProject($"origin-{Guid.NewGuid():N}"))).AssertOkAsync();
+        var wsClient = _factory.Server.CreateWebSocketClient();
+        wsClient.ConfigureRequest = request =>
+        {
+            request.Headers["Cookie"] = cookie;
+            if (origin is not null)
+            {
+                request.Headers["Origin"] = origin;
+            }
+        };
+        var uri = new UriBuilder(_factory.Server.BaseAddress)
+        {
+            Path = "/api/collab/does-not-matter",
+        }.Uri;
+
+        await Assert.ThrowsAnyAsync<Exception>(() => wsClient.ConnectAsync(uri, CancellationToken.None));
     }
 }
 
