@@ -262,6 +262,45 @@ public class SeparationJobProcessorTests
     }
 
     [Fact]
+    public async Task ClaimNextQueuedAsync_SixteenConcurrentWorkers_ClaimDistinctJobsAtomically()
+    {
+        const int workerCount = 16;
+        using var harness = new StemDbHarness();
+        await harness.SeedOwnerAsync("owner");
+        var storage = new InMemoryStemStorage();
+        var createdAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+
+        await using (var db = harness.CreateContext())
+        {
+            db.SeparationJobs.AddRange(Enumerable.Range(0, workerCount).Select(index =>
+                NewQueuedJob(
+                    "owner",
+                    $"job-{index:D2}",
+                    $"owner/job-{index:D2}/mix",
+                    createdAt.AddMilliseconds(index))));
+            await db.SaveChangesAsync();
+        }
+
+        var claims = await Task.WhenAll(Enumerable.Range(0, workerCount).Select(async _ =>
+        {
+            await using var db = harness.CreateContext();
+            return (await NewProcessor(db, storage).ClaimNextQueuedAsync())?.Id;
+        }));
+
+        Assert.DoesNotContain(claims, id => id is null);
+        Assert.Equal(workerCount, claims.Distinct(StringComparer.Ordinal).Count());
+
+        await using var verify = harness.CreateContext();
+        var jobs = await verify.SeparationJobs.AsNoTracking().ToListAsync();
+        Assert.All(jobs, job =>
+        {
+            Assert.Equal(JobStatus.Processing, job.Status);
+            Assert.Equal(1, job.Attempts);
+            Assert.NotNull(job.ProcessingStartedAt);
+        });
+    }
+
+    [Fact]
     public async Task ReclaimTimedOutJobsAsync_RequeuesStaleJob_WhenUnderMaxAttempts()
     {
         using var harness = new StemDbHarness();

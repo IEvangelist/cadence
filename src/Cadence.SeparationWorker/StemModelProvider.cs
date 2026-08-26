@@ -29,13 +29,42 @@ public interface IStemModelProvider
 /// — so it is excluded from coverage.
 /// </summary>
 [ExcludeFromCodeCoverage]
-public sealed class HttpStemModelProvider(
-    HttpClient httpClient,
-    StemOptions options,
-    ILogger<HttpStemModelProvider> logger) : IStemModelProvider
+public sealed class HttpStemModelProvider : IStemModelProvider
 {
+    private readonly HttpClient _httpClient;
+    private readonly StemOptions _options;
+    private readonly ILogger<HttpStemModelProvider> _logger;
+    private readonly string _cacheDirectory;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private string? _cachedPath;
+
+    /// <summary>Create a provider using the per-user Cadence model cache.</summary>
+    public HttpStemModelProvider(
+        HttpClient httpClient,
+        StemOptions options,
+        ILogger<HttpStemModelProvider> logger)
+        : this(
+            httpClient,
+            options,
+            logger,
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "cadence",
+                "models"))
+    {
+    }
+
+    internal HttpStemModelProvider(
+        HttpClient httpClient,
+        StemOptions options,
+        ILogger<HttpStemModelProvider> logger,
+        string cacheDirectory)
+    {
+        _httpClient = httpClient;
+        _options = options;
+        _logger = logger;
+        _cacheDirectory = cacheDirectory;
+    }
 
     public async Task<string> GetModelPathAsync(CancellationToken cancellationToken = default)
     {
@@ -52,47 +81,42 @@ public sealed class HttpStemModelProvider(
                 return _cachedPath;
             }
 
-            var uri = options.ModelUri
+            var configuredModelUri = _options.ModelUri
                 ?? throw new InvalidOperationException("Stems:ModelUri is not configured.");
+            var modelLocation = StemModelIntegrity.ParseModelLocation(configuredModelUri);
 
-            // Reject an insecure http:// pin outright (MITM-substitutable), regardless
-            // of whether a digest is configured.
-            StemModelIntegrity.RequireSecureModelUri(uri);
-
-            // A local path or file URI is used in place (still digest-verified when a
-            // pin is configured, but never purged — it is the operator's own file).
-            if (Uri.TryCreate(uri, UriKind.Absolute, out var parsed) && parsed.IsFile)
+            // Local paths and file URIs are used in place (still digest-verified when
+            // pinned, but never purged — they are the operator's own files).
+            if (!modelLocation.IsRemote)
             {
-                await VerifyIfPinnedAsync(parsed.LocalPath, purgeOnMismatch: false, cancellationToken);
-                _cachedPath = parsed.LocalPath;
+                var localPath = modelLocation.LocalPath;
+                await VerifyIfPinnedAsync(localPath, purgeOnMismatch: false, cancellationToken);
+                _cachedPath = localPath;
                 return _cachedPath;
             }
 
-            if (!uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
-                !uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-            {
-                await VerifyIfPinnedAsync(uri, purgeOnMismatch: false, cancellationToken);
-                _cachedPath = uri;
-                return _cachedPath;
-            }
+            var uri = modelLocation.Reference;
+            Directory.CreateDirectory(_cacheDirectory);
 
-            var cacheDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "cadence",
-                "models");
-            Directory.CreateDirectory(cacheDir);
-
-            var cachePath = Path.Combine(cacheDir, HashUri(uri) + ".onnx");
+            var cachePath = Path.Combine(_cacheDirectory, HashUri(uri) + ".onnx");
             if (!File.Exists(cachePath))
             {
-                logger.LogInformation("Downloading pinned stem model from {ModelUri}.", uri);
+                _logger.LogInformation("Downloading pinned stem model from {ModelUri}.", uri);
                 await DownloadAsync(uri, cachePath, cancellationToken);
             }
             else
             {
                 // Re-verify an already-cached model so a poisoned cache entry is caught
-                // and purged rather than silently reused.
-                await VerifyIfPinnedAsync(cachePath, purgeOnMismatch: true, cancellationToken);
+                // and immediately replaced rather than silently reused.
+                try
+                {
+                    await VerifyIfPinnedAsync(cachePath, purgeOnMismatch: true, cancellationToken);
+                }
+                catch (InvalidOperationException exception)
+                {
+                    _logger.LogWarning(exception, "Purged poisoned cached stem model; downloading a clean copy.");
+                    await DownloadAsync(uri, cachePath, cancellationToken);
+                }
             }
 
             _cachedPath = cachePath;
@@ -109,7 +133,7 @@ public sealed class HttpStemModelProvider(
         var tempPath = destination + ".tmp";
         try
         {
-            using (var response = await httpClient.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
+            using (var response = await _httpClient.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
             {
                 response.EnsureSuccessStatusCode();
                 await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -140,9 +164,10 @@ public sealed class HttpStemModelProvider(
     /// </summary>
     private async Task VerifyIfPinnedAsync(string path, bool purgeOnMismatch, CancellationToken cancellationToken)
     {
-        if (options.ModelSha256 is not { Length: > 0 } expected)
+        var expected = StemModelIntegrity.NormalizeOptionalSha256(_options.ModelSha256);
+        if (expected is null)
         {
-            logger.LogWarning("Stems:ModelSha256 is not set; the stem model is not integrity-verified.");
+            _logger.LogWarning("Stems:ModelSha256 is not set; the stem model is not integrity-verified.");
             return;
         }
 

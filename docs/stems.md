@@ -131,6 +131,11 @@ The ONNX engine is a drop-in `IStemSeparator` selected only when a model is pinn
 ## Configuration (`Stems` section)
 
 Nothing here is a secret; all values have safe defaults (see `StemOptions`).
+The API and worker validate this section during host startup. Invalid settings stop
+the process before it accepts traffic or claims work: upload/duration/lease/attempt
+bounds must all be greater than zero, and a checksum cannot be configured without
+a model URI. Validation is eager (`ValidateOnStart`), not deferred until the first
+request or queued job.
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -138,8 +143,8 @@ Nothing here is a secret; all values have safe defaults (see `StemOptions`).
 | `Stems:MaxDurationSeconds` | `600` | Mix duration cap (`413`). |
 | `Stems:AllowedContentTypes` | WAV/MP3/FLAC/OGG/MP4/AAC | Accepted upload media types (`415`). |
 | `Stems:ContainerName` | `stems` | Blob container for mixes + stems. |
-| `Stems:ModelUri` | *(unset)* | Pinned ONNX model URI; unset → band-split engine. |
-| `Stems:ModelSha256` | *(unset)* | Pinned lowercase-hex SHA-256 of the model binary; when set, a downloaded/local model is verified against it and rejected on mismatch. |
+| `Stems:ModelUri` | *(unset)* | Pinned ONNX model URI; remote models must use HTTPS. Unset → band-split engine. |
+| `Stems:ModelSha256` | *(unset)* | Pinned 64-digit hexadecimal SHA-256 of the model binary. Required when `ModelUri` is remote in Production; optional for local files and non-production remote development. |
 | `Stems:ProcessingLeaseSeconds` | `300` | How long a job may stay `Processing` before it is treated as abandoned and reclaimed. |
 | `Stems:MaxAttempts` | `3` | Max processing attempts before a repeatedly-stuck job is failed instead of requeued. |
 
@@ -205,14 +210,21 @@ When `Stems:ModelUri` is set, the model download is now hardened by
 
 - **Secure transport required.** An `http://` model URI is rejected outright — a
   plaintext download is MITM-substitutable. `https://`, `file://`, and bare local
-  paths are allowed.
+  paths are allowed. Surrounding configuration whitespace is removed once before
+  both startup validation and loading classify the reference.
 - **Pinned digest verified.** When `Stems:ModelSha256` is set, the fetched bytes
   are hashed (SHA-256) and compared to the pin (case-, whitespace-, and
   `sha256:`-prefix-insensitive). A downloaded model is verified **before** it is
   published into the cache (written to a temp file and only moved into place on a
   match); an already-cached file is re-verified on each start and **purged** on
-  mismatch so a corrupted cache self-heals. A mismatch throws and the worker
-  refuses to run the model.
+  mismatch, then immediately re-downloaded and verified so a corrupted cache
+  self-heals. A bad replacement still throws and the worker refuses to run it.
+  Surrounding whitespace is trimmed once; a whitespace-only value is consistently
+  treated as unset by both startup validation and the model provider.
+- **Production startup is fail-fast.** A remote Production model must configure
+  both an HTTPS `ModelUri` and a valid `ModelSha256`. Supplying only a checksum,
+  a malformed digest, plaintext/unsupported remote transport, or a non-positive
+  resource bound fails options validation at both API and worker startup.
 
 Leaving `Stems:ModelUri` unset (the CI/dev default) still uses the hermetic
 `BandSplitStemSeparator`, so none of this affects the integration test.

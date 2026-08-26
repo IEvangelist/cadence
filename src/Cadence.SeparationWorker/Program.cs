@@ -18,7 +18,11 @@ builder.AddAzureBlobServiceClient("blobs");
 
 // Stem options (bound lazily so nothing here is required for a local run) plus the
 // Blob-backed stem storage the pipeline persists mixes and stems through.
-builder.Services.Configure<StemOptions>(builder.Configuration.GetSection(StemOptions.SectionName));
+builder.Services.AddSingleton<IValidateOptions<StemOptions>>(
+    new StemOptionsValidator(builder.Environment.IsProduction()));
+builder.Services.AddOptions<StemOptions>()
+    .Bind(builder.Configuration.GetSection(StemOptions.SectionName))
+    .ValidateOnStart();
 builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<StemOptions>>().Value);
 builder.Services.AddSingleton<IStemStorage, BlobStemStorage>();
 

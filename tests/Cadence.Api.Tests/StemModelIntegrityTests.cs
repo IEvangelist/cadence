@@ -12,7 +12,9 @@ public class StemModelIntegrityTests
     [Theory]
     [InlineData("http://example.com/model.onnx")]
     [InlineData("HTTP://EXAMPLE.COM/model.onnx")]
-    public void RequireSecureModelUri_Rejects_Http(string uri) =>
+    [InlineData(" \thttp://example.com/model.onnx\r\n ")]
+    [InlineData("ftp://example.com/model.onnx")]
+    public void RequireSecureModelUri_Rejects_InsecureOrUnsupportedRemoteScheme(string uri) =>
         Assert.Throws<InvalidOperationException>(() => StemModelIntegrity.RequireSecureModelUri(uri));
 
     [Theory]
@@ -25,6 +27,44 @@ public class StemModelIntegrityTests
         var ex = Record.Exception(() => StemModelIntegrity.RequireSecureModelUri(uri));
         Assert.Null(ex);
     }
+
+    [Theory]
+    [InlineData(" \thttps://example.com/model.onnx\r\n ", StemModelLocationKind.Https, "https://example.com/model.onnx")]
+    [InlineData(" \tfile:///models/model.onnx\r\n ", StemModelLocationKind.FileUri, "file:///models/model.onnx")]
+    [InlineData(" \tC:\\models\\model.onnx\r\n ", StemModelLocationKind.LocalPath, "C:\\models\\model.onnx")]
+    public void ParseModelLocation_TrimsAndClassifiesConsistently(
+        string configured,
+        StemModelLocationKind expectedKind,
+        string expectedReference)
+    {
+        var location = StemModelIntegrity.ParseModelLocation(configured);
+
+        Assert.Equal(expectedKind, location.Kind);
+        Assert.Equal(expectedReference, location.Reference);
+        Assert.Equal(expectedKind == StemModelLocationKind.Https, location.IsRemote);
+        if (expectedKind == StemModelLocationKind.LocalPath)
+        {
+            Assert.Equal(expectedReference, location.LocalPath);
+        }
+        else if (expectedKind == StemModelLocationKind.FileUri)
+        {
+            Assert.Equal(location.ParsedUri!.LocalPath, location.LocalPath);
+        }
+        else
+        {
+            Assert.Throws<InvalidOperationException>(() => location.LocalPath);
+        }
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    [InlineData(" \t\r\n ", null)]
+    [InlineData(" abc123 ", "abc123")]
+    public void NormalizeOptionalSha256_TrimsAndTreatsWhitespaceAsMissing(
+        string? configured,
+        string? expected) =>
+        Assert.Equal(expected, StemModelIntegrity.NormalizeOptionalSha256(configured));
 
     [Fact]
     public void ComputeSha256Hex_MatchesKnownVector()

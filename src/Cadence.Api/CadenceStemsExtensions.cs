@@ -20,7 +20,11 @@ public static class CadenceStemsExtensions
     {
         // Bind lazily via IOptions so late-added configuration (e.g. test overrides)
         // is honored, then expose the resolved value for direct injection.
-        builder.Services.Configure<StemOptions>(builder.Configuration.GetSection(StemOptions.SectionName));
+        builder.Services.AddSingleton<IValidateOptions<StemOptions>>(
+            new StemOptionsValidator(builder.Environment.IsProduction()));
+        builder.Services.AddOptions<StemOptions>()
+            .Bind(builder.Configuration.GetSection(StemOptions.SectionName))
+            .ValidateOnStart();
         builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<StemOptions>>().Value);
 
         if (!builder.Environment.IsEnvironment("Testing"))

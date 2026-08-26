@@ -79,7 +79,7 @@ public static class StemsEndpoints
             return TooLarge(options);
         }
 
-        var bytes = await ReadCappedAsync(request.Body, options.MaxUploadBytes, cancellationToken);
+        var bytes = await CappedStreamReader.ReadAsync(request.Body, options.MaxUploadBytes, cancellationToken);
         if (bytes is null)
         {
             return TooLarge(options);
@@ -274,24 +274,6 @@ public static class StemsEndpoints
         }
 
         return false;
-    }
-
-    private static async Task<byte[]?> ReadCappedAsync(Stream body, long cap, CancellationToken cancellationToken)
-    {
-        using var buffer = new MemoryStream();
-        var chunk = new byte[81920];
-        int read;
-        while ((read = await body.ReadAsync(chunk, cancellationToken)) > 0)
-        {
-            if (buffer.Length + read > cap)
-            {
-                return null;
-            }
-
-            buffer.Write(chunk, 0, read);
-        }
-
-        return buffer.ToArray();
     }
 
     private static string SanitizeFileName(string? name)
