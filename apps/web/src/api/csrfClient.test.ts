@@ -89,6 +89,67 @@ describe('CsrfClient', () => {
       .rejects.toBeInstanceOf(CsrfTokenError)
   })
 
+  it('recovers after a transient token acquisition failure', async () => {
+    let tokenRequests = 0
+    let mutations = 0
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === CSRF_ENDPOINT) {
+        tokenRequests += 1
+        return tokenRequests === 1
+          ? new Response(null, { status: 503 })
+          : json({ requestToken: 'recovered-token' })
+      }
+      mutations += 1
+      return new Response(null, { status: 204 })
+    })
+    const client = new CsrfClient(fetchImpl, '')
+
+    await expect(client.mutation('/api/projects', { method: 'POST' }))
+      .rejects.toMatchObject({ status: 503 })
+    await expect(client.mutation('/api/projects', { method: 'POST' }))
+      .resolves.toMatchObject({ status: 204 })
+
+    expect(tokenRequests).toBe(2)
+    expect(mutations).toBe(1)
+  })
+
+  it('single-flights concurrent failures and their concurrent retry', async () => {
+    let resolveFirst!: (response: Response) => void
+    const firstTokenResponse = new Promise<Response>((resolve) => {
+      resolveFirst = resolve
+    })
+    let tokenRequests = 0
+    let mutations = 0
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === CSRF_ENDPOINT) {
+        tokenRequests += 1
+        return tokenRequests === 1
+          ? firstTokenResponse
+          : json({ requestToken: 'retry-token' })
+      }
+      mutations += 1
+      expect(new Headers(init?.headers).get(CSRF_HEADER)).toBe('retry-token')
+      return new Response(null, { status: 204 })
+    })
+    const client = new CsrfClient(fetchImpl, '')
+
+    const first = client.mutation('/api/projects/a', { method: 'DELETE' })
+    const second = client.mutation('/api/projects/b', { method: 'DELETE' })
+    expect(tokenRequests).toBe(1)
+    resolveFirst(new Response(null, { status: 503 }))
+    const failed = await Promise.allSettled([first, second])
+    expect(failed.every((result) => result.status === 'rejected')).toBe(true)
+
+    const retried = await Promise.all([
+      client.mutation('/api/projects/a', { method: 'DELETE' }),
+      client.mutation('/api/projects/b', { method: 'DELETE' }),
+    ])
+
+    expect(retried.every((response) => response.status === 204)).toBe(true)
+    expect(tokenRequests).toBe(2)
+    expect(mutations).toBe(2)
+  })
+
   it('never sends a token to an absolute or non-API path', async () => {
     const fetchImpl = vi.fn(async () => json({ requestToken: 'secret' }))
     const client = new CsrfClient(fetchImpl, '')

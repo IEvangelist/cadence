@@ -48,8 +48,16 @@ export class CsrfClient {
   }
 
   private getToken(): Promise<string> {
-    this.tokenPromise ??= this.fetchToken()
-    return this.tokenPromise
+    if (this.tokenPromise) return this.tokenPromise
+
+    const tokenPromise = this.fetchToken()
+    this.tokenPromise = tokenPromise
+    void tokenPromise.catch(() => {
+      // Do not let one transient acquisition failure poison this singleton.
+      // A newer request may already be in flight, so clear by identity only.
+      if (this.tokenPromise === tokenPromise) this.tokenPromise = null
+    })
+    return tokenPromise
   }
 
   private async fetchToken(): Promise<string> {
