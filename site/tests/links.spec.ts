@@ -34,6 +34,9 @@ test.describe('internal links & assets', () => {
       for (const h of hrefs) {
         if (!h.startsWith(origin)) continue; // skip external links
         const pathname = new URL(h).pathname; // drop hash + query
+        // The composer is overlaid during Pages artifact assembly and has its
+        // own deployment suite; Astro preview intentionally serves only site/.
+        if (pathname.startsWith('/cadence/app/')) continue;
         if (!seen.has(pathname)) {
           seen.add(pathname);
           queue.push(pathname);

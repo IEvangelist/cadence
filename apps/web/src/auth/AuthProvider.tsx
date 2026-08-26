@@ -9,6 +9,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AuthClient, AuthError, type Me } from './authClient'
 import { AuthContext, type AuthContextValue, type AuthStatus } from './authContext'
+import { backendConfig } from '../platform/backendConfig'
 
 interface AuthProviderProps {
   children: ReactNode
@@ -27,7 +28,9 @@ function messageFor(error: unknown, fallback: string): string {
 export function AuthProvider({ children, client: injected, onAuthChange }: AuthProviderProps) {
   const [client] = useState<AuthClient>(() => injected ?? new AuthClient())
   const [user, setUser] = useState<Me | null>(null)
-  const [status, setStatus] = useState<AuthStatus>('loading')
+  const [status, setStatus] = useState<AuthStatus>(
+    backendConfig.available ? 'loading' : 'anonymous',
+  )
   const [providers, setProviders] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -48,6 +51,10 @@ export function AuthProvider({ children, client: injected, onAuthChange }: AuthP
   }, [])
 
   const refresh = useCallback(async () => {
+    if (!backendConfig.available) {
+      await applyUser(null)
+      return
+    }
     try {
       const me = await client.me()
       await applyUser(me)
@@ -57,6 +64,7 @@ export function AuthProvider({ children, client: injected, onAuthChange }: AuthP
   }, [client, applyUser])
 
   useEffect(() => {
+    if (!backendConfig.available) return
     let cancelled = false
     void (async () => {
       await refresh()

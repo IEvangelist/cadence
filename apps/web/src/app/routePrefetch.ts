@@ -1,6 +1,7 @@
 import { warmRouteLoaders } from './routeLoaders'
 import type { PlatformCapabilitySource } from '../composer/contract/platform'
 import { capabilitySourceFor } from '../platform/platformCapabilities'
+import { cadenceCacheName } from '../pwa/cacheName'
 
 declare global {
   interface Window {
@@ -68,6 +69,8 @@ async function waitForServiceWorkerControl(
 }
 
 export function loadedStaticAssetUrls(win: Window = window): string[] {
+  const assetBase = new URL(`${import.meta.env.BASE_URL}assets/`, win.location.origin)
+    .pathname
   return [
     ...new Set(
       win.performance
@@ -75,7 +78,7 @@ export function loadedStaticAssetUrls(win: Window = window): string[] {
         .map((entry) => new URL(entry.name, win.location.href))
         .filter(
           (url) =>
-            url.origin === win.location.origin && url.pathname.startsWith('/assets/'),
+            url.origin === win.location.origin && url.pathname.startsWith(assetBase),
         )
         .map((url) => url.href),
     ),
@@ -87,7 +90,7 @@ export async function ensureAssetsCached(
   cacheStorage: CacheStorage,
   fetchImpl: typeof fetch,
 ): Promise<void> {
-  const cache = await cacheStorage.open('cadence-shell-v1')
+  const cache = await cacheStorage.open(cadenceCacheName())
   for (const url of urls) {
     if (!(await cache.match(url, { ignoreVary: true }))) {
       const response = await fetchImpl(url, { cache: 'force-cache' })

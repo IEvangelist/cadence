@@ -22,6 +22,7 @@ import {
   type AuthDialogContextValue,
   type OpenAuthOptions,
 } from './authDialogContext'
+import { backendConfig } from '../platform/backendConfig'
 
 interface AuthDialogProviderProps {
   children: ReactNode
@@ -58,6 +59,7 @@ export function AuthDialogProvider({ children }: AuthDialogProviderProps) {
 
   const openAuth = useCallback(
     (next: OpenAuthOptions = {}) => {
+      if (!backendConfig.available) return
       attemptRef.current += 1
       setBusy(false)
       launcherRef.current =
@@ -143,7 +145,7 @@ export function AuthDialogProvider({ children }: AuthDialogProviderProps) {
   return (
     <AuthDialogContext value={context}>
       {children}
-      <AuthDialogAdapter
+      {backendConfig.available ? <AuthDialogAdapter
         open={options !== null}
         title={mode === 'signin' ? 'Sign in to Cadence' : 'Create your account'}
         description="Sign in, request a magic link, or create an account to continue."
@@ -276,7 +278,7 @@ export function AuthDialogProvider({ children }: AuthDialogProviderProps) {
             {auth.error}
           </p>
         ) : null}
-      </AuthDialogAdapter>
+      </AuthDialogAdapter> : null}
     </AuthDialogContext>
   )
 }

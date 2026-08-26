@@ -13,8 +13,10 @@ import {
   readThemePreference,
 } from './theme/themeStorage'
 import { prefetchSecondaryRoutes } from './app/routePrefetch'
+import { restorePagesRoute } from './app/pagesFallback'
 
 applyThemePreference(readThemePreference(browserThemeStorage()))
+restorePagesRoute()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

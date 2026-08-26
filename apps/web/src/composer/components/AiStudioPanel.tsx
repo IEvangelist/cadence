@@ -1,6 +1,7 @@
 import type { AiStudioController } from '../hooks/useAiStudio'
 import type { AiFeatureId } from '../ai/expanded'
 import { GROOVE_PRESETS, MOTIF_LENGTH_RANGE, STYLES } from '../ai/expanded'
+import { appRouteUrl } from '../../app/paths'
 
 interface AiStudioPanelProps {
   studio: AiStudioController
@@ -235,7 +236,7 @@ export function AiStudioPanel({ studio }: AiStudioPanelProps) {
           <a
             className="btn btn-sm"
             data-interaction="studio.ai.upgrade"
-            href="/pricing"
+            href={appRouteUrl('/pricing')}
           >
             View plans
           </a>

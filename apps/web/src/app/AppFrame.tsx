@@ -11,6 +11,8 @@ import type { AppRouteContext } from './routeContext'
 import { RouteEffects } from './RouteEffects'
 import { AuthCallbackEffect } from './AuthCallbackEffect'
 import { clearAuthReturnTarget } from '../auth/authReturnTarget'
+import { backendConfig } from '../platform/backendConfig'
+import { appAssetUrl } from './paths'
 
 function destination(pathname: string, location: ReturnType<typeof useLocation>) {
   return { pathname, search: location.search, hash: location.hash }
@@ -42,6 +44,7 @@ export function AppFrame() {
     }
   }
   const routeContext: AppRouteContext = {
+    backendAvailable: backendConfig.available,
     authenticated,
     signingOut,
     openSignIn: () => authDialog.openAuth(),
@@ -71,7 +74,7 @@ export function AppFrame() {
         {!studio ? <header className="app-header">
           <div className="app-header__brand">
             <div className="brand">
-              <img className="brand-mark" src="/favicon.svg" alt="" aria-hidden="true" />
+              <img className="brand-mark" src={appAssetUrl('favicon.svg')} alt="" aria-hidden="true" />
               <h1>{appName}</h1>
             </div>
             <p className="tagline">{tagline}</p>
@@ -84,7 +87,7 @@ export function AppFrame() {
               signingOut={signingOut}
               onSignOut={signOut}
             />
-            <nav className="app-nav" aria-label="Primary">
+            {backendConfig.available ? <nav className="app-nav" aria-label="Primary">
               <button
                 type="button"
                 className="app-nav-link"
@@ -103,7 +106,7 @@ export function AppFrame() {
               >
                 Pricing
               </button>
-            </nav>
+            </nav> : null}
             <ThemeMenu />
           </div>
         </header> : null}

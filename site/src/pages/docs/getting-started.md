@@ -10,6 +10,13 @@ This guide gets Cadence running locally. The backend is orchestrated by
 [Aspire](https://aspire.dev), so a single command
 starts the API together with its Postgres, Redis, and Blob dependencies.
 
+To compose without installing anything, open the public
+[Cadence web composer](https://ievangelist.github.io/cadence/app/). That static
+GitHub Pages build supports anonymous local projects and offline use. It does not
+include a hosted Cadence backend; sign-in, cloud sync, collaboration, billing,
+and stem separation remain unavailable there. The steps below run the complete
+self-hosted stack.
+
 ## Prerequisites
 
 | Tool | Version | Used for |

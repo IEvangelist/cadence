@@ -8,6 +8,7 @@ import { StudioHelpMenu } from '../../studio'
 import { ThemeMenu } from '../../theme/ThemeMenu'
 import { useProjectStore } from '../projectStoreContext'
 import type { AppRouteContext } from '../routeContext'
+import { backendConfig } from '../../platform/backendConfig'
 
 function destination(pathname: string, location: ReturnType<typeof useLocation>) {
   return { pathname, search: location.search, hash: location.hash }
@@ -27,12 +28,12 @@ export function StudioRoute() {
   } = useOutletContext<AppRouteContext>()
   const collab = useMemo(
     () =>
-      buildCollabConfig({
+      backendConfig.available ? buildCollabConfig({
         search: location.search,
         location: window.location,
         user: auth.user,
         relayOverride: import.meta.env?.VITE_COLLAB_URL as string | undefined,
-      }),
+      }) : null,
     [auth.user, location.search],
   )
   const consumeSharedProject = useCallback(() => {
@@ -73,11 +74,12 @@ export function StudioRoute() {
           onSharedProjectConsumed: consumeSharedProject,
         }}
         collab={collab}
-        canShare={authenticated}
+        canShare={backendConfig.available && authenticated}
         guardNavigation
         utilityControls={
           <>
             <StudioHelpMenu
+              backendAvailable={backendConfig.available}
               onNavigate={(pathname) => void navigate(destination(pathname, location))}
             />
             <ThemeMenu />

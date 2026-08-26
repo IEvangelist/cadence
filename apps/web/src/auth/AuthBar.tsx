@@ -5,6 +5,7 @@
  * a link to their profile, and sign-out. Every control is labelled for a11y.
  */
 import { useAuth } from './authContext'
+import { backendConfig } from '../platform/backendConfig'
 
 interface AuthBarProps {
   /** Open the shared sign-in Dialog. */
@@ -27,6 +28,14 @@ export function AuthBar({
   onSignOut,
 }: AuthBarProps) {
   const auth = useAuth()
+
+  if (!backendConfig.available) {
+    return (
+      <p className="authbar auth-note" role="status">
+        Local-only mode. Accounts and cloud sync are not connected.
+      </p>
+    )
+  }
 
   if (auth.status === 'loading') {
     return <div className="authbar authbar--loading" aria-hidden="true" />

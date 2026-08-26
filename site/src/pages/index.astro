@@ -89,21 +89,27 @@ const description =
         <div class="hero-actions" data-hero-reveal>
           <a
             class="btn btn-primary"
+            data-interaction="hero.web-app"
+            href={href('/app/')}
+          >
+            <Icon name="rocket" size={20} />
+            Open web composer
+          </a>
+          <a
+            class="btn btn-secondary"
             data-interaction="hero.download"
             href="#download"
           >
             <Icon name="download" size={20} />
             Download
           </a>
-          <a
-            class="btn btn-secondary"
-            data-interaction="hero.docs"
-            href={href('/docs/')}
-          >
-            <Icon name="book" size={20} />
-            Docs
-          </a>
+          <a class="hero-docs-link" data-interaction="hero.docs" href={href('/docs/')}>Docs</a>
         </div>
+        <p class="hero-availability" data-hero-reveal>
+          Start anonymously and keep composing offline. The public web app has no
+          hosted backend, so account, sync, collaboration, and stems features show
+          their existing unavailable states.
+        </p>
       </div>
 
       <figure class="hero-media" data-hero-reveal>
@@ -391,6 +397,19 @@ const description =
     flex-wrap: wrap;
     gap: var(--space-3);
     margin-top: var(--space-8);
+  }
+
+  .hero-docs-link {
+    align-self: center;
+    padding: var(--space-2);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .hero-availability {
+    max-width: 34rem;
+    margin-top: var(--space-4);
+    color: var(--color-text-subtle);
+    font-size: var(--font-size-sm);
   }
 
   .hero-media {

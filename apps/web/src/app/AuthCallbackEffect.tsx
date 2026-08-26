@@ -8,6 +8,7 @@ import {
   type RouteLocation,
 } from '../auth/authReturnTarget'
 import { useAuth } from '../auth/authContext'
+import { backendConfig } from '../platform/backendConfig'
 
 interface PendingCallback {
   target: string
@@ -29,6 +30,7 @@ export function AuthCallbackEffect() {
   const [notice, setNotice] = useState<AuthNotice | null>(null)
 
   useEffect(() => {
+    if (!backendConfig.available) return
     const callback = consumeAuthCallback(location)
     if (!callback) return
 

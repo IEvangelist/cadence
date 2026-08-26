@@ -52,7 +52,11 @@ function devServerOptions() {
 }
 
 // https://vite.dev/config/
+const configuredBase = process.env.CADENCE_BASE_PATH ?? '/'
+const base = `/${configuredBase.replace(/^\/+|\/+$/g, '')}/`.replace('//', '/')
+
 export default defineConfig({
+  base,
   plugins: [magentaGlobalShim(), react()],
   server: devServerOptions(),
   worker: {
@@ -106,4 +110,3 @@ export default defineConfig({
     },
   },
 })
-

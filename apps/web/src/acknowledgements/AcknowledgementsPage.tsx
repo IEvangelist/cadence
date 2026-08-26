@@ -18,6 +18,7 @@
  */
 import { useId } from 'react'
 import { RoutedPage } from '../ui/RoutedPage'
+import { appAssetUrl } from '../app/paths'
 import './acknowledgements.css'
 
 interface AcknowledgementsPageProps {
@@ -44,8 +45,8 @@ const DOCS_ACKNOWLEDGEMENTS_URL =
   'https://ievangelist.github.io/cadence/docs/acknowledgements/'
 const LGPL_TEXT_URL = 'https://www.gnu.org/licenses/lgpl-3.0.txt'
 const GPL_TEXT_URL = 'https://www.gnu.org/licenses/gpl-3.0.txt'
-const OFL_TEXT_URL = '/licenses/OFL-1.1.txt'
-const LUCIDE_LICENSE_URL = '/licenses/lucide-ISC.txt'
+const OFL_TEXT_URL = appAssetUrl('licenses/OFL-1.1.txt')
+const LUCIDE_LICENSE_URL = appAssetUrl('licenses/lucide-ISC.txt')
 
 // The only third-party component Cadence redistributes into the shipped bundle
 // (mirrors the docs "Licenses" table). Kept as data so more rows can be added

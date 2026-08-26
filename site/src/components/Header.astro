@@ -22,11 +22,11 @@ const repo = 'https://github.com/IEvangelist/cadence';
         <a data-interaction="nav.github" href={repo} rel="noopener">GitHub</a>
         <a
           class="btn btn-primary btn-sm"
-          data-interaction="nav.download"
-          href={href('/#download')}
+          data-interaction="nav.web-app"
+          href={href('/app/')}
         >
-          <Icon name="download" size={18} />
-          Download
+          <Icon name="rocket" size={18} />
+          Open web app
         </a>
       </nav>
 
@@ -41,10 +41,10 @@ const repo = 'https://github.com/IEvangelist/cadence';
           <a data-interaction="nav.mobile.github" href={repo} rel="noopener">GitHub</a>
           <a
             class="btn btn-primary btn-sm"
-            data-interaction="nav.mobile.download"
-            href={href('/#download')}
+            data-interaction="nav.mobile.web-app"
+            href={href('/app/')}
           >
-            Download
+            Open web app
           </a>
         </nav>
       </details>

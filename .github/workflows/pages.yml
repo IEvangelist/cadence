@@ -1,4 +1,4 @@
-# Build and (conditionally) publish the Cadence landing + docs site to GitHub Pages.
+# Build and (conditionally) publish Cadence landing, docs, and web composer to Pages.
 #
 # GATING — mirrors the repo's "always run, gate the sensitive step on visibility"
 # pattern (see the CodeQL jobs in ci.yml):
@@ -11,13 +11,18 @@
 #     for lack of Pages.
 # To enable publishing: make the repo public (or set repo variable ENABLE_PAGES
 # = true) and turn on Pages (Settings -> Pages -> Source: GitHub Actions).
-name: Pages (landing + docs)
+name: Pages (site + web composer)
 
 on:
   push:
     branches: [main]
     paths:
       - 'site/**'
+      - 'apps/web/**'
+      - 'tools/*pages*.mjs'
+      - 'tests/pages-artifact.test.mjs'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -34,23 +39,36 @@ jobs:
   # for the (conditional) deploy job. No Pages permissions needed here.
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: site
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: site/package-lock.json
-      - run: npm ci
+          cache-dependency-path: |
+            package-lock.json
+            site/package-lock.json
+      - name: Install web dependencies
+        run: npm ci
+      - name: Install site dependencies
+        run: npm ci --prefix site
       - name: Build site
-        run: npm run build
+        run: npm run build --prefix site
+      - name: Build web composer for Pages
+        env:
+          CADENCE_BASE_PATH: /cadence/app/
+          VITE_BACKEND_MODE: disabled
+        run: npm run build --workspace @cadence/web
+      - name: Assemble collision-free Pages artifact
+        run: node tools/pages-artifact.mjs
+      - name: Test Pages artifact assembly
+        run: |
+          node --test tests/pages-artifact.test.mjs
+          node tools/verify-pages-artifact.mjs
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          path: site/dist
+          path: .pages-artifact
 
   # Publish only when Pages is available (public repo OR ENABLE_PAGES=true) and
   # only on a push to main / manual dispatch. Skipped -> green on the private repo.

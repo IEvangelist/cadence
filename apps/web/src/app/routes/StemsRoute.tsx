@@ -5,12 +5,14 @@ import type { AppRouteContext } from '../routeContext'
 export function StemsRoute() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { authenticated, entitlements } = useOutletContext<AppRouteContext>()
+  const { authenticated, backendAvailable, entitlements } =
+    useOutletContext<AppRouteContext>()
   const go = (pathname: string) =>
     void navigate({ pathname, search: location.search, hash: location.hash })
   return (
     <StemsPage
       authenticated={authenticated}
+      backendAvailable={backendAvailable}
       entitled={entitlements?.stemSeparation ?? false}
       onUpgrade={() => go('/pricing')}
       onClose={() => go('/')}

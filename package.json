@@ -14,7 +14,10 @@
     "build": "npm run build --workspace @cadence/web",
     "test": "npm run test --workspace @cadence/web",
     "test:coverage": "npm run test:coverage --workspace @cadence/web",
-    "e2e": "npm run e2e --workspace @cadence/web"
+    "e2e": "npm run e2e --workspace @cadence/web",
+    "build:pages": "node tools/build-pages.mjs",
+    "test:pages-artifact": "node --test tests/pages-artifact.test.mjs",
+    "test:pages": "npm run test:pages-artifact && npm run e2e:pages --workspace @cadence/web"
   },
   "engines": {
     "node": ">=20"

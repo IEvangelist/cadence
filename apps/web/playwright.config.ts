@@ -14,6 +14,7 @@ const collabUrl = `ws://127.0.0.1:${RELAY_PORT}`
 
 export default defineConfig({
   testDir: './e2e',
+  testIgnore: 'pages-deployment.spec.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -45,6 +46,7 @@ export default defineConfig({
       testIgnore: [
         'mobile-contract.spec.ts',
         'final-gate/**/*.spec.ts',
+        'pages-deployment.spec.ts',
       ],
       use: { ...devices['Desktop Chrome'] },
     },
