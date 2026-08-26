@@ -377,6 +377,14 @@ paths first. See [`collaboration.md`](collaboration.md) for the design.
   `whenSynced` both destroy the IndexedDB provider, surface a nonfatal
   unavailable status, and connect the live socket exactly once; destroying the
   session cancels the bound without a late connect.
+- **Fallback merge**: real browser IndexedDB failure exercises two offline
+  edits across reload, then matching-user reauthentication merges the
+  owner/project/grant serialized backup with a peer's server-only edit.
+- **Cleanup retry**: hung `indexedDB.databases()`, blocked deletes, retained
+  pending registries, and startup/auth retry are bounded and deterministic.
+- **Auth/save races**: StrictMode and deferred old-user responses cannot
+  overwrite a newer sign-out/user or recreate the identity cache; deferred
+  remote saves cannot recreate an owner backup after purge.
 - **Auth + production-store wiring**: real `AppProviders` and
   `SyncingProjectStore` prove remote-primary autosave also writes an
   owner/project/grant-scoped serialized backup, full API failure reloads only

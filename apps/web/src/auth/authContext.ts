@@ -9,6 +9,14 @@ import { createContext, useContext } from 'react'
 import { type AuthClient, type Me } from './authClient'
 import type { OfflineAuthIdentity } from './offlineIdentity'
 
+let authGeneration = 0
+
+/** Process-wide monotonic auth ordering, including StrictMode remounts. */
+export function nextAuthGeneration(): number {
+  authGeneration += 1
+  return authGeneration
+}
+
 export type AuthStatus =
   | 'loading'
   | 'authenticated'
@@ -17,6 +25,7 @@ export type AuthStatus =
   | 'anonymous'
 
 export interface AuthPersistenceChange {
+  generation: number
   mode: 'authenticated' | 'offline' | 'anonymous'
   ownerId: string | null
   purgeOwnerIds: string[]

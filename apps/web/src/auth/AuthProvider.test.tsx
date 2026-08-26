@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { useState } from 'react'
+import { StrictMode, useState } from 'react'
 import type { AuthClient, Me } from './authClient'
 import { AuthProvider } from './AuthProvider'
 import { useAuth, type AuthPersistenceChange } from './authContext'
@@ -79,6 +79,7 @@ describe('AuthProvider / useAuth', () => {
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('anonymous'))
     expect(screen.getByTestId('user')).toHaveTextContent('none')
     expect(onAuthChange).toHaveBeenCalledWith({
+      generation: expect.any(Number),
       mode: 'anonymous',
       ownerId: null,
       purgeOwnerIds: [],
@@ -98,6 +99,7 @@ describe('AuthProvider / useAuth', () => {
     expect(screen.getByTestId('user')).toHaveTextContent('Ada')
     expect(screen.getByTestId('providers')).toHaveTextContent('GitHub,Google')
     expect(onAuthChange).toHaveBeenCalledWith({
+      generation: expect.any(Number),
       mode: 'authenticated',
       ownerId: '1',
       purgeOwnerIds: [],
@@ -125,6 +127,7 @@ describe('AuthProvider / useAuth', () => {
     expect(screen.getByTestId('user')).toHaveTextContent('none')
     expect(screen.getByTestId('offline-user')).toHaveTextContent('Ada')
     expect(onAuthChange).toHaveBeenCalledWith({
+      generation: expect.any(Number),
       mode: 'offline',
       ownerId: '1',
       purgeOwnerIds: [],
@@ -143,6 +146,7 @@ describe('AuthProvider / useAuth', () => {
     )
     expect(identityStore.read()).toBeNull()
     expect(onAuthChange).toHaveBeenCalledWith({
+      generation: expect.any(Number),
       mode: 'anonymous',
       ownerId: null,
       purgeOwnerIds: ['1'],
@@ -170,10 +174,117 @@ describe('AuthProvider / useAuth', () => {
       expect(screen.getByTestId('user')).toHaveTextContent('Bea'),
     )
     expect(onAuthChange).toHaveBeenCalledWith({
+      generation: expect.any(Number),
       mode: 'authenticated',
       ownerId: '2',
       purgeOwnerIds: ['1'],
     })
+    expect(identityStore.read()).toEqual({ id: '2', displayName: 'Bea' })
+  })
+
+  it('ignores a late old-user refresh after sign-out and never recreates its cache', async () => {
+    let resolveOldUser!: (value: Me | null) => void
+    let refreshSignal: AbortSignal | undefined
+    const oldUser = new Promise<Me | null>((resolve) => {
+      resolveOldUser = resolve
+    })
+    const client = fakeClient({
+      me: vi.fn((signal?: AbortSignal) => {
+        refreshSignal = signal
+        return oldUser
+      }),
+    })
+    const storage = new MemoryStorage()
+    const identityStore = new OfflineIdentityStore(storage)
+    identityStore.remember(user)
+    const onAuthChange = vi.fn()
+    renderWith(client, onAuthChange, identityStore)
+
+    fireEvent.click(screen.getByText('signout'))
+    await waitFor(() =>
+      expect(screen.getByTestId('status')).toHaveTextContent('anonymous'),
+    )
+    expect(refreshSignal?.aborted).toBe(true)
+
+    resolveOldUser(user)
+    await Promise.resolve()
+    expect(screen.getByTestId('user')).toHaveTextContent('none')
+    expect(identityStore.read()).toBeNull()
+    expect(
+      onAuthChange.mock.calls.some(
+        ([change]) => change.mode === 'authenticated',
+      ),
+    ).toBe(false)
+  })
+
+  it('ignores a late old-user refresh after a newer user signs in', async () => {
+    let resolveOldUser!: (value: Me | null) => void
+    const oldUser = new Promise<Me | null>((resolve) => {
+      resolveOldUser = resolve
+    })
+    const nextUser: Me = {
+      id: '2',
+      email: 'b@b.com',
+      displayName: 'Bea',
+      tier: 'Free',
+    }
+    const storage = new MemoryStorage()
+    const identityStore = new OfflineIdentityStore(storage)
+    const client = fakeClient({
+      me: vi.fn(() => oldUser),
+      login: vi.fn(async () => nextUser),
+    })
+    renderWith(client, undefined, identityStore)
+
+    fireEvent.click(screen.getByText('signin'))
+    await waitFor(() =>
+      expect(screen.getByTestId('user')).toHaveTextContent('Bea'),
+    )
+    resolveOldUser(user)
+    await Promise.resolve()
+
+    expect(screen.getByTestId('user')).toHaveTextContent('Bea')
+    expect(identityStore.read()).toEqual({ id: '2', displayName: 'Bea' })
+  })
+
+  it('keeps the newest StrictMode refresh and ignores the aborted response', async () => {
+    const resolvers: Array<(value: Me | null) => void> = []
+    const signals: AbortSignal[] = []
+    const client = fakeClient({
+      me: vi.fn((signal?: AbortSignal) => {
+        if (signal) signals.push(signal)
+        return new Promise<Me | null>((resolve) => resolvers.push(resolve))
+      }),
+    })
+    const storage = new MemoryStorage()
+    const identityStore = new OfflineIdentityStore(storage)
+    render(
+      <StrictMode>
+        <AuthProvider
+          client={client}
+          offlineIdentityStore={identityStore}
+        >
+          <Harness />
+        </AuthProvider>
+      </StrictMode>,
+    )
+    await waitFor(() => expect(client.me).toHaveBeenCalledTimes(2))
+    expect(signals[0].aborted).toBe(true)
+
+    const nextUser: Me = {
+      id: '2',
+      email: 'b@b.com',
+      displayName: 'Bea',
+      tier: 'Free',
+    }
+    resolvers[1](nextUser)
+    await waitFor(() =>
+      expect(screen.getByTestId('user')).toHaveTextContent('Bea'),
+    )
+    resolvers[0](user)
+    await Promise.resolve()
+
+    expect(screen.getByTestId('user')).toHaveTextContent('Bea')
     expect(identityStore.read()).toEqual({ id: '2', displayName: 'Bea' })
   })
 
@@ -186,6 +297,7 @@ describe('AuthProvider / useAuth', () => {
 
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'))
     expect(onAuthChange).toHaveBeenLastCalledWith({
+      generation: expect.any(Number),
       mode: 'authenticated',
       ownerId: '1',
       purgeOwnerIds: [],
@@ -206,6 +318,7 @@ describe('AuthProvider / useAuth', () => {
     fireEvent.click(screen.getByText('signin'))
     await waitFor(() =>
       expect(onAuthChange).toHaveBeenLastCalledWith({
+        generation: expect.any(Number),
         mode: 'authenticated',
         ownerId: '1',
         purgeOwnerIds: [],
@@ -271,6 +384,7 @@ describe('AuthProvider / useAuth', () => {
 
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('anonymous'))
     expect(onAuthChange).toHaveBeenLastCalledWith({
+      generation: expect.any(Number),
       mode: 'anonymous',
       ownerId: null,
       purgeOwnerIds: ['1'],

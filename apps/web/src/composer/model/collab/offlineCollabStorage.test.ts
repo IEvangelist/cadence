@@ -8,6 +8,7 @@ import {
   clearOwnerCollaborationData,
   createCollaborationBackupStore,
   registerCollaborationDatabase,
+  retryPendingOwnerCollaborationCleanup,
 } from './offlineCollabStorage'
 
 const config: CollabConfig = {
@@ -105,16 +106,40 @@ describe('owner-scoped offline collaboration storage', () => {
     const registryKey = Array.from(
       { length: storage.length },
       (_, index) => storage.key(index),
-    ).find((key) => key?.includes('idb-registry'))
+    ).find((key) => key?.includes('idb-pending'))
     expect(registryKey && storage.getItem(registryKey)).toContain(databaseName)
 
     database.close()
-    await clearOwnerCollaborationData(config.user.id, {
+    await retryPendingOwnerCollaborationCleanup(config.user.id, {
       storage,
       indexedDB,
       timeoutMs: 100,
     })
     expect((await indexedDB.databases()).map((entry) => entry.name))
       .not.toContain(databaseName)
+  })
+
+  it('bounds database enumeration before deleting registered names', async () => {
+    const storage = new MemoryStorage()
+    const indexedDB = new IDBFactory()
+    vi.spyOn(indexedDB, 'databases').mockReturnValue(
+      new Promise<never>(() => {}),
+    )
+    const databaseName = 'cadence.collab.v1:account-1:enumeration-hang'
+    registerCollaborationDatabase(config.user.id, databaseName, storage)
+
+    await expect(
+      clearOwnerCollaborationData(config.user.id, {
+        storage,
+        indexedDB,
+        timeoutMs: 5,
+      }),
+    ).resolves.toBeUndefined()
+
+    const retained = Array.from(
+      { length: storage.length },
+      (_, index) => storage.key(index) ?? '',
+    ).filter((key) => key.includes('idb-pending'))
+    expect(retained).toEqual([])
   })
 })

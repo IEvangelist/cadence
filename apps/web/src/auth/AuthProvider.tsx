@@ -13,6 +13,7 @@ import {
   type AuthContextValue,
   type AuthPersistenceChange,
   type AuthStatus,
+  nextAuthGeneration,
 } from './authContext'
 import {
   OfflineIdentityStore,
@@ -28,6 +29,11 @@ interface AuthProviderProps {
   offlineIdentityStore?: OfflineIdentityStore
   /** Called whenever live/offline/anonymous persistence ownership changes. */
   onAuthChange?: (change: AuthPersistenceChange) => void | Promise<void>
+}
+
+interface AuthOperation {
+  generation: number
+  controller: AbortController
 }
 
 function messageFor(error: unknown, fallback: string): string {
@@ -55,52 +61,97 @@ export function AuthProvider({
   const [error, setError] = useState<string | null>(null)
 
   const onAuthChangeRef = useRef(onAuthChange)
+  const operationRef = useRef<{
+    generation: number
+    controller: AbortController | null
+  }>({ generation: 0, controller: null })
   useEffect(() => {
     onAuthChangeRef.current = onAuthChange
   }, [onAuthChange])
 
+  const beginOperation = useCallback((): AuthOperation => {
+    operationRef.current.controller?.abort()
+    const operation = {
+      generation: nextAuthGeneration(),
+      controller: new AbortController(),
+    }
+    operationRef.current = operation
+    return operation
+  }, [])
+
+  const isCurrent = useCallback(
+    (operation: AuthOperation): boolean =>
+      operationRef.current.generation === operation.generation &&
+      operationRef.current.controller === operation.controller &&
+      !operation.controller.signal.aborted,
+    [],
+  )
+
+  const cancelOperation = useCallback(
+    (operation: AuthOperation) => {
+      if (!isCurrent(operation)) return
+      operation.controller.abort()
+      operationRef.current = {
+        generation: nextAuthGeneration(),
+        controller: null,
+      }
+    },
+    [isCurrent],
+  )
+
   const applyChange = useCallback(
     async (
-      change: AuthPersistenceChange,
+      operation: AuthOperation,
+      change: Omit<AuthPersistenceChange, 'generation'>,
       nextUser: Me | null,
       nextOfflineUser: OfflineAuthIdentity | null,
-    ) => {
+    ): Promise<boolean> => {
+      if (!isCurrent(operation)) return false
       setStatus('loading')
       setUser(null)
       setOfflineUser(null)
       try {
-        await onAuthChangeRef.current?.(change)
+        await onAuthChangeRef.current?.({
+          ...change,
+          generation: operation.generation,
+        })
       } catch {
         // Authentication is authoritative; local cleanup/reconciliation is best-effort.
       }
+      if (!isCurrent(operation)) return false
       setUser(nextUser)
       setOfflineUser(nextOfflineUser)
       setStatus(change.mode)
+      return true
     },
-    [],
+    [isCurrent],
   )
 
   const applyAuthenticated = useCallback(
-    async (next: Me) => {
+    async (operation: AuthOperation, next: Me) => {
+      if (!isCurrent(operation)) return
       const cached = offlineIdentityStore.read()
       const purgeOwnerIds =
         cached && cached.id !== next.id ? [cached.id] : []
       if (purgeOwnerIds.length > 0) offlineIdentityStore.clear()
-      await applyChange(
+      const applied = await applyChange(
+        operation,
         { mode: 'authenticated', ownerId: next.id, purgeOwnerIds },
         next,
         null,
       )
-      offlineIdentityStore.remember(next)
+      if (applied && isCurrent(operation)) offlineIdentityStore.remember(next)
     },
-    [applyChange, offlineIdentityStore],
+    [applyChange, isCurrent, offlineIdentityStore],
   )
 
   const applyAnonymous = useCallback(
-    async (purge = true) => {
+    async (operation: AuthOperation, purge = true) => {
+      if (!isCurrent(operation)) return
       const cached = offlineIdentityStore.read()
       offlineIdentityStore.clear()
       await applyChange(
+        operation,
         {
           mode: 'anonymous',
           ownerId: null,
@@ -110,65 +161,91 @@ export function AuthProvider({
         null,
       )
     },
-    [applyChange, offlineIdentityStore],
+    [applyChange, isCurrent, offlineIdentityStore],
   )
 
-  const applyOffline = useCallback(async () => {
+  const applyOffline = useCallback(async (operation: AuthOperation) => {
+    if (!isCurrent(operation)) return
     const cached = offlineIdentityStore.read()
     if (!cached) {
-      await applyAnonymous(false)
+      await applyAnonymous(operation, false)
       return
     }
     await applyChange(
+      operation,
       { mode: 'offline', ownerId: cached.id, purgeOwnerIds: [] },
       null,
       cached,
     )
-  }, [applyAnonymous, applyChange, offlineIdentityStore])
+  }, [applyAnonymous, applyChange, isCurrent, offlineIdentityStore])
 
-  const refresh = useCallback(async () => {
+  const performRefresh = useCallback(async (operation: AuthOperation) => {
     if (!backendConfig.available) {
-      await applyAnonymous()
+      await applyAnonymous(operation)
       return
     }
     try {
-      const me = await client.me()
-      if (me) await applyAuthenticated(me)
-      else await applyAnonymous()
+      const me = await client.me(operation.controller.signal)
+      if (!isCurrent(operation)) return
+      if (me) await applyAuthenticated(operation, me)
+      else await applyAnonymous(operation)
     } catch {
-      await applyOffline()
+      if (isCurrent(operation)) await applyOffline(operation)
     }
-  }, [client, applyAnonymous, applyAuthenticated, applyOffline])
+  }, [
+    client,
+    applyAnonymous,
+    applyAuthenticated,
+    applyOffline,
+    isCurrent,
+  ])
+
+  const refresh = useCallback(async () => {
+    const operation = beginOperation()
+    await performRefresh(operation)
+  }, [beginOperation, performRefresh])
 
   useEffect(() => {
     if (!backendConfig.available) return
-    let cancelled = false
+    const operation = beginOperation()
     void (async () => {
-      await refresh()
+      await performRefresh(operation)
+      if (!isCurrent(operation)) return
       try {
-        const list = await client.providers()
-        if (!cancelled) setProviders(list)
+        const list = await client.providers(operation.controller.signal)
+        if (isCurrent(operation)) setProviders(list)
       } catch {
-        if (!cancelled) setProviders([])
+        if (isCurrent(operation)) setProviders([])
       }
     })()
-    return () => {
-      cancelled = true
-    }
-  }, [client, refresh])
+    return () => cancelOperation(operation)
+  }, [
+    beginOperation,
+    cancelOperation,
+    client,
+    isCurrent,
+    performRefresh,
+  ])
 
   const signIn = useCallback(
     async (email: string, password: string) => {
+      const operation = beginOperation()
       setError(null)
       try {
-        const me = await client.login(email, password)
-        await applyAuthenticated(me)
+        const me = await client.login(
+          email,
+          password,
+          operation.controller.signal,
+        )
+        if (!isCurrent(operation)) return
+        await applyAuthenticated(operation, me)
       } catch (err) {
+        if (!isCurrent(operation)) return
         setError(messageFor(err, 'Sign in failed.'))
         throw err
       }
     },
-    [client, applyAuthenticated],
+    [applyAuthenticated, beginOperation, client, isCurrent],
   )
 
   const register = useCallback(
@@ -201,18 +278,20 @@ export function AuthProvider({
   )
 
   const signOut = useCallback(async () => {
+    const operation = beginOperation()
     setError(null)
     const cached = offlineIdentityStore.read()
     offlineIdentityStore.clear()
     setStatus('signing-out')
     let logoutError: unknown
-    const logout = client.logout().catch((error) => {
+    const logout = client.logout(operation.controller.signal).catch((error) => {
       logoutError = error
     })
     // Explicit local sign-out revokes access to cached owner data immediately;
     // the best-effort server request is never allowed to delay that cleanup.
     try {
       await onAuthChangeRef.current?.({
+        generation: operation.generation,
         mode: 'anonymous',
         ownerId: null,
         purgeOwnerIds: cached ? [cached.id] : [],
@@ -220,12 +299,14 @@ export function AuthProvider({
     } catch {
       // Local identity is already revoked; cleanup is best-effort and bounded.
     }
+    if (!isCurrent(operation)) return
     await logout
+    if (!isCurrent(operation)) return
     setUser(null)
     setOfflineUser(null)
     setStatus('anonymous')
     if (logoutError !== undefined) throw logoutError
-  }, [client, offlineIdentityStore])
+  }, [beginOperation, client, isCurrent, offlineIdentityStore])
 
   const value = useMemo<AuthContextValue>(
     () => ({

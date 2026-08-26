@@ -18,6 +18,8 @@ import type { CollabConfig } from './collab/useCollaboration'
 import {
   clearOwnerCollaborationData,
   createCollaborationBackupStore,
+  retryPendingCollaborationCleanup,
+  retryPendingOwnerCollaborationCleanup,
 } from './collab/offlineCollabStorage'
 
 /** A tiny mutable holder read on every call to pick the active backend. */
@@ -25,11 +27,14 @@ export interface AuthFlag {
   current: boolean
   mode: 'authenticated' | 'offline' | 'anonymous'
   ownerId: string | null
+  generation: number
 }
 
 export interface CollaborationScopedProjectStore extends ProjectStore {
   forCollaboration(config: CollabConfig): ProjectStore
+  loadCollaborationBackup(config: CollabConfig): Promise<Project | null>
   clearOwnerCollaborationData(ownerId: string): Promise<void>
+  retryPendingCollaborationData(ownerId?: string): Promise<void>
 }
 
 export function supportsCollaborationScope(
@@ -69,14 +74,53 @@ class CollaborativeProjectStore implements ProjectStore {
         : 'denied'
   }
 
+  private capture(mode: 'authenticated' | 'offline') {
+    return {
+      generation: this.auth.generation,
+      mode,
+      ownerId: this.accountId,
+    } as const
+  }
+
+  private isCurrent(
+    snapshot: ReturnType<CollaborativeProjectStore['capture']>,
+  ): boolean {
+    return this.auth.generation === snapshot.generation &&
+      this.auth.mode === snapshot.mode &&
+      this.auth.ownerId === snapshot.ownerId
+  }
+
+  private async guardedBackup<T>(
+    project: Project,
+    snapshot: ReturnType<CollaborativeProjectStore['capture']>,
+    backup: () => Promise<T>,
+  ): Promise<T | undefined> {
+    if (!this.isCurrent(snapshot)) return undefined
+    const result = await backup()
+    if (!this.isCurrent(snapshot)) {
+      // A sign-out/account switch may have purged while hashing the scope.
+      // Remove a late write so it cannot resurrect the old owner's backup.
+      try {
+        await this.backup.remove(project.id)
+      } catch {
+        // Cleanup retry remains owner-scoped; never expose the stale result.
+      }
+      return undefined
+    }
+    return result
+  }
+
   private async backupAfterRemote<T>(
+    project: Project,
+    snapshot: ReturnType<CollaborativeProjectStore['capture']>,
     remote: () => Promise<T>,
     backup: () => Promise<unknown>,
   ): Promise<T> {
     try {
       const result = await remote()
+      if (!this.isCurrent(snapshot)) return result
       try {
-        await backup()
+        await this.guardedBackup(project, snapshot, backup)
       } catch (error) {
         console.warn(
           'The project was saved remotely, but its offline collaboration backup failed.',
@@ -88,7 +132,7 @@ class CollaborativeProjectStore implements ProjectStore {
       // This is a deliberate backup, not a silent fallback: preserve the local
       // snapshot but propagate the primary remote failure to autosave state.
       try {
-        await backup()
+        await this.guardedBackup(project, snapshot, backup)
       } catch {
         // The remote error remains authoritative.
       }
@@ -104,9 +148,19 @@ class CollaborativeProjectStore implements ProjectStore {
 
   async save(project: Project): Promise<StoredProjectMeta> {
     const access = this.access()
-    if (access === 'offline') return this.backup.save(project)
+    if (access === 'offline') {
+      const result = await this.guardedBackup(
+        project,
+        this.capture('offline'),
+        () => this.backup.save(project),
+      )
+      if (result) return result
+      return this.denyWrite()
+    }
     if (access === 'denied') return this.denyWrite()
     return this.backupAfterRemote(
+      project,
+      this.capture('authenticated'),
       () => this.remote.save(project),
       () => this.backup.save(project),
     )
@@ -115,12 +169,21 @@ class CollaborativeProjectStore implements ProjectStore {
   async persist(project: Project): Promise<StoredProjectMeta> {
     const access = this.access()
     if (access === 'offline') {
-      return this.backup.persist
-        ? this.backup.persist(project)
-        : this.backup.save(project)
+      const result = await this.guardedBackup(
+        project,
+        this.capture('offline'),
+        () =>
+          this.backup.persist
+            ? this.backup.persist(project)
+            : this.backup.save(project),
+      )
+      if (result) return result
+      return this.denyWrite()
     }
     if (access === 'denied') return this.denyWrite()
     return this.backupAfterRemote(
+      project,
+      this.capture('authenticated'),
       async () => {
         if (this.remote.persist) return this.remote.persist(project)
         const meta = await this.remote.save(project)
@@ -155,7 +218,9 @@ class CollaborativeProjectStore implements ProjectStore {
     const access = this.access()
     if (access === 'offline') return this.backup.remove(id)
     if (access === 'denied') return this.denyWrite()
+    const snapshot = this.capture('authenticated')
     await this.remote.remove(id)
+    if (!this.isCurrent(snapshot)) return
     try {
       await this.backup.remove(id)
     } catch (error) {
@@ -176,7 +241,9 @@ class CollaborativeProjectStore implements ProjectStore {
     const access = this.access()
     if (access === 'offline') return this.backup.setLast(id)
     if (access === 'denied') return this.denyWrite()
+    const snapshot = this.capture('authenticated')
     await this.remote.setLast(id)
+    if (!this.isCurrent(snapshot)) return
     try {
       await this.backup.setLast(id)
     } catch (error) {
@@ -250,10 +317,27 @@ export class SyncingProjectStore implements CollaborationScopedProjectStore {
     )
   }
 
+  loadCollaborationBackup(config: CollabConfig): Promise<Project | null> {
+    return createCollaborationBackupStore(
+      config,
+      this.collaborationStorage,
+    ).loadLast()
+  }
+
   clearOwnerCollaborationData(ownerId: string): Promise<void> {
     return clearOwnerCollaborationData(ownerId, {
       storage: this.collaborationStorage,
     })
+  }
+
+  retryPendingCollaborationData(ownerId?: string): Promise<void> {
+    return ownerId
+      ? retryPendingOwnerCollaborationCleanup(ownerId, {
+          storage: this.collaborationStorage,
+        })
+      : retryPendingCollaborationCleanup({
+          storage: this.collaborationStorage,
+        })
   }
 
   /**

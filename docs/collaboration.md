@@ -108,6 +108,15 @@ read or write that backup; generic anonymous storage and other accounts see
 nothing. An empty safe placeholder lets the Yjs cache hydrate even if an
 autosave debounce had not completed before reload.
 
+If IndexedDB itself is unavailable, the matching serialized backup is loaded
+before the socket may connect. Local-only sessions apply it immediately. A live
+session first adopts the relay CRDT, then performs one deterministic recovery
+merge: successful IndexedDB always wins and skips the fallback; otherwise
+backup values win same-id field conflicts while server-only tracks/notes are
+retained. The merged update is written through Yjs once and converges normally.
+This additive policy favors no data loss because a plain snapshot cannot prove
+whether an absent entity was deleted locally or added remotely.
+
 ## Relay & transport
 
 The relay is a **first-party ASP.NET Core WebSocket endpoint** inside
@@ -218,7 +227,18 @@ authentication rebuilds the provider with
 networking enabled and merges; a confirmed 401, explicit sign-out, or account
 switch clears the cached identity, serialized backups, and every registered
 owner-scoped Yjs database. Blocked database deletion remains registered for a
-bounded retry rather than becoming an untracked cache.
+bounded retry rather than becoming an untracked cache. Database enumeration and
+every delete request have independent time bounds. Active databases move to a
+separate pending-deletion registry during cleanup; startup and every auth
+transition retry only that pending registry, never a current account's active
+cache.
+
+Auth requests are ordered by a process-wide generation and AbortController.
+StrictMode remounts, refresh, sign-in, and sign-out cancel older operations;
+state, store ownership, and confirmed-identity writes re-check the generation
+after every await. Collaborative autosaves capture the same auth generation:
+if a remote request completes after sign-out/account switch, it cannot create a
+new backup, and a local backup write that crosses the boundary is removed.
 
 ## Activation
 

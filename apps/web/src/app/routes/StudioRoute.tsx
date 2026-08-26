@@ -27,7 +27,7 @@ export function StudioRoute() {
     signOut,
     watermarkExports,
   } = useOutletContext<AppRouteContext>()
-  const collab = useMemo(
+  const baseCollab = useMemo(
     () =>
       backendConfig.available ? buildCollabConfig({
         search: location.search,
@@ -37,6 +37,17 @@ export function StudioRoute() {
         relayOverride: import.meta.env?.VITE_COLLAB_URL as string | undefined,
       }) : null,
     [auth.offlineUser, auth.status, auth.user, location.search],
+  )
+  const collab = useMemo(
+    () =>
+      baseCollab && supportsCollaborationScope(store)
+        ? {
+            ...baseCollab,
+            loadSerializedBackup: () =>
+              store.loadCollaborationBackup(baseCollab),
+          }
+        : baseCollab,
+    [baseCollab, store],
   )
   const composerStore = useMemo(
     () =>

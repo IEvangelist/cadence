@@ -255,7 +255,16 @@ describe('createWebsocketProvider IndexedDB lifecycle', () => {
     let socket!: FakeSocket
     const statuses: string[] = []
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const provider = createWebsocketProvider(config, {
+    const backup = project()
+    backup.name = 'Offline backup'
+    backup.tracks[0].notes.push(
+      createNote({ pitch: 64, start: 1 }, 'offline'),
+    )
+    const loadSerializedBackup = vi.fn(async () => backup)
+    const provider = createWebsocketProvider({
+      ...config,
+      loadSerializedBackup,
+    }, {
       resolvePersistenceName: async () => 'failed-persistence',
       registerPersistence: vi.fn(),
       persistenceTimeoutMs: 1_000,
@@ -277,10 +286,33 @@ describe('createWebsocketProvider IndexedDB lifecycle', () => {
     )
     expect(persistence.destroy).toHaveBeenCalledTimes(1)
     expect(socket.connect).toHaveBeenCalledTimes(1)
+    expect(loadSerializedBackup).toHaveBeenCalledTimes(1)
+    expect(provider.doc.getMap('project').size).toBe(0)
+
+    const serverDoc = new Y.Doc()
+    const server = project()
+    server.name = 'Server state'
+    server.tracks[0].notes.push(
+      createNote({ pitch: 67, start: 2 }, 'server'),
+    )
+    seedProjectDoc(serverDoc, server)
+    Y.applyUpdate(provider.doc, Y.encodeStateAsUpdate(serverDoc), 'relay')
+    const synced = vi.fn()
+    provider.onSynced?.(synced)
+    socket.fireSynced()
+
+    const recovered = readProject(provider.doc)
+    expect(synced).toHaveBeenCalledOnce()
+    expect(recovered.name).toBe('Offline backup')
+    expect(recovered.tracks).toHaveLength(1)
+    expect(recovered.tracks[0].notes.map((note) => note.id).sort())
+      .toEqual(['initial', 'offline', 'server'])
 
     resolveLateSync()
     await Promise.resolve()
     expect(socket.connect).toHaveBeenCalledTimes(1)
+    expect(loadSerializedBackup).toHaveBeenCalledTimes(1)
+    serverDoc.destroy()
   })
 
   it('bounds a hung IndexedDB initialization and destroys it before network fallback', async () => {
@@ -338,5 +370,27 @@ describe('createWebsocketProvider IndexedDB lifecycle', () => {
     expect(createSocket).not.toHaveBeenCalled()
     expect(sockets).toHaveLength(0)
     expect(provider.awareness).toBeInstanceOf(Awareness)
+  })
+
+  it('uses the serialized fallback once when successful IndexedDB is empty', async () => {
+    const sockets: FakeSocket[] = []
+    const backup = project()
+    backup.name = 'Serialized fallback'
+    const loadSerializedBackup = vi.fn(async () => backup)
+    const provider = createWebsocketProvider(
+      {
+        ...config,
+        networkEnabled: false,
+        loadSerializedBackup,
+      },
+      dependencies(sockets),
+    )
+    providers.push(provider)
+
+    await waitForPersistence(provider)
+
+    expect(loadSerializedBackup).toHaveBeenCalledOnce()
+    expect(readProject(provider.doc).name).toBe('Serialized fallback')
+    expect(sockets).toHaveLength(0)
   })
 })

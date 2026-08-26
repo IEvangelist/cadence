@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AuthClient, Me } from '../auth/authClient'
 import { useAuth } from '../auth/authContext'
+import { nextAuthGeneration } from '../auth/authContext'
 import { buildCollabConfig } from '../composer/model/collab/collabConfig'
 import { createEmptyProject, type Project } from '../composer/model/project'
 import { serializeProject } from '../composer/model/persistence'
@@ -14,6 +15,7 @@ import { AppProviders } from './AppProviders'
 import { useProjectStore } from './projectStoreContext'
 import { handleAuthChange } from '../appStores'
 import { registerCollaborationDatabase } from '../composer/model/collab/offlineCollabStorage'
+import { CSRF_HEADER } from '../api/csrfClient'
 
 const ada: Me = {
   id: 'account-1',
@@ -112,6 +114,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   await handleAuthChange({
+    generation: nextAuthGeneration(),
     mode: 'anonymous',
     ownerId: null,
     purgeOwnerIds: ['account-1', 'account-2'],
@@ -128,7 +131,9 @@ describe('AppProviders collaborative persistence wiring', () => {
       async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = new URL(String(input), 'https://app.test')
         const method = init?.method ?? 'GET'
+        if (url.pathname === '/api/auth/csrf') return csrfResponse()
         if (url.pathname === '/api/projects' && method === 'POST') {
+          expect(new Headers(init?.headers).get(CSRF_HEADER)).toBe('test-csrf-token')
           remoteProject = JSON.parse(String(init?.body)).data
             ? projectFromPayload(String(init?.body))
             : null
@@ -208,6 +213,7 @@ describe('AppProviders collaborative persistence wiring', () => {
     remoteProject = null
     fetchImpl.mockImplementation(async (input, init) => {
       const url = new URL(String(input), 'https://app.test')
+      if (url.pathname === '/api/auth/csrf') return csrfResponse()
       if (url.pathname === '/api/projects' && (init?.method ?? 'GET') === 'GET') {
         return new Response('[]', {
           status: 200,
@@ -238,6 +244,7 @@ describe('AppProviders collaborative persistence wiring', () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), 'https://app.test')
       const method = init?.method ?? 'GET'
+      if (url.pathname === '/api/auth/csrf') return csrfResponse()
       if (url.pathname === '/api/projects' && method === 'GET') {
         return new Response('[]', {
           status: 200,
@@ -245,6 +252,7 @@ describe('AppProviders collaborative persistence wiring', () => {
         })
       }
       if (url.pathname === '/api/projects' && method === 'POST') {
+        expect(new Headers(init?.headers).get(CSRF_HEADER)).toBe('test-csrf-token')
         return projectResponse(project, 201)
       }
       return new Response(null, { status: 204 })
@@ -307,4 +315,11 @@ function projectResponse(project: Project, status = 200): Response {
     }),
     { status, headers: { 'Content-Type': 'application/json' } },
   )
+}
+
+function csrfResponse(): Response {
+  return new Response(JSON.stringify({ requestToken: 'test-csrf-token' }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
 }

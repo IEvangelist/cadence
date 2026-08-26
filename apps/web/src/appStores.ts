@@ -16,6 +16,7 @@ const authFlag: AuthFlag = {
   current: false,
   mode: 'anonymous',
   ownerId: null,
+  generation: 0,
 }
 const localStore = createProjectStore()
 const remoteStore = new RemoteProjectStore()
@@ -27,8 +28,10 @@ export const projectStore = new SyncingProjectStore(localStore, remoteStore, aut
 export async function handleAuthChange(
   change: AuthPersistenceChange,
 ): Promise<void> {
+  if (change.generation < authFlag.generation) return
   const wasAuthenticated = authFlag.current
   // Deny every owner-scoped view while cleanup/reconciliation is in flight.
+  authFlag.generation = change.generation
   authFlag.current = false
   authFlag.mode = 'anonymous'
   authFlag.ownerId = null
@@ -38,6 +41,11 @@ export async function handleAuthChange(
       projectStore.clearOwnerCollaborationData(ownerId),
     ),
   )
+  if (authFlag.generation !== change.generation) return
+  await projectStore.retryPendingCollaborationData(
+    change.ownerId ?? undefined,
+  )
+  if (authFlag.generation !== change.generation) return
 
   authFlag.current = change.mode === 'authenticated'
   authFlag.mode = change.mode

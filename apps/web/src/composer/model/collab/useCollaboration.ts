@@ -41,6 +41,11 @@ export interface CollabConfig {
   url: string
   /** Opaque share token proving access; the relay validates it server-side. */
   token?: string
+  /**
+   * Matching owner/project/grant serialized recovery. Used exactly once only
+   * when IndexedDB initialization fails, before any relay connection.
+   */
+  loadSerializedBackup?: () => Promise<Project | null>
 }
 
 /** Network transport abstraction so the hook is unit-testable without sockets. */
@@ -157,6 +162,7 @@ export function useCollaboration(
   const userId = config?.user.id
   const userName = config?.user.name
   const userColor = config?.user.color
+  const loadSerializedBackup = config?.loadSerializedBackup
   const subscribeProjectTransitions = binding.subscribeProjectTransitions
 
   const pushTransition = useCallback(
@@ -208,6 +214,7 @@ export function useCollaboration(
       role,
       url,
       token,
+      loadSerializedBackup,
       user: { id: userId, name: userName, color: userColor },
     }
     const provider = providerFactory(activeConfig)
@@ -298,6 +305,7 @@ export function useCollaboration(
     userId,
     userName,
     userColor,
+    loadSerializedBackup,
     providerFactory,
     pushTransition,
     subscribeProjectTransitions,

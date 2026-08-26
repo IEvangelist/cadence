@@ -14,6 +14,9 @@ import type {
 } from './useCollaboration'
 import { collabPersistenceName } from './collabPersistenceIdentity'
 import { registerCollaborationDatabase } from './offlineCollabStorage'
+import { isProjectDocEmpty, readProject, reconcileDoc } from './crdt'
+import { mergeSerializedBackup } from './backupMerge'
+import type { Project } from '../project'
 
 export { collabPersistenceName } from './collabPersistenceIdentity'
 
@@ -110,6 +113,52 @@ export function createWebsocketProvider(
   let socketStarted = false
   let initializationTimer: ReturnType<typeof setTimeout> | undefined
   let cancelInitialization: (() => void) | undefined
+  let backupRecoveryAttempted = false
+  let serializedBackup: Project | null = null
+  let serializedBackupMerged = false
+
+  const mergeBackupIntoDoc = () => {
+    if (
+      serializedBackupMerged ||
+      !serializedBackup ||
+      config.role === 'viewer'
+    ) {
+      return
+    }
+    const merged = isProjectDocEmpty(doc)
+      ? serializedBackup
+      : mergeSerializedBackup(readProject(doc), serializedBackup)
+    serializedBackupMerged = true
+    reconcileDoc(doc, merged, Symbol('cadence-collab-backup-recovery'))
+  }
+
+  const recoverSerializedBackup = async () => {
+    if (
+      backupRecoveryAttempted ||
+      config.role === 'viewer' ||
+      !config.loadSerializedBackup
+    ) {
+      return
+    }
+    backupRecoveryAttempted = true
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), dependencies.persistenceTimeoutMs)
+    })
+    const backup = await Promise.race([
+      Promise.resolve()
+        .then(() => config.loadSerializedBackup?.() ?? null)
+        .catch(() => null),
+      timeout,
+    ])
+    if (timer !== undefined) clearTimeout(timer)
+    if (destroyed || !backup) return
+    serializedBackup = backup
+    // With no authorized network, the backup is the only available state.
+    // Live clients defer the additive backup-precedence merge until the relay's
+    // initial state has arrived, avoiding an independently seeded duplicate tree.
+    if (!socket) mergeBackupIntoDoc()
+  }
 
   const finishPersistenceSync = (status: OfflinePersistenceStatus) => {
     if (destroyed || persistenceSynced) return
@@ -176,6 +225,7 @@ export function createWebsocketProvider(
       if (failedPersistence) {
         void Promise.resolve(failedPersistence.destroy()).catch(() => undefined)
       }
+      await recoverSerializedBackup()
       console.warn(
         'Offline collaboration persistence is unavailable; continuing without reload durability.',
         outcome.error,
@@ -183,6 +233,7 @@ export function createWebsocketProvider(
       finishPersistenceSync('unavailable')
       return
     }
+    if (isProjectDocEmpty(doc)) await recoverSerializedBackup()
     finishPersistenceSync('ready')
   }
   void startPersistence()
@@ -191,7 +242,13 @@ export function createWebsocketProvider(
     doc,
     awareness: socket?.awareness ?? localAwareness!,
     onStatus: socket?.onStatus,
-    onSynced: socket?.onSynced,
+    onSynced: socket
+      ? (listener) =>
+          socket.onSynced(() => {
+            mergeBackupIntoDoc()
+            listener()
+          })
+      : undefined,
     onPersistenceSynced: (listener) => {
       if (persistenceSynced) {
         queueMicrotask(() => {

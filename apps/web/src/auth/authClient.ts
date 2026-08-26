@@ -85,20 +85,28 @@ export class AuthClient {
     }
   }
 
-  private async postJson(path: string, body: unknown): Promise<Response> {
+  private async postJson(
+    path: string,
+    body: unknown,
+    signal?: AbortSignal,
+  ): Promise<Response> {
     this.assertAvailable()
     return this.fetchImpl(this.url(path), {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal,
     })
   }
 
   /** The current session, or null when signed out (401). */
-  async me(): Promise<Me | null> {
+  async me(signal?: AbortSignal): Promise<Me | null> {
     this.assertAvailable()
-    const response = await this.fetchImpl(this.url('/api/auth/me'), { credentials: 'include' })
+    const response = await this.fetchImpl(this.url('/api/auth/me'), {
+      credentials: 'include',
+      signal,
+    })
     if (response.status === 401) return null
     if (!response.ok) throw new AuthError(response.status, 'Could not load the current session.')
     return (await response.json()) as Me
@@ -117,8 +125,16 @@ export class AuthClient {
   }
 
   /** Sign in with a local account. */
-  async login(email: string, password: string): Promise<Me> {
-    const response = await this.postJson('/api/auth/login', { email, password })
+  async login(
+    email: string,
+    password: string,
+    signal?: AbortSignal,
+  ): Promise<Me> {
+    const response = await this.postJson(
+      '/api/auth/login',
+      { email, password },
+      signal,
+    )
     if (response.status === 401) throw new AuthError(401, 'Incorrect email or password.')
     if (!response.ok) throw new AuthError(response.status, await readError(response, 'Sign in failed.'))
     this.csrf.clear()
@@ -126,10 +142,13 @@ export class AuthClient {
   }
 
   /** Sign out the current session. */
-  async logout(): Promise<void> {
+  async logout(signal?: AbortSignal): Promise<void> {
     this.assertAvailable()
     try {
-      await this.csrf.mutation('/api/auth/logout', { method: 'POST' })
+      await this.csrf.mutation('/api/auth/logout', {
+        method: 'POST',
+        signal,
+      })
     } finally {
       this.csrf.clear()
     }
@@ -141,9 +160,12 @@ export class AuthClient {
   }
 
   /** The external OAuth providers the server has wired. */
-  async providers(): Promise<string[]> {
+  async providers(signal?: AbortSignal): Promise<string[]> {
     this.assertAvailable()
-    const response = await this.fetchImpl(this.url('/api/auth/providers'), { credentials: 'include' })
+    const response = await this.fetchImpl(this.url('/api/auth/providers'), {
+      credentials: 'include',
+      signal,
+    })
     if (!response.ok) return []
     const body = (await response.json()) as { providers: string[] }
     return body.providers ?? []

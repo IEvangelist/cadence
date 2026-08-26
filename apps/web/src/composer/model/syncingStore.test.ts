@@ -17,7 +17,12 @@ describe('SyncingProjectStore', () => {
   beforeEach(() => {
     local = makeLocal()
     remote = makeLocal()
-    auth = { current: false, mode: 'anonymous', ownerId: null }
+    auth = {
+      current: false,
+      mode: 'anonymous',
+      ownerId: null,
+      generation: 0,
+    }
     collaborationStorage = new MemoryStorage()
     store = new SyncingProjectStore(
       local,
@@ -277,4 +282,63 @@ describe('SyncingProjectStore', () => {
     expect(await ownerStore.loadLast()).toBeNull()
     expect((await otherStore.loadLast())?.name).not.toBe('Owner backup')
   })
+
+  it.each([
+    ['sign-out', { mode: 'anonymous' as const, ownerId: null }],
+    ['account switch', { mode: 'authenticated' as const, ownerId: 'account-2' }],
+  ])(
+    'does not recreate a purged backup when a remote save completes after %s',
+    async (_label, transition) => {
+      auth.current = true
+      auth.mode = 'authenticated'
+      auth.ownerId = 'account-1'
+      auth.generation = 1
+      const scoped = store.forCollaboration(collabConfig())
+      let finishRemote!: (meta: {
+        id: string
+        name: string
+        updatedAt: number
+      }) => void
+      remote.persist = vi.fn(
+        () =>
+          new Promise<{ id: string; name: string; updatedAt: number }>((resolve) => {
+            finishRemote = resolve
+          }),
+      )
+      const project = createEmptyProject('shared')
+      project.name = 'Late old-owner backup'
+      const saving = scoped.persist?.(project)
+      await waitForCall(remote.persist!)
+
+      auth.generation = 2
+      auth.current = transition.mode === 'authenticated'
+      auth.mode = transition.mode
+      auth.ownerId = transition.ownerId
+      await store.clearOwnerCollaborationData('account-1')
+      finishRemote({ id: project.id, name: project.name, updatedAt: 1 })
+      await saving
+
+      auth.generation = 3
+      auth.current = false
+      auth.mode = 'offline'
+      auth.ownerId = 'account-1'
+      expect((await scoped.loadLast())?.name)
+        .not.toBe('Late old-owner backup')
+      const staleKeys = Array.from(
+        { length: collaborationStorage.length },
+        (_, index) => collaborationStorage.key(index),
+      ).filter((key) =>
+        key?.startsWith('cadence.collab.backup.v1:account-1:'),
+      )
+      expect(staleKeys).toEqual([])
+    },
+  )
 })
+
+async function waitForCall(
+  mock: ProjectStore['persist'],
+): Promise<void> {
+  await vi.waitFor(() => {
+    expect(mock).toHaveBeenCalled()
+  })
+}

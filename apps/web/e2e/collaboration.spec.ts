@@ -111,10 +111,30 @@ async function openCollaborator(
   user: Identity,
   role: 'editor' | 'viewer',
   room: string,
+  options: { failIndexedDb?: boolean } = {},
 ) {
   const context = await browser.newContext()
   const page = await context.newPage()
-  await page.addInitScript((offlineKey) => {
+  await page.addInitScript(({ offlineKey, failIndexedDb }) => {
+    if (failIndexedDb) {
+      const nativeIndexedDB = window.indexedDB
+      Object.defineProperty(window, 'indexedDB', {
+        configurable: true,
+        value: new Proxy(nativeIndexedDB, {
+          get(target, property) {
+            if (property === 'open') {
+              return () => {
+                throw new DOMException(
+                  'IndexedDB disabled by deterministic e2e fixture.',
+                  'UnknownError',
+                )
+              }
+            }
+            return Reflect.get(target, property, target)
+          },
+        }),
+      })
+    }
     const NativeWebSocket = window.WebSocket
     const counts = { created: 0, closed: 0 }
     const sockets = new Set<WebSocket>()
@@ -145,7 +165,7 @@ async function openCollaborator(
         window.localStorage.removeItem(offlineKey)
       }
     }
-  }, WS_OFFLINE_KEY)
+  }, { offlineKey: WS_OFFLINE_KEY, failIndexedDb: options.failIndexedDb ?? false })
   const api = mockApi(user)
   await page.route('**/api/**', api.handler)
 
@@ -224,7 +244,37 @@ async function indexeddbUpdateCount(
         count.onsuccess = () => resolve(count.result)
         transaction.oncomplete = () => database.close()
       }
+
     })
+  })
+}
+
+async function serializedBackupNoteCount(
+  page: import('@playwright/test').Page,
+): Promise<number> {
+  return page.evaluate(() => {
+    let count = 0
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index)
+      if (
+        !key?.startsWith('cadence.collab.backup.v1:') ||
+        !key.includes('cadence.v1.project.')
+      ) {
+        continue
+      }
+      try {
+        const project = JSON.parse(localStorage.getItem(key) ?? '{}') as {
+          tracks?: Array<{ notes?: unknown[] }>
+        }
+        count = Math.max(
+          count,
+          project.tracks?.[0]?.notes?.length ?? 0,
+        )
+      } catch {
+        // Ignore a concurrently replaced/corrupt test fixture value.
+      }
+    }
+    return count
   })
 }
 
@@ -459,6 +509,76 @@ test.describe('live collaboration', () => {
     })
     await expect(ada.page.locator('.pr-note')).toHaveCount(before + 3, { timeout: 30_000 })
     await expect(bob.page.locator('.pr-note')).toHaveCount(before + 3, { timeout: 30_000 })
+
+    await ada.context.close()
+    await bob.context.close()
+  })
+
+  test('serialized backup recovers and merges when IndexedDB is unavailable', async ({
+    browser,
+  }) => {
+    const room = `backup-fallback-${Date.now()}`
+    const user = {
+      id: 'u-backup',
+      email: 'backup@example.com',
+      displayName: 'Backup Ada',
+      tier: 'Free',
+    }
+    const ada = await openCollaborator(
+      browser,
+      user,
+      'editor',
+      room,
+      { failIndexedDb: true },
+    )
+    const bob = await openCollaborator(
+      browser,
+      {
+        id: 'u-backup-peer',
+        email: 'backup-peer@example.com',
+        displayName: 'Backup Bob',
+        tier: 'Free',
+      },
+      'editor',
+      room,
+    )
+    await expect(ada.roster).toContainText('2 people', { timeout: 15_000 })
+    const before = await ada.page.locator('.pr-note').count()
+    await expect(bob.page.locator('.pr-note')).toHaveCount(before)
+    const backupBefore = before
+
+    await setCollabOffline(ada.page, true)
+    ada.api.setAvailable(false)
+    await addNoteByKeyboard(ada.page)
+    await expect(ada.page.locator('.pr-note')).toHaveCount(before + 1)
+    await expect
+      .poll(() => serializedBackupNoteCount(ada.page))
+      .toBeGreaterThan(backupBefore)
+    const firstOfflineBackup = await serializedBackupNoteCount(ada.page)
+
+    await addNoteByKeyboard(bob.page)
+    await expect(bob.page.locator('.pr-note')).toHaveCount(before + 1)
+
+    await ada.page.reload()
+    await expect(ada.roster).toBeVisible()
+    await expect(ada.page.locator('.pr-note')).toHaveCount(before + 1, {
+      timeout: 15_000,
+    })
+    await addNoteByKeyboard(ada.page)
+    await expect(ada.page.locator('.pr-note')).toHaveCount(before + 2)
+    await expect
+      .poll(() => serializedBackupNoteCount(ada.page))
+      .toBeGreaterThan(firstOfflineBackup)
+
+    ada.api.setAvailable(true)
+    await setCollabOffline(ada.page, false)
+    await signInCollaborator(ada.page, user)
+    await expect(ada.page.locator('.pr-note')).toHaveCount(before + 3, {
+      timeout: 30_000,
+    })
+    await expect(bob.page.locator('.pr-note')).toHaveCount(before + 3, {
+      timeout: 30_000,
+    })
 
     await ada.context.close()
     await bob.context.close()

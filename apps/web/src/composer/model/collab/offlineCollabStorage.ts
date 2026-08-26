@@ -10,6 +10,7 @@ import { collabPersistenceScopeId } from './collabPersistenceIdentity'
 
 const BACKUP_PREFIX = 'cadence.collab.backup.v1:'
 const REGISTRY_PREFIX = 'cadence.collab.idb-registry.v1:'
+const PENDING_REGISTRY_PREFIX = 'cadence.collab.idb-pending.v1:'
 
 function defaultStorage(): SyncStorage {
   return typeof globalThis !== 'undefined' &&
@@ -102,6 +103,28 @@ function registryKey(ownerId: string): string {
   return `${REGISTRY_PREFIX}${encodeURIComponent(ownerId)}`
 }
 
+function pendingRegistryKey(ownerId: string): string {
+  return `${PENDING_REGISTRY_PREFIX}${encodeURIComponent(ownerId)}`
+}
+
+function readNames(storage: SyncStorage, key: string): string[] {
+  const raw = storage.getItem(key)
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed)
+      ? parsed.filter((name): name is string => typeof name === 'string')
+      : []
+  } catch {
+    return []
+  }
+}
+
+function writeNames(storage: SyncStorage, key: string, names: string[]): void {
+  if (names.length > 0) storage.setItem(key, JSON.stringify([...new Set(names)]))
+  else storage.removeItem(key)
+}
+
 /** Track every owner-scoped Yjs database so explicit auth cleanup can delete it. */
 export function registerCollaborationDatabase(
   ownerId: string,
@@ -109,20 +132,27 @@ export function registerCollaborationDatabase(
   storage: SyncStorage = defaultStorage(),
 ): void {
   const key = registryKey(ownerId)
-  const raw = storage.getItem(key)
-  let names: string[] = []
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) {
-        names = parsed.filter((name): name is string => typeof name === 'string')
-      }
-    } catch {
-      names = []
-    }
-  }
+  const names = readNames(storage, key)
   if (!names.includes(databaseName)) names.push(databaseName)
-  storage.setItem(key, JSON.stringify(names))
+  writeNames(storage, key, names)
+}
+
+function bounded<T>(
+  work: Promise<T>,
+  timeoutMs: number,
+  fallback: T,
+): Promise<T> {
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (value: T) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(value)
+    }
+    const timer = setTimeout(() => finish(fallback), timeoutMs)
+    void work.then(finish, () => finish(fallback))
+  })
 }
 
 function allKeys(storage: SyncStorage): string[] {
@@ -161,6 +191,36 @@ function deleteDatabase(
   })
 }
 
+interface CleanupOptions {
+  storage?: SyncStorage
+  indexedDB?: IDBFactory
+  timeoutMs?: number
+}
+
+async function deleteRegisteredDatabases(
+  ownerId: string,
+  names: string[],
+  options: CleanupOptions,
+): Promise<void> {
+  const storage = options.storage ?? defaultStorage()
+  const pendingKey = pendingRegistryKey(ownerId)
+  const indexedDB =
+    options.indexedDB ??
+    (globalThis as { indexedDB?: IDBFactory }).indexedDB
+  if (!indexedDB) {
+    writeNames(storage, pendingKey, names)
+    return
+  }
+  const results = await Promise.all(
+    names.map((name) => deleteDatabase(indexedDB, name, options.timeoutMs)),
+  )
+  writeNames(
+    storage,
+    pendingKey,
+    names.filter((_name, index) => !results[index]),
+  )
+}
+
 /**
  * Purge all serialized backups and registered Yjs databases for one confirmed
  * account. Anonymous callers never receive a store capable of reading them.
@@ -180,24 +240,25 @@ export async function clearOwnerCollaborationData(
     .forEach((key) => storage.removeItem(key))
 
   const key = registryKey(ownerId)
-  const raw = storage.getItem(key)
-  let names: string[] = []
-  try {
-    const parsed = raw ? JSON.parse(raw) : []
-    if (Array.isArray(parsed)) {
-      names = parsed.filter((name): name is string => typeof name === 'string')
-    }
-  } catch {
-    names = []
-  }
+  const pendingKey = pendingRegistryKey(ownerId)
+  const names = [
+    ...new Set([
+      ...readNames(storage, key),
+      ...readNames(storage, pendingKey),
+    ]),
+  ]
+  storage.removeItem(key)
   const indexedDB =
     options.indexedDB ??
     (globalThis as { indexedDB?: IDBFactory }).indexedDB
-  if (!indexedDB) return
-  try {
+  if (indexedDB) {
     const databasePrefix =
       `cadence.collab.v1:${encodeURIComponent(ownerId)}:`
-    const discovered = await indexedDB.databases()
+    const discovered = await bounded(
+      Promise.resolve().then(() => indexedDB.databases()),
+      options.timeoutMs ?? 2_000,
+      [],
+    )
     for (const database of discovered) {
       if (
         database.name?.startsWith(databasePrefix) &&
@@ -206,20 +267,43 @@ export async function clearOwnerCollaborationData(
         names.push(database.name)
       }
     }
-  } catch {
-    // The registry remains the compatibility path when enumeration is absent.
   }
   if (names.length === 0) {
-    storage.removeItem(key)
+    storage.removeItem(pendingKey)
     return
   }
-  const results = await Promise.all(
-    names.map((name) => deleteDatabase(indexedDB, name, options.timeoutMs)),
+  await deleteRegisteredDatabases(ownerId, names, options)
+}
+
+/** Retry only deletions previously retained after a bounded/blocked cleanup. */
+export async function retryPendingOwnerCollaborationCleanup(
+  ownerId: string,
+  options: CleanupOptions = {},
+): Promise<void> {
+  const storage = options.storage ?? defaultStorage()
+  const names = readNames(storage, pendingRegistryKey(ownerId))
+  if (names.length === 0) return
+  await deleteRegisteredDatabases(ownerId, names, options)
+}
+
+/** Retry every retained owner cleanup during application/auth startup. */
+export async function retryPendingCollaborationCleanup(
+  options: CleanupOptions = {},
+): Promise<void> {
+  const storage = options.storage ?? defaultStorage()
+  const owners = allKeys(storage)
+    .filter((key) => key.startsWith(PENDING_REGISTRY_PREFIX))
+    .map((key) => {
+      try {
+        return decodeURIComponent(key.slice(PENDING_REGISTRY_PREFIX.length))
+      } catch {
+        return ''
+      }
+    })
+    .filter(Boolean)
+  await Promise.all(
+    owners.map((ownerId) =>
+      retryPendingOwnerCollaborationCleanup(ownerId, options),
+    ),
   )
-  const remaining = names.filter((_name, index) => !results[index])
-  if (remaining.length > 0) {
-    storage.setItem(key, JSON.stringify(remaining))
-  } else {
-    storage.removeItem(key)
-  }
 }
