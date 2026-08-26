@@ -9,9 +9,14 @@
 import * as Y from 'yjs'
 import type { Awareness } from 'y-protocols/awareness'
 import type { Project } from './../project'
+import type { ProjectMix } from './../mix'
 import {
+  CRDT_REPAIR_ORIGIN,
   LOCAL_ORIGIN,
+  backfillSharedMixIfMissing,
   getProjectMap,
+  hasSharedMixRoot,
+  hasValidSharedMix,
   isProjectDocEmpty,
   readProject,
   reconcileDoc,
@@ -56,6 +61,11 @@ export interface CollabSessionOptions {
   onRemoteProject: (project: Project) => void
   /** Seed the shared doc from this project when it is still empty. */
   initialProject?: Project
+  /**
+   * Local snapshot retained while a legacy/invalid room has no authoritative
+   * shared mix. Never seeds score data before network synchronization.
+   */
+  fallbackProject?: Project
 }
 
 export interface CollabSession {
@@ -138,8 +148,35 @@ function readPresence(awareness: Awareness): CollabPresence[] {
   return present
 }
 
+function cloneMix(mix: ProjectMix | undefined): ProjectMix | undefined {
+  if (!mix) return undefined
+  return {
+    tracks: Object.fromEntries(
+      Object.entries(mix.tracks).map(([trackId, track]) => [
+        trackId,
+        {
+          ...track,
+          inserts: track.inserts.map((insert) => ({
+            ...insert,
+            params: { ...insert.params },
+          })),
+        },
+      ]),
+    ),
+    master: { ...mix.master },
+  }
+}
+
 export function createCollabSession(options: CollabSessionOptions): CollabSession {
-  const { doc, awareness, user, canWrite, onRemoteProject, initialProject } = options
+  const {
+    doc,
+    awareness,
+    user,
+    canWrite,
+    onRemoteProject,
+    initialProject,
+    fallbackProject,
+  } = options
 
   const presenceListeners = new Set<(present: CollabPresence[]) => void>()
   const undoStackListeners = new Set<() => void>()
@@ -147,11 +184,13 @@ export function createCollabSession(options: CollabSessionOptions): CollabSessio
   // the shared project ahead of it is never itself undoable (see the
   // `enableUndo` doc comment on the interface above).
   let undoManager: Y.UndoManager | undefined
+  let fallbackMix = cloneMix(fallbackProject?.mix ?? initialProject?.mix)
 
   // Seed only when we may write and the doc is empty; a late viewer/editor that
   // joins an existing doc must not clobber it.
-  if (canWrite && initialProject && isProjectDocEmpty(doc)) {
-    seedProjectDoc(doc, initialProject)
+  if (canWrite && initialProject) {
+    if (isProjectDocEmpty(doc)) seedProjectDoc(doc, initialProject)
+    else backfillSharedMixIfMissing(doc, initialProject)
   }
 
   const handleDocUpdate = (_update: Uint8Array, origin: unknown) => {
@@ -160,8 +199,14 @@ export function createCollabSession(options: CollabSessionOptions): CollabSessio
     // stamps those with itself (not `LOCAL_ORIGIN`) as the origin, so an undo
     // naturally falls through to `onRemoteProject` — the same path a genuine
     // remote peer's edit takes — with no extra wiring required.
-    if (origin === LOCAL_ORIGIN) return
-    onRemoteProject(readProject(doc))
+    if (origin === LOCAL_ORIGIN || origin === CRDT_REPAIR_ORIGIN) return
+    const project = readProject(doc, { repair: canWrite })
+    if (!hasSharedMixRoot(doc) && fallbackMix) {
+      project.mix = cloneMix(fallbackMix)
+    } else if (hasValidSharedMix(doc)) {
+      fallbackMix = cloneMix(project.mix)
+    }
+    onRemoteProject(project)
   }
   doc.on('update', handleDocUpdate)
 
@@ -179,18 +224,25 @@ export function createCollabSession(options: CollabSessionOptions): CollabSessio
   return {
     localOrigin: LOCAL_ORIGIN,
     pushLocalProject(project: Project) {
+      fallbackMix = cloneMix(project.mix) ?? fallbackMix
       if (!canWrite) return
       reconcileDoc(doc, project, LOCAL_ORIGIN)
     },
     replaceLocalProject(project: Project) {
+      fallbackMix = cloneMix(project.mix) ?? fallbackMix
       if (!canWrite) return
       undoManager?.clear()
       undoManager?.stopCapturing()
       reconcileDoc(doc, project, REPLACEMENT_ORIGIN)
     },
     seedIfEmpty(project: Project) {
+      fallbackMix = cloneMix(project.mix) ?? fallbackMix
       if (!canWrite) return
-      if (isProjectDocEmpty(doc)) seedProjectDoc(doc, project)
+      if (isProjectDocEmpty(doc)) {
+        seedProjectDoc(doc, project)
+      } else {
+        backfillSharedMixIfMissing(doc, project)
+      }
     },
     setLocalCursor(cursor: CollabCursor | null) {
       awareness.setLocalStateField('cursor', cursor)

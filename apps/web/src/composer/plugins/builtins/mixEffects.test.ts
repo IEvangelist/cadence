@@ -5,6 +5,13 @@ const h = vi.hoisted(() => ({ dispose: vi.fn() }))
 
 vi.mock('tone', () => {
   class Base {
+    low = { value: 0 }
+    mid = { value: 0 }
+    high = { value: 0 }
+    wet = { value: 0 }
+    feedback = { value: 0 }
+    threshold = { value: 0 }
+    ratio = { value: 0 }
     dispose = h.dispose
   }
   return {
@@ -37,5 +44,13 @@ describe('MIX_EFFECTS', () => {
       node.dispose()
       expect(h.dispose).toHaveBeenCalledTimes(1)
     }
+  })
+
+  it('declares defaults and updates live Tone parameters', () => {
+    const reverb = MIX_EFFECTS.find((effect) => effect.id === 'reverb')
+    expect(reverb?.parameters?.map((parameter) => parameter.id)).toEqual(['wet'])
+    const node = reverb!.createNode({ tempo: 120, params: { wet: 0.4 } })
+    node.updateParams?.({ wet: 0.75 })
+    expect((node.input as unknown as { wet: { value: number } }).wet.value).toBe(0.75)
   })
 })

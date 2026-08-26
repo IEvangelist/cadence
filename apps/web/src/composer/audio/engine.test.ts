@@ -5,6 +5,7 @@ import {
   createTrack,
   type Project,
 } from '../model/project'
+import { createProjectMix } from '../model/mix'
 
 /** Shared spies/state the mocked `tone` module writes to. */
 const h = vi.hoisted(() => {
@@ -472,6 +473,35 @@ describe('createAudioEngine', () => {
 })
 
 describe('SilentAudioEngine', () => {
+  it('normalizes insert descriptors identically to the Tone engine without audio nodes', () => {
+    const project = createEmptyProject('parity')
+    project.tracks[0].id = 'track-parity'
+    project.mix = createProjectMix(['track-parity'])
+    project.mix.tracks['track-parity'].inserts = [
+      {
+        id: 'delay',
+        effectId: 'delay',
+        enabled: false,
+        params: { feedback: 4 },
+      },
+    ]
+    const tone = new ToneAudioEngine()
+    const silent = new SilentAudioEngine()
+
+    tone.mixer.hydrate(project.mix)
+    silent.mixer.hydrate(project.mix)
+
+    expect(silent.mixer.listInserts('track-parity')[0].params).toEqual({
+      feedback: 0.9,
+      wet: 0.28,
+    })
+    expect(silent.mixer.listInserts('track-parity')[0].params).toEqual(
+      tone.mixer.listInserts('track-parity')[0].params,
+    )
+    tone.dispose()
+    silent.dispose()
+  })
+
   it('is a no-op that still tracks transport state', async () => {
     const engine = new SilentAudioEngine()
     const states: string[] = []

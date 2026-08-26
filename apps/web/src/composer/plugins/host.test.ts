@@ -31,6 +31,44 @@ describe('PluginHost registration', () => {
     expect(() => host.register(plugin('a'))).toThrow(PluginRegistrationError)
   })
 
+  it.each(['__proto__', 'constructor', 'prototype'])(
+    'rejects reserved effect parameter id %s at registration',
+    (parameterId) => {
+      const host = createPluginHost()
+      expect(() =>
+        host.register({
+          manifest: { id: 'unsafe', name: 'Unsafe', version: '1.0.0' },
+          contributes: {
+            effects: [
+              {
+                id: 'unsafe.effect',
+                name: 'Unsafe effect',
+                description: 'Invalid descriptor fixture',
+                parameters: [
+                  {
+                    type: 'number',
+                    id: parameterId,
+                    name: 'Unsafe',
+                    defaultValue: 0,
+                    min: 0,
+                    max: 1,
+                    step: 0.1,
+                  },
+                ],
+                createNode: () =>
+                  ({
+                    input: {},
+                    output: {},
+                    dispose: () => {},
+                  }) as never,
+              },
+            ],
+          },
+        }),
+      ).toThrow(PluginRegistrationError)
+    },
+  )
+
   it('replaces a plugin when override is set, disposing the old one', () => {
     const host = new PluginHost()
     const dispose = vi.fn()

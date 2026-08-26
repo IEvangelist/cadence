@@ -16,6 +16,7 @@
  *   keeps it registered, so it can be re-activated (enable/disable toggling).
  */
 import { validateManifest } from './manifest'
+import { effectParameterDescriptors } from './effectParameters'
 import type {
   AiProviderContribution,
   CadencePlugin,
@@ -50,6 +51,17 @@ export interface RegisterOptions {
   override?: boolean
 }
 
+function validateEffectDescriptors(plugin: CadencePlugin): void {
+  for (const effect of plugin.contributes?.effects ?? []) {
+    const declared = effect.parameters ?? []
+    if (effectParameterDescriptors(effect).length !== declared.length) {
+      throw new PluginRegistrationError(
+        `Effect "${effect.id}" has invalid or duplicate parameter descriptors`,
+      )
+    }
+  }
+}
+
 const EMPTY: Required<PluginContributions> = {
   instruments: [],
   effects: [],
@@ -67,6 +79,7 @@ export class PluginHost {
   /** Register a plugin (validating its manifest). Does not activate it. */
   register(plugin: CadencePlugin, options: RegisterOptions = {}): RegisteredPlugin {
     const manifest = validateManifest(plugin.manifest)
+    validateEffectDescriptors(plugin)
     const existing = this.plugins.get(manifest.id)
     if (existing && !options.override) {
       throw new PluginRegistrationError(

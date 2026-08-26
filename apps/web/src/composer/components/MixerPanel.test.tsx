@@ -34,10 +34,38 @@ function makeViewModel(overrides: Partial<MixerViewModel> = {}): MixerViewModel 
     master: { gainDb: 0, limiterEnabled: true, limiterThresholdDb: -1 },
     masterAutomated: false,
     availableEffects: [
-      { id: 'reverb', name: 'Studio Reverb' },
-      { id: 'eq3', name: 'Parametric EQ' },
+      {
+        id: 'reverb',
+        name: 'Studio Reverb',
+        parameters: [
+          {
+            type: 'number',
+            id: 'wet',
+            name: 'Wet',
+            defaultValue: 0.32,
+            min: 0,
+            max: 1,
+            step: 0.01,
+          },
+        ],
+      },
+      { id: 'eq3', name: 'Parametric EQ', parameters: [] },
     ],
     effectName: (id) => (id === 'reverb' ? 'Studio Reverb' : id),
+    effectParameters: (id) =>
+      id === 'reverb'
+        ? [
+            {
+              type: 'number',
+              id: 'wet',
+              name: 'Wet',
+              defaultValue: 0.32,
+              min: 0,
+              max: 1,
+              step: 0.01,
+            },
+          ]
+        : [],
     positionBeats: 0,
     lengthBeats: 8,
     snap: 1,
@@ -49,6 +77,7 @@ function makeViewModel(overrides: Partial<MixerViewModel> = {}): MixerViewModel 
     addInsert: vi.fn(),
     removeInsert: vi.fn(),
     toggleInsert: vi.fn(),
+    setInsertParam: vi.fn(),
     setMasterGain: vi.fn(),
     setLimiterEnabled: vi.fn(),
     setLimiterThreshold: vi.fn(),
@@ -128,6 +157,53 @@ describe('MixerPanel', () => {
     // No explicit selection change → adds the first available effect.
     fireEvent.click(leadStrip().getByRole('button', { name: 'Add' }))
     expect(mixer.addInsert).toHaveBeenCalledWith('t1', 'reverb')
+  })
+
+  it('edits only registered effect parameters and closes the slider gesture', () => {
+    coversInteractions('studio.mixer.insert.parameter')
+    const mixer = makeViewModel()
+    render(<MixerPanel mixer={mixer} />)
+
+    const parameters = leadStrip().getByRole('group', {
+      name: 'Studio Reverb parameters',
+    })
+    const wet = within(parameters).getByRole('slider', { name: 'Wet' })
+    expect(wet).toHaveValue('0.32')
+    expect(wet).toHaveAttribute('aria-valuetext', '0.32')
+
+    fireEvent.change(wet, { target: { value: '0.65' } })
+    expect(mixer.setInsertParam).toHaveBeenCalledWith('t1', 'i1', 'wet', 0.65)
+    fireEvent.pointerUp(wet)
+    expect(mixer.stopHistoryCapture).toHaveBeenCalled()
+  })
+
+  it('does not expose preserved params without a registered descriptor', () => {
+    const mixer = makeViewModel({
+      tracks: [
+        {
+          id: 't1',
+          name: 'Lead',
+          color: '#f0f',
+          gainDb: 0,
+          pan: 0,
+          solo: false,
+          muted: false,
+          inserts: [
+            {
+              id: 'missing',
+              effectId: 'plugin.missing',
+              enabled: true,
+              params: { secret: 0.7 },
+            },
+          ],
+          automated: false,
+        },
+      ],
+    })
+    render(<MixerPanel mixer={mixer} />)
+    expect(
+      leadStrip().queryByRole('group', { name: /plugin\.missing.*parameters/ }),
+    ).toBeNull()
   })
 
   it('wires the master bus controls', () => {

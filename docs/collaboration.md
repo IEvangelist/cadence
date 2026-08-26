@@ -39,6 +39,8 @@ document (`apps/web/src/composer/model/collab/crdt.ts`):
 
 - Project scalars (id, name, tempo, loop) live on a top-level `Y.Map`.
 - `tracks` is a `Y.Array<Y.Map>`; each track's `notes` is a `Y.Array<Y.Map>`.
+- `mix` is nested by track and insert id; master settings and each insert's
+  numeric parameter map merge per field.
 
 Because the structure is CRDT-native, two clients that concurrently insert,
 move, or delete notes/tracks converge to an identical project without a central
@@ -62,10 +64,62 @@ A remote peer's `Y.Doc` update is untrusted input. Every read-back from the CRDT
 is routed through the **existing** persistence sanitizer —
 `migrateProject` / `coerceNote` in
 `apps/web/src/composer/model/persistence.ts` — before it reaches the reducer.
-Out-of-range pitches, `NaN`/`Infinity` timings, negative durations, and unknown
-shapes are clamped or dropped exactly as they are for `localStorage` load. A
+Out-of-range pitches or mixer values, `NaN`/`Infinity` timings and effect params,
+negative durations, and unknown shapes are clamped or dropped exactly as they
+are for `localStorage` load. Registered effect descriptors are normalized again
+at the audio-controller boundary before a live node is created or updated. A
 malicious client therefore cannot inject values the single-user path would have
-rejected. This is covered by a "remote updates are sanitized" unit test.
+rejected. Every shared-type boundary in the read path is runtime-checked:
+loop, tracks, each track, notes, each note, and every nested mix structure.
+Scalars or plain objects in place of a `Y.Map`/`Y.Array` decode to sanitizer
+defaults, and the next valid reconciliation deterministically replaces the
+malformed branch without producing an update loop. This is covered by
+adversarial remote-shape, `handleDocUpdate`, recovery, and convergence tests.
+
+Legacy rooms created before mixer sharing have no `mix` map. During initial
+sync, the client preserves its locally persisted mix instead of adopting a
+synthetic neutral value; the first writable peer then backfills only the absent
+shared mix branch. Backfill projects fallback values only onto matching
+authoritative room track ids; unmatched room tracks get neutral defaults and
+local-only tracks are excluded. A partial/malformed mix root is different: valid shared
+fields and inserts remain authoritative while missing fields are repaired from
+their sanitizer defaults. Once the branch is structurally valid, later
+peers—including ones with stale local values—can no longer overwrite it.
+Shared mix decoding is independent of the older project schema migration gate,
+so a schema-v2 room that already carries mix data keeps its authoritative gain
+and inserts while the project itself migrates forward.
+Each valid authoritative adoption refreshes a deep-cloned local fallback.
+If a later remote update deletes the entire mix root, all peers therefore retain
+the same last authoritative mix rather than their different pre-join values.
+
+The root project plus track, note, and insert records with missing, empty, or
+duplicate ids are repaired once in the Yjs document using deterministic
+content/position-derived ids. Mix keys are cloned to repaired track references
+only when the repaired record's exact old id proves provenance; unrelated
+deleted-track orphans are dropped and never assigned by position. Duplicate
+inserts remain distinct.
+Orphan keys and track records are canonically sorted before association, so
+replicas converge regardless of update-application order. The comparator uses
+the exact UTF-16 code-unit sequence (not locale collation), so canonically
+equivalent strings remain distinct and totally ordered. Existing mix keys are
+also reserved before generating repaired track ids, so an unrelated orphan can
+never become the target merely by matching a generated id. Clones copy only
+validated primitive fields and finite numeric params—nested hostile Yjs types
+are dropped rather than re-integrated. All existing ids in a scope are reserved
+before generating replacements, preventing a repair from stealing a later
+valid id. Repair transactions have a dedicated origin, repeated reads emit no
+updates, and peers derive identical ids before converging.
+
+Read-only collaborators decode the same deterministic local fallbacks but never
+write repair transactions. Writable peers repair the shared document, after
+which viewers converge through the ordinary remote-update path.
+
+Mixer records use prototype-safe own-property construction throughout
+persistence, CRDT decoding, and runtime snapshots. Track ids such as
+`__proto__`, `constructor`, and `prototype` therefore serialize and hydrate as
+ordinary accepted ids without mutating or resolving through object prototypes.
+Parameter reconciliation likewise uses own-property membership, so inherited
+names such as `toString` cannot keep stale Yjs parameter keys alive.
 
 ### Deferred single-seed
 

@@ -1683,7 +1683,15 @@ select:focus-visible {
 }
 
 .mixer-insert {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.mixer-insert-head {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: var(--space-2);
 }
 
 .mixer-insert-toggle {
@@ -1692,6 +1700,22 @@ select:focus-visible {
   gap: var(--space-2);
   font-size: var(--font-size-sm);
   color: var(--color-text);
+}
+
+.mixer-effect-params {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding-inline-start: var(--space-5);
+}
+
+.mixer-effect-param {
+  min-width: 0;
+}
+
+.mixer-effect-param > input[type='range'] {
+  min-width: 0;
+  width: 100%;
 }
 
 .mixer-automation-buttons {

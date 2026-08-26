@@ -4,7 +4,7 @@ This is the stable surface the composer feature cluster builds against: live
 collaboration (#9) is the foundation, the current composer controller is
 formalized as a frozen core API, and efforts #41–#45 add typed extension seams
 without breaking the serialized `Project` shape. The contract is exported from
-`composer/contract`; the current `COMPOSER_CONTRACT_VERSION` is `1.3.0`.
+`composer/contract`; the current `COMPOSER_CONTRACT_VERSION` is `1.4.0`.
 
 ## Stability & versioning
 
@@ -307,12 +307,12 @@ remains the single source of truth. Inserts reuse effect contributions.
 | `TrackMixerState` | Per-track gain, pan, solo, and mirrored mute state |
 | `MasterBusState` | Master gain and limiter controls |
 | `MixerSnapshot` | Full overlay snapshot keyed by track id plus master state |
-| `TrackInsert` | Per-track effect insert with params |
-| `MixerController` | Read/update API for mixer controls and inserts |
+| `TrackInsert` | Per-track effect insert with durable numeric params |
+| `MixerController` | Read/update API for mixer controls, inserts, and live insert params |
 | `AutomationPoint` | Beat/value point |
 | `AutomationLane` | Automation target and ordered point list |
 | `MixerEffectNode` | Effect-node alias for mixer audio graph reuse |
-| `EffectContribution` / `EffectNode` | Re-exported Plugin SDK effect surface |
+| `EffectContribution` / `EffectNode` | Re-exported Plugin SDK effect surface with optional parameter descriptors and live updates |
 
 ```ts
 function syncMute(api: ComposerPublicApi, mixer: MixerController) {
@@ -332,9 +332,23 @@ parametric EQ, studio reverb, tempo delay, and glue compressor — ships as
 `enabledByDefault: false` so the stock signal path stays transparent. The
 controller wires into the audio engine additively; the default overlay (0 dB,
 center pan, limiter off) is unity, and note preview routes past the mixer so
-auditions remain audible. Live insert-parameter editing is deferred until the
-effect factory accepts params — today inserts are add / remove / enable with
-baked default params.
+auditions remain audible. Composer contract `1.4.0` adds numeric
+`EffectParameterDescriptor`s, factory `EffectContext.params`, optional
+`EffectNode.updateParams`, and `MixerController.setInsertParams`. The mixer
+renders controls only for validated descriptors registered by an active plugin.
+Edits clamp to descriptor bounds, update live nodes, persist in
+`ProjectMixInsert.params`, and coalesce each pointer/keyboard gesture into one
+undo step. Factory creation, hydration, same-structure updates, and the public
+controller setter all share one complete-snapshot normalizer: missing values
+receive defaults, values clamp and snap to the descriptor step, and invalid
+types fall back safely. Effects that omit descriptors keep their original fixed
+behavior. Tone-backed and silent/headless engines install the same contribution
+resolver, so normalization is identical without constructing Web Audio nodes.
+Externally returned insert views deep-clone parameter records; cached subscribed
+views freeze them so consumer mutation cannot alter controller state.
+Parameter actions carry one id/value change and merge against the reducer's
+current document, so multiple controls edited in one React tick cannot overwrite
+each other.
 
 ### #45 Extended AI
 
@@ -385,11 +399,10 @@ function watermarkFor(view: ExportEntitlementView, entitlements: Entitlements) {
 The contract defines the API surface and schema v3 adds an optional, sanitized
 `Project.mix` document for manual track and master settings.
 
-- **Durable/shared (converges via #9 CRDT):** score fields currently represented
-  by the CRDT and accepted AI note edits.
-- **Durable/local-only in collaboration:** mixer/inserts/master and automation
-  persist through project files, stores, and share snapshots, but remain local
-  while a collaboration session is active because the CRDT does not carry them.
+- **Durable/shared (converges via #9 CRDT):** score fields, mixer/inserts/master,
+  effect params, and accepted AI note edits.
+- **Durable/local-only in collaboration:** automation persists through project
+  files, stores, and share snapshots but is not yet carried by the CRDT.
 - **Awareness/ephemeral:** presence, peer cursors, selections, AI preview ghosts,
   and other room-local overlays.
 - **Local-only:** onboarding progress, viewport/touch mode, PWA install state,
@@ -399,8 +412,10 @@ Place each new field in the right tier before wiring UI or persistence.
 
 The mixer overlay survives reload, project-file export, stores, and share
 snapshots through schema v3 `Project.mix`. Unavailable plugin effect ids are
-retained and bypassed until their provider becomes available again. This does
-not claim collaborative convergence; the CRDT still excludes mix and automation.
+retained with their numeric params and bypassed until their provider becomes
+available again. The nested CRDT mix map converges per track/insert/parameter and
+is covered by the collaboration `Y.UndoManager`, so parameter gestures remain
+undoable while collaborating. Automation remains collaboration-local.
 
 `model/persistence.ts` currently hardcodes `['poly-synth', 'fm-synth',
 'drum-kit']` and coerces unknown `instrumentId` values to `poly-synth`. #41 must

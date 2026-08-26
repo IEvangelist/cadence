@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { MixerViewModel } from '../hooks/useMixer'
 import { automationValueRange } from '../model/automation'
+import type { EffectParameterDescriptor } from '../plugins/types'
 import { AutomationLane } from './AutomationLane'
 
 interface MixerPanelProps {
@@ -14,6 +15,15 @@ const formatDb = (db: number): string => `${db > 0 ? '+' : ''}${db.toFixed(1)} d
 const formatPan = (pan: number): string => {
   if (Math.abs(pan) < 0.005) return 'C'
   return `${pan < 0 ? 'L' : 'R'}${Math.round(Math.abs(pan) * 100)}`
+}
+
+const formatEffectParameter = (
+  descriptor: EffectParameterDescriptor,
+  value: number,
+): string => {
+  const precision = descriptor.step < 0.1 ? 2 : descriptor.step < 1 ? 1 : 0
+  const number = value.toFixed(precision)
+  return descriptor.unit ? `${number} ${descriptor.unit}` : number
 }
 
 const GAIN_MIN = -60
@@ -35,6 +45,7 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
     master,
     availableEffects,
     effectName,
+    effectParameters,
     positionBeats,
     lengthBeats,
     snap,
@@ -46,6 +57,7 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
     addInsert,
     removeInsert,
     toggleInsert,
+    setInsertParam,
     setMasterGain,
     setLimiterEnabled,
     setLimiterThreshold,
@@ -149,24 +161,69 @@ export function MixerPanel({ mixer }: MixerPanelProps) {
                 <ul className="mixer-insert-list">
                   {track.inserts.map((insert) => (
                     <li key={insert.id} className="mixer-insert">
-                      <label className="mixer-insert-toggle">
-                        <input
-                          type="checkbox"
-                          data-interaction="studio.mixer.insert.toggle"
-                          checked={insert.enabled}
-                          onChange={() => toggleInsert(track.id, insert.id)}
-                        />
-                        <span>{effectName(insert.effectId)}</span>
-                      </label>
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        data-interaction="studio.mixer.insert.remove"
-                        aria-label={`Remove ${effectName(insert.effectId)} from ${track.name}`}
-                        onClick={() => removeInsert(track.id, insert.id)}
-                      >
-                        Remove
-                      </button>
+                      <div className="mixer-insert-head">
+                        <label className="mixer-insert-toggle">
+                          <input
+                            type="checkbox"
+                            data-interaction="studio.mixer.insert.toggle"
+                            checked={insert.enabled}
+                            onChange={() => toggleInsert(track.id, insert.id)}
+                          />
+                          <span>{effectName(insert.effectId)}</span>
+                        </label>
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          data-interaction="studio.mixer.insert.remove"
+                          aria-label={`Remove ${effectName(insert.effectId)} from ${track.name}`}
+                          onClick={() => removeInsert(track.id, insert.id)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      {effectParameters(insert.effectId).length > 0 && (
+                        <div
+                          className="mixer-effect-params"
+                          role="group"
+                          aria-label={`${effectName(insert.effectId)} parameters`}
+                        >
+                          {effectParameters(insert.effectId).map((parameter) => {
+                            const current =
+                              insert.params[parameter.id] ?? parameter.defaultValue
+                            return (
+                              <label className="field mixer-effect-param" key={parameter.id}>
+                                <span>{parameter.name}</span>
+                                <input
+                                  type="range"
+                                  data-interaction="studio.mixer.insert.parameter"
+                                  min={parameter.min}
+                                  max={parameter.max}
+                                  step={parameter.step}
+                                  value={current}
+                                  disabled={!insert.enabled}
+                                  aria-label={parameter.name}
+                                  aria-valuetext={formatEffectParameter(parameter, current)}
+                                  onChange={(event) =>
+                                    setInsertParam(
+                                      track.id,
+                                      insert.id,
+                                      parameter.id,
+                                      Number(event.target.value),
+                                    )
+                                  }
+                                  onPointerUp={endGesture}
+                                  onPointerCancel={endGesture}
+                                  onKeyUp={endGesture}
+                                  onBlur={endGesture}
+                                />
+                                <span className="field-suffix">
+                                  {formatEffectParameter(parameter, current)}
+                                </span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>

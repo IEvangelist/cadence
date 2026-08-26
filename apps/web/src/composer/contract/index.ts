@@ -17,4 +17,4 @@ export * from './conformance'
 export * from './collaborationSelector'
 
 /** Current published composer contract version. */
-export const COMPOSER_CONTRACT_VERSION = '1.3.0'
+export const COMPOSER_CONTRACT_VERSION = '1.4.0'

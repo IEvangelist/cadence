@@ -37,8 +37,8 @@ export function createCorePlugin(): CadencePlugin {
     manifest: {
       id: 'cadence.core',
       name: 'Cadence Core',
-      version: '1.0.0',
-      description: 'Built-in instruments, formats, and AI providers.',
+      version: '1.1.0',
+      description: 'Built-in instruments, effects, formats, and AI providers.',
       author: 'Cadence',
       builtin: true,
     },
