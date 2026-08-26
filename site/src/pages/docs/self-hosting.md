@@ -133,7 +133,8 @@ Stems__ModelSha256=<64-hex-digit-sha256>
 `file://` URIs and local paths remain supported for operator-managed model files.
 The worker verifies a cached/downloaded model before use; a poisoned cache entry
 is purged and re-downloaded. Plain HTTP and unsupported remote URI schemes are
-rejected.
+rejected. The checksum accepts hexadecimal case differences and an optional
+`sha256:` prefix.
 
 ## Deploy from your machine
 
