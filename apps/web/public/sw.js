@@ -1,6 +1,12 @@
 // Offline shell service worker: precache the document shell, then cache same-origin static assets as they are visited.
 const CACHE = 'cadence-shell-v1'
-const APP_SHELL = ['/', '/index.html', '/site.webmanifest', '/favicon.svg']
+const APP_BASE = new URL(self.registration.scope).pathname
+const APP_SHELL = [
+  APP_BASE,
+  `${APP_BASE}index.html`,
+  `${APP_BASE}site.webmanifest`,
+  `${APP_BASE}favicon.svg`,
+]
 
 const STATIC_ASSET_PATTERN = /(?:^\/assets\/|\/(?:favicon|apple-touch-icon|pwa-|maskable-).*\.(?:svg|png|ico)$|\.(?:css|js|svg|png|ico|woff2)$)/i
 
@@ -27,18 +33,34 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
+  const appPath = url.pathname.startsWith(APP_BASE)
+    ? `/${url.pathname.slice(APP_BASE.length)}`
+    : url.pathname
 
   if (request.method !== 'GET' || url.origin !== self.location.origin) {
     return
   }
 
-  if (NETWORK_ONLY.test(url.pathname)) {
+  if (NETWORK_ONLY.test(url.pathname) || NETWORK_ONLY.test(appPath)) {
     return
   }
 
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(async () => (await caches.match('/index.html')) || caches.match('/')),
+      fetch(request)
+        .then(async (response) => {
+          if (response.status !== 404) return response
+          return (
+            (await caches.match(`${APP_BASE}index.html`)) ||
+            (await caches.match(APP_BASE)) ||
+            response
+          )
+        })
+        .catch(
+          async () =>
+            (await caches.match(`${APP_BASE}index.html`)) ||
+            caches.match(APP_BASE),
+        ),
     )
     return
   }

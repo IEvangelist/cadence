@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "e2e": "playwright test",
+    "e2e:pages": "playwright test --config playwright.pages.config.ts",
     "e2e:final-gate": "playwright test --config playwright.final-gate.config.ts",
     "e2e:install": "playwright install chromium",
     "e2e:visual": "playwright test --config playwright.visual.config.ts",

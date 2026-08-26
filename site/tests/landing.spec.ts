@@ -4,7 +4,9 @@ test('hero hierarchy and CTA fit the initial viewport', async ({ page }) => {
   await page.goto('/cadence/', { waitUntil: 'networkidle' });
 
   const heading = page.getByRole('heading', { level: 1, name: 'Make the idea land.' });
-  const primaryCta = page.locator('.hero-actions').getByRole('link', { name: 'Download' });
+  const primaryCta = page.locator('.hero-actions').getByRole('link', {
+    name: 'Open web composer',
+  });
   await expect(heading).toBeVisible();
   await expect(primaryCta).toBeVisible();
 
@@ -44,8 +46,9 @@ test('navigation is one line and no taller than 80px on desktop', async ({ page 
   );
   expect(Math.max(...linkCenters) - Math.min(...linkCenters)).toBeLessThanOrEqual(1);
 
-  const download = nav.getByRole('link', { name: 'Download' });
-  expect(await download.evaluate((element) => getComputedStyle(element).whiteSpace)).toBe('nowrap');
+  const webApp = nav.getByRole('link', { name: 'Open web app' });
+  await expect(webApp).toHaveAttribute('href', '/cadence/app/');
+  expect(await webApp.evaluate((element) => getComputedStyle(element).whiteSpace)).toBe('nowrap');
 });
 
 test('mobile navigation opens, closes, and restores the collapsed state', async ({ page }, testInfo) => {
@@ -212,6 +215,15 @@ test('visible copy and repeated CTA intents pass the design copy gate', async ({
     .allInnerTexts();
   expect(downloadLabels.length).toBeGreaterThanOrEqual(2);
   expect(downloadLabels.every((label) => label.trim() === 'Download')).toBe(true);
+
+  const webAppLinks = page.locator(
+    '[data-interaction="hero.web-app"], [data-interaction="nav.web-app"]',
+  );
+  await expect(webAppLinks).toHaveCount(2);
+  await expect(webAppLinks.first()).toHaveAttribute('href', '/cadence/app/');
+  await expect(
+    page.getByText(/public web app has no hosted backend/i),
+  ).toBeVisible();
 });
 
 test('landing layout remains stable and interactive work stays below 200ms', async ({

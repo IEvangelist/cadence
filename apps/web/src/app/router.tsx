@@ -66,7 +66,7 @@ function appRoutes(): RouteObject[] {
 }
 
 export function createAppBrowserRouter() {
-  return createBrowserRouter(appRoutes())
+  return createBrowserRouter(appRoutes(), { basename: import.meta.env.BASE_URL })
 }
 
 export function createAppMemoryRouter(

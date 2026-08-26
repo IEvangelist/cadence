@@ -21,7 +21,7 @@ async function expectValidManifest(page: Page): Promise<WebManifest> {
   const manifest = (await response.json()) as WebManifest
   expect(manifest.name).toBe('Cadence')
   expect(manifest.short_name).toBeTruthy()
-  expect(manifest.start_url).toBe('/')
+  expect(new URL(manifest.start_url!, page.url()).pathname).toBe('/')
   expect(manifest.display).toBe('standalone')
   expect(manifest.icons).toEqual(
     expect.arrayContaining([

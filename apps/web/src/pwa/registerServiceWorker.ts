@@ -8,6 +8,7 @@ export function registerServiceWorker(
     typeof window === 'undefined' ? undefined : window,
     nav,
   ),
+  basePath: string = import.meta.env.BASE_URL,
 ): void {
   if (
     !enabled ||
@@ -21,7 +22,9 @@ export function registerServiceWorker(
   }
 
   const register = () => {
-    nav.serviceWorker.register('/sw.js').catch(() => {})
+    nav.serviceWorker
+      .register(`${basePath}sw.js`, { scope: basePath })
+      .catch(() => {})
   }
 
   if (document.readyState === 'complete') {

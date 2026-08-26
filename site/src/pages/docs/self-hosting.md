@@ -6,6 +6,20 @@ description: Deploy the Cadence Aspire backend to Azure Container Apps with azd,
 
 # Self-hosting & deploy
 
+## Public web composer versus self-hosting
+
+The public app at
+[ievangelist.github.io/cadence/app/](https://ievangelist.github.io/cadence/app/)
+is a static, installable web composer. Anonymous projects, local import and
+export, on-device AI, and offline use work entirely in the browser. GitHub Pages
+does **not** deploy an API, collaboration relay, database, billing service, or
+stem-separation worker. Features that need those services keep their existing
+unavailable and sign-in states.
+
+Self-hosting is a separate choice: it runs the repository's existing Aspire
+service graph and can pair a web build with that backend. Publishing the static
+app neither provisions Azure nor changes the API topology described below.
+
 Cadence's backend deploys to **Azure Container Apps** using
 [`azd`](https://learn.microsoft.com/azure/developer/azure-developer-cli/) and the
 **Aspire azd integration**. There is no hand-authored Bicep to drift from the
@@ -61,8 +75,8 @@ AppHost declares them:
 The `.RunAsContainer()` / `.RunAsEmulator()` calls keep local `aspire run` on
 containers and the Azurite emulator; on **publish** azd emits the managed Azure
 services above, so production data is durable across revision restarts. The API's
-`WithExternalHttpEndpoints()` gives it public ingress so the GitHub Pages SPA — a
-different origin — can reach it; cross-origin browser access is then gated by the
+`WithExternalHttpEndpoints()` gives it public ingress so a separately configured
+web SPA, including a GitHub Pages build, can reach it; cross-origin browser access is then gated by the
 `Cors:AllowedOrigins` policy (see [Required configuration](#required-configuration)).
 The AppHost is the single source of truth: change a resource there and azd picks
 it up on the next `azd provision`.

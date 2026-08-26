@@ -37,7 +37,7 @@ describe('registerServiceWorker', () => {
 
     registerServiceWorker(nav, true)
 
-    expect(register).toHaveBeenCalledWith('/sw.js')
+    expect(register).toHaveBeenCalledWith('/sw.js', { scope: '/' })
   })
 
   it('registers /sw.js after window load when the document is not complete', () => {
@@ -50,7 +50,7 @@ describe('registerServiceWorker', () => {
 
     window.dispatchEvent(new Event('load'))
 
-    expect(register).toHaveBeenCalledWith('/sw.js')
+    expect(register).toHaveBeenCalledWith('/sw.js', { scope: '/' })
   })
 
   it('swallows registration failures', async () => {
@@ -61,6 +61,22 @@ describe('registerServiceWorker', () => {
     expect(() => registerServiceWorker(nav, true)).not.toThrow()
     await Promise.resolve()
 
-    expect(register).toHaveBeenCalledWith('/sw.js')
+    expect(register).toHaveBeenCalledWith('/sw.js', { scope: '/' })
+  })
+
+  it('registers inside a configured deployment base', () => {
+    setReadyState('complete')
+    const register = vi.fn(() => Promise.resolve())
+
+    registerServiceWorker(
+      navWithRegister(register),
+      true,
+      undefined,
+      '/cadence/app/',
+    )
+
+    expect(register).toHaveBeenCalledWith('/cadence/app/sw.js', {
+      scope: '/cadence/app/',
+    })
   })
 })

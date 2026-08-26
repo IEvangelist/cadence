@@ -68,6 +68,8 @@ async function waitForServiceWorkerControl(
 }
 
 export function loadedStaticAssetUrls(win: Window = window): string[] {
+  const assetBase = new URL(`${import.meta.env.BASE_URL}assets/`, win.location.origin)
+    .pathname
   return [
     ...new Set(
       win.performance
@@ -75,7 +77,7 @@ export function loadedStaticAssetUrls(win: Window = window): string[] {
         .map((entry) => new URL(entry.name, win.location.href))
         .filter(
           (url) =>
-            url.origin === win.location.origin && url.pathname.startsWith('/assets/'),
+            url.origin === win.location.origin && url.pathname.startsWith(assetBase),
         )
         .map((url) => url.href),
     ),

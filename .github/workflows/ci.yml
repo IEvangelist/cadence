@@ -150,6 +150,29 @@ jobs:
           path: site/playwright-report
           if-no-files-found: ignore
 
+  pages-artifact:
+    needs: detect
+    if: needs.detect.outputs.web == 'true' && needs.detect.outputs.site == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            site/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix site
+      - name: Test artifact assembly
+        run: npm run test:pages-artifact
+      - name: Install Playwright Chromium
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+      - name: Validate deployed paths, boot, fallback, and offline PWA
+        run: npm run e2e:pages --workspace @cadence/web
+
   dotnet:
     needs: detect
     if: needs.detect.outputs.dotnet == 'true'

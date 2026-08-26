@@ -13,6 +13,7 @@ describe('service worker static cache failure', () => {
     const context = {
       self: {
         location: { origin: 'https://cadence.test' },
+        registration: { scope: 'https://cadence.test/' },
         addEventListener: (type: string, listener: (event: unknown) => void) =>
           listeners.set(type, listener),
       },
