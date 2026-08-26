@@ -25,8 +25,8 @@
     <!--
       Node.js hosting integration (AddNpmApp) for the apps/web dev server. The
       curated feed publishes this package only up to 9.5.2 (the core Aspire
-      hosting packages are 13.4.6); 9.5.2 is the latest available stable and its
-      npm-app surface binds cleanly against the 13.4.6 host — verified by a live
+      hosting packages are 13.5.2); 9.5.2 is the latest available stable and its
+      npm-app surface binds cleanly against the 13.5.2 host — verified by a live
       `aspire run` smoke (the web resource starts Vite and serves the SPA).
     -->
     <PackageVersion Include="Aspire.Hosting.NodeJs" Version="9.5.2" />
@@ -35,9 +35,10 @@
       LOCAL Ollama container + model into `aspire run` — run mode only and
       explicit-start (see AppHost.cs), so nothing Ollama-related enters the
       published manifest or is ever deployed. 13.4.0 is the latest stable the
-      restore feed publishes and aligns with the 13.4.x Aspire host; its AppHost
-      surface binds cleanly against the 13.4.6 core packages. The consuming
-      server-side AI endpoint (and its #71 daily cap) is tracked separately in #140.
+      restore feed publishes and remains compatible with the 13.5.x Aspire host;
+      its AppHost surface binds cleanly against the 13.5.2 core packages. The
+      consuming server-side AI endpoint (and its #71 daily cap) is tracked
+      separately in #140.
     -->
     <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Ollama" Version="13.4.0" />
     <!--
@@ -45,9 +46,10 @@
       by Cadence.Api's optional, default-off server-side AI endpoint (#140). Registers
       an OllamaSharp IOllamaApiClient and a Microsoft.Extensions.AI IChatClient bound
       to the Aspire-referenced "ollama-model" resource, so the endpoint depends on the
-      mockable IChatClient abstraction. 13.4.0 matches the hosting package above and
-      the 13.4.x Aspire line; it is only resolved when the feature flag is enabled and
-      the model's connection string is present (a developer started the local Ollama).
+      mockable IChatClient abstraction. 13.4.0 matches the hosting package above
+      and remains compatible with the 13.5.x Aspire line; it is only resolved when
+      the feature flag is enabled and the model's connection string is present
+      (a developer started the local Ollama).
     -->
     <PackageVersion Include="CommunityToolkit.Aspire.OllamaSharp" Version="13.4.0" />
   </ItemGroup>
