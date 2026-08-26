@@ -107,6 +107,26 @@ public class StemsEndpointTests
     }
 
     [Fact]
+    public async Task Create_MisleadingContentLengthStillEnforcesStreamCap()
+    {
+        await using var factory = new CadenceApiFactory
+        {
+            ConfigOverrides = new Dictionary<string, string?> { ["Stems:MaxUploadBytes"] = "16" },
+        };
+        var client = factory.CreateClient();
+        var me = await client.RegisterAndReadMeAsync("stems.lying-length@example.com");
+        await PromoteToProAsync(factory, me.Id);
+        byte[] oversizedAudio = [0xFF, 0xFB, .. new byte[15]];
+        using var content = new MisleadingLengthContent(oversizedAudio, declaredLength: 1);
+        content.Headers.ContentType = new MediaTypeHeaderValue("audio/mpeg");
+
+        var response = await client.PostAsync("/api/stems/jobs?name=mix.mp3", content);
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+        Assert.Empty(factory.StemStorage.Blobs);
+    }
+
+    [Fact]
     public async Task Create_OverDurationCap_Returns413()
     {
         await using var factory = new CadenceApiFactory
@@ -317,5 +337,17 @@ public class StemsEndpointTests
         // Bob's listing does not include Alice's job.
         var bobList = await bob.GetFromJsonAsync<List<StemJobSummary>>("/api/stems/jobs");
         Assert.DoesNotContain(bobList!, j => j.Id == aliceJob.Id);
+    }
+
+    private sealed class MisleadingLengthContent(byte[] payload, long declaredLength) : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
+            stream.WriteAsync(payload).AsTask();
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = declaredLength;
+            return true;
+        }
     }
 }

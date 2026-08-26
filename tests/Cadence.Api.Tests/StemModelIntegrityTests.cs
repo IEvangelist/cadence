@@ -12,7 +12,8 @@ public class StemModelIntegrityTests
     [Theory]
     [InlineData("http://example.com/model.onnx")]
     [InlineData("HTTP://EXAMPLE.COM/model.onnx")]
-    public void RequireSecureModelUri_Rejects_Http(string uri) =>
+    [InlineData("ftp://example.com/model.onnx")]
+    public void RequireSecureModelUri_Rejects_InsecureOrUnsupportedRemoteScheme(string uri) =>
         Assert.Throws<InvalidOperationException>(() => StemModelIntegrity.RequireSecureModelUri(uri));
 
     [Theory]
