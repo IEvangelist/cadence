@@ -971,8 +971,8 @@
       "cadence.separationworker": {
         "type": "Project",
         "dependencies": {
-          "Aspire.Azure.Storage.Blobs": "[13.4.6, )",
-          "Aspire.Npgsql.EntityFrameworkCore.PostgreSQL": "[13.4.6, )",
+          "Aspire.Azure.Storage.Blobs": "[13.5.2, )",
+          "Aspire.Npgsql.EntityFrameworkCore.PostgreSQL": "[13.5.2, )",
           "Cadence.Data": "[1.0.0, )",
           "Cadence.ServiceDefaults": "[1.0.0, )",
           "Microsoft.ML.OnnxRuntime": "[1.29.0, )"
