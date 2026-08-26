@@ -2,7 +2,16 @@ import { afterEach, describe, expect, it } from 'vitest'
 import * as Y from 'yjs'
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from 'y-protocols/awareness'
 import { createEmptyProject, createNote, createTrack, type Project } from './../project'
+import { createProjectMix } from './../mix'
 import { createCollabSession, type CollabSession } from './collabSession'
+import {
+  CRDT_REPAIR_ORIGIN,
+  getProjectMap,
+  hasValidSharedMix,
+  readProject,
+  reconcileDoc,
+  seedProjectDoc,
+} from './crdt'
 
 /**
  * An in-memory transport that mimics a relay: it forwards document + awareness
@@ -95,6 +104,297 @@ function seedProject(): Project {
 }
 
 describe('createCollabSession', () => {
+  it('preserves and backfills local mix when joining a legacy room exactly once', () => {
+    const roomDoc = new Y.Doc()
+    const shared = seedProject()
+    shared.name = 'Authoritative room'
+    seedProjectDoc(roomDoc, shared)
+    roomDoc.transact(() => getProjectMap(roomDoc).delete('mix'), 'legacy-room')
+    expect(hasValidSharedMix(roomDoc)).toBe(false)
+
+    const local = seedProject()
+    local.mix = createProjectMix(['track_a'])
+    local.mix.tracks.track_a.gainDb = -12
+    const awareness = new Awareness(roomDoc)
+    let adopted = local
+    const session = createCollabSession({
+      doc: roomDoc,
+      awareness,
+      user: { id: 'local', name: 'Local', color: '#abc' },
+      canWrite: true,
+      fallbackProject: local,
+      onRemoteProject: (project) => {
+        adopted = project
+      },
+    })
+
+    roomDoc.transact(
+      () => getProjectMap(roomDoc).set('tempo', 132),
+      'remote-peer',
+    )
+    expect(adopted.name).toBe('Authoritative room')
+    expect(adopted.mix?.tracks.track_a.gainDb).toBe(-12)
+
+    session.seedIfEmpty(adopted)
+    expect(hasValidSharedMix(roomDoc)).toBe(true)
+    expect(readProject(roomDoc).mix?.tracks.track_a.gainDb).toBe(-12)
+
+    const staleDoc = new Y.Doc()
+    Y.applyUpdate(staleDoc, Y.encodeStateAsUpdate(roomDoc))
+    const stale = seedProject()
+    stale.mix = createProjectMix(['track_a'])
+    stale.mix.tracks.track_a.gainDb = -3
+    const staleAwareness = new Awareness(staleDoc)
+    const staleSession = createCollabSession({
+      doc: staleDoc,
+      awareness: staleAwareness,
+      user: { id: 'stale', name: 'Stale', color: '#def' },
+      canWrite: true,
+      initialProject: stale,
+      fallbackProject: stale,
+      onRemoteProject: () => {},
+    })
+    expect(readProject(staleDoc).mix?.tracks.track_a.gainDb).toBe(-12)
+
+    session.destroy()
+    staleSession.destroy()
+  })
+
+  it('backfills a legacy room only onto authoritative shared track ids', () => {
+    const roomDoc = new Y.Doc()
+    const shared = createEmptyProject('shared')
+    shared.tracks = [createTrack({ name: 'Room' }, 'room-track')]
+    shared.mix = createProjectMix(['room-track'])
+    seedProjectDoc(roomDoc, shared)
+    roomDoc.transact(() => getProjectMap(roomDoc).delete('mix'), 'legacy-room')
+
+    const local = createEmptyProject('local')
+    local.tracks = [createTrack({ name: 'Local' }, 'local-track')]
+    local.mix = createProjectMix(['local-track'])
+    local.mix.tracks['local-track'].gainDb = -12
+    const awareness = new Awareness(roomDoc)
+    const session = createCollabSession({
+      doc: roomDoc,
+      awareness,
+      user: { id: 'joiner', name: 'Joiner', color: '#abc' },
+      canWrite: true,
+      fallbackProject: local,
+      onRemoteProject: () => {},
+    })
+    session.seedIfEmpty(local)
+
+    const read = readProject(roomDoc)
+    expect(hasValidSharedMix(roomDoc)).toBe(true)
+    expect(Object.keys(read.mix!.tracks)).toEqual(['room-track'])
+    expect(read.mix!.tracks['room-track']).toEqual({
+      gainDb: 0,
+      pan: 0,
+      solo: false,
+      inserts: [],
+    })
+    expect(Object.hasOwn(read.mix!.tracks, 'local-track')).toBe(false)
+
+    const peer = new Y.Doc()
+    Y.applyUpdate(peer, Y.encodeStateAsUpdate(roomDoc))
+    expect(readProject(peer).mix).toEqual(read.mix)
+    session.destroy()
+  })
+
+  it('repairs a partial shared mix without overwriting valid remote fields', () => {
+    const roomDoc = new Y.Doc()
+    const shared = seedProject()
+    shared.schemaVersion = 2
+    shared.mix = createProjectMix(['track_a'])
+    shared.mix.tracks.track_a.gainDb = -9
+    shared.mix.tracks.track_a.inserts = [
+      {
+        id: 'remote-verb',
+        effectId: 'reverb',
+        enabled: true,
+        params: { wet: 0.7 },
+      },
+    ]
+    seedProjectDoc(roomDoc, shared)
+    const projectMap = getProjectMap(roomDoc)
+    const mix = projectMap.get('mix') as Y.Map<unknown>
+    const master = mix.get('master') as Y.Map<unknown>
+    roomDoc.transact(
+      () => master.delete('limiterEnabled'),
+      'malicious-peer',
+    )
+    expect(hasValidSharedMix(roomDoc)).toBe(false)
+
+    const stale = seedProject()
+    stale.mix = createProjectMix(['track_a'])
+    stale.mix.tracks.track_a.gainDb = -12
+    stale.mix.tracks.track_a.inserts = [
+      {
+        id: 'stale-compressor',
+        effectId: 'compressor',
+        enabled: true,
+        params: { ratio: 8 },
+      },
+    ]
+    const awareness = new Awareness(roomDoc)
+    const session = createCollabSession({
+      doc: roomDoc,
+      awareness,
+      user: { id: 'joiner', name: 'Joiner', color: '#abc' },
+      canWrite: true,
+      initialProject: stale,
+      fallbackProject: stale,
+      onRemoteProject: () => {},
+    })
+
+    const repaired = readProject(roomDoc)
+    expect(repaired.schemaVersion).toBeGreaterThanOrEqual(3)
+    expect(hasValidSharedMix(roomDoc)).toBe(true)
+    expect(repaired.mix?.tracks.track_a.gainDb).toBe(-9)
+    expect(repaired.mix?.tracks.track_a.inserts).toEqual([
+      {
+        id: 'remote-verb',
+        effectId: 'reverb',
+        enabled: true,
+        params: { wet: 0.7 },
+      },
+    ])
+    expect(repaired.mix?.master.limiterEnabled).toBe(false)
+    session.destroy()
+  })
+
+  it('refreshes cloned fallback mix after authoritative adoption on every peer', () => {
+    const shared = seedProject()
+    shared.mix = createProjectMix(['track_a'])
+    shared.mix.tracks.track_a.gainDb = -9
+    shared.mix.tracks.track_a.inserts = [
+      {
+        id: 'remote-verb',
+        effectId: 'reverb',
+        enabled: true,
+        params: { wet: 0.7 },
+      },
+    ]
+    const base = new Y.Doc()
+    seedProjectDoc(base, shared)
+    const update = Y.encodeStateAsUpdate(base)
+    const docA = new Y.Doc()
+    const docB = new Y.Doc()
+    Y.applyUpdate(docA, update)
+    Y.applyUpdate(docB, update)
+    const awarenessA = new Awareness(docA)
+    const awarenessB = new Awareness(docB)
+    const localA = seedProject()
+    localA.mix = createProjectMix(['track_a'])
+    localA.mix.tracks.track_a.gainDb = -3
+    const localB = seedProject()
+    localB.mix = createProjectMix(['track_a'])
+    localB.mix.tracks.track_a.gainDb = -15
+    let projectA = localA
+    let projectB = localB
+    const sessionA = createCollabSession({
+      doc: docA,
+      awareness: awarenessA,
+      user: { id: 'a', name: 'A', color: '#aaa' },
+      canWrite: true,
+      fallbackProject: localA,
+      onRemoteProject: (project) => {
+        projectA = project
+      },
+    })
+    const sessionB = createCollabSession({
+      doc: docB,
+      awareness: awarenessB,
+      user: { id: 'b', name: 'B', color: '#bbb' },
+      canWrite: true,
+      fallbackProject: localB,
+      onRemoteProject: (project) => {
+        projectB = project
+      },
+    })
+    connect(
+      { doc: docA, awareness: awarenessA },
+      { doc: docB, awareness: awarenessB },
+    )
+
+    docA.transact(() => getProjectMap(docA).set('tempo', 121), 'remote-peer')
+    expect(projectA.mix?.tracks.track_a.gainDb).toBe(-9)
+    expect(projectB.mix?.tracks.track_a.gainDb).toBe(-9)
+    projectA.mix!.tracks.track_a.gainDb = -1
+    projectA.mix!.tracks.track_a.inserts[0].params.wet = 0.1
+
+    docA.transact(() => getProjectMap(docA).delete('mix'), 'root-deletion')
+    expect(projectA.mix?.tracks.track_a.gainDb).toBe(-9)
+    expect(projectB.mix?.tracks.track_a.gainDb).toBe(-9)
+    expect(projectA.mix?.tracks.track_a.inserts[0].params.wet).toBe(0.7)
+    expect(projectB.mix?.tracks.track_a.inserts[0].params.wet).toBe(0.7)
+
+    sessionA.destroy()
+    sessionB.destroy()
+  })
+
+  it('sanitizes malformed remote score structures through handleDocUpdate', () => {
+    const peer = makePeer('A', seedProject())
+    expect(() =>
+      peer.doc.transact(
+        () => getProjectMap(peer.doc).set('tracks', { malformed: true }),
+        'malicious-peer',
+      ),
+    ).not.toThrow()
+
+    const recovered = seedProject()
+    expect(() => reconcileDoc(peer.doc, recovered, 'valid-peer')).not.toThrow()
+    expect(peer.project.tracks).toEqual(recovered.tracks)
+  })
+
+  it('keeps viewer reads pure while writers repair and converge', () => {
+    const doc = new Y.Doc()
+    seedProjectDoc(doc, seedProject())
+    const projectMap = getProjectMap(doc)
+    const tracks = projectMap.get('tracks') as Y.Array<Y.Map<unknown>>
+    projectMap.delete('id')
+    tracks.get(0).delete('id')
+
+    const viewerAwareness = new Awareness(doc)
+    let viewerProject = seedProject()
+    const viewer = createCollabSession({
+      doc,
+      awareness: viewerAwareness,
+      user: { id: 'viewer', name: 'Viewer', color: '#aaa' },
+      canWrite: false,
+      fallbackProject: viewerProject,
+      onRemoteProject: (project) => {
+        viewerProject = project
+      },
+    })
+    const origins: unknown[] = []
+    doc.on('update', (_update, origin) => origins.push(origin))
+    doc.transact(() => projectMap.set('tempo', 130), 'remote-peer')
+    expect(origins).toEqual(['remote-peer'])
+    expect(origins).not.toContain(CRDT_REPAIR_ORIGIN)
+    expect(projectMap.get('id')).toBeUndefined()
+    expect(viewerProject.id).toMatch(/^project_repaired_/)
+
+    const writerAwareness = new Awareness(doc)
+    let writerProject = seedProject()
+    const writer = createCollabSession({
+      doc,
+      awareness: writerAwareness,
+      user: { id: 'writer', name: 'Writer', color: '#bbb' },
+      canWrite: true,
+      fallbackProject: writerProject,
+      onRemoteProject: (project) => {
+        writerProject = project
+      },
+    })
+    doc.transact(() => projectMap.set('tempo', 131), 'remote-peer-2')
+    expect(origins).toContain(CRDT_REPAIR_ORIGIN)
+    expect(projectMap.get('id')).toBe(viewerProject.id)
+    expect(writerProject.id).toBe(viewerProject.id)
+
+    viewer.destroy()
+    writer.destroy()
+  })
+
   it('converges two docs under concurrent, conflicting edits', () => {
     const a = makePeer('A', seedProject())
     const b = makePeer('B', undefined)

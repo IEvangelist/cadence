@@ -116,7 +116,8 @@ interface PluginManifest {
 which throws a typed `PluginManifestError` if the `id`/`name` is missing or
 `version` isn't a semantic version. There is **no schema library** — the check
 is a few lines of hand-rolled validation, so the SDK adds zero runtime
-dependencies.
+dependencies. Effect parameter descriptors are validated at registration, and
+malformed, duplicate, or reserved ids reject the plugin before activation.
 
 ## Extension points
 
@@ -176,7 +177,10 @@ and
 
 An effect returns an `EffectNode` (`input` → effect → `output`). Effects with
 `enabledByDefault: true` are inserted into the master chain when the engine is
-built.
+built. Optional numeric parameter descriptors expose accessible mixer controls;
+their defaults seed new inserts, current params reach the factory, and the
+optional update callback changes the live node without rebuilding it. Effects
+that omit these additions continue to work unchanged.
 
 ```ts
 import * as Tone from 'tone'
@@ -188,13 +192,32 @@ effects: [
     name: 'High-Cut Softener',
     description: 'A gentle low-pass filter on the master bus.',
     enabledByDefault: false,
-    createNode: (): EffectNode => {
-      const filter = new Tone.Filter(8000, 'lowpass')
-      return { input: filter, output: filter, dispose: () => filter.dispose() }
+    parameters: [
+      {
+        type: 'number', id: 'frequency', name: 'Cutoff',
+        defaultValue: 8000, min: 200, max: 20000, step: 100, unit: 'Hz',
+      },
+    ],
+    createNode: ({ params }): EffectNode => {
+      const filter = new Tone.Filter(params?.frequency ?? 8000, 'lowpass')
+      return {
+        input: filter,
+        output: filter,
+        updateParams: (next) => {
+          filter.frequency.value = next.frequency ?? 8000
+        },
+        dispose: () => filter.dispose(),
+      }
     },
   },
 ]
 ```
+
+Cadence validates descriptors, rejects reserved prototype keys, and clamps/snaps
+finite values through the public `effectParameterDescriptors` and
+`sanitizeEffectParameterValue` helpers. Safe unknown persisted keys—and all
+params for a temporarily unavailable plugin—are retained across project round
+trips. Factories and live updates receive the same complete normalized snapshot.
 
 ### Format
 

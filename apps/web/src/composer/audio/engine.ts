@@ -18,6 +18,7 @@ import {
 import { getInstrumentContribution } from '../instruments/registry'
 import { defaultPluginHost } from '../plugins/defaultHost'
 import { connectEffectChain } from '../plugins/effectChain'
+import { createEffectNode } from '../plugins/effectParameters'
 import type { EffectNode, InstrumentVoice } from '../plugins/types'
 import { createMixerGraph, type MixerGraph } from './mixerGraph'
 import { createMixerController, type MixerController } from './mixerController'
@@ -106,7 +107,9 @@ export class ToneAudioEngine implements AudioEngine {
     this.mixerGraph.output.connect(this.voiceBus)
     this._mixer = createMixerController({
       graph: this.mixerGraph,
-      createEffect: (effectId) => this.createInsertNode(effectId),
+      resolveEffect: (effectId) =>
+        defaultPluginHost.effects().find((effect) => effect.id === effectId),
+      createEffect: (effectId, params) => this.createInsertNode(effectId, params),
     })
     Tone.getTransport().bpm.value = this.tempo
     this.disposed = false
@@ -127,9 +130,19 @@ export class ToneAudioEngine implements AudioEngine {
   }
 
   /** Build an insert node for a mixer effect id via the plugin host (or null). */
-  private createInsertNode(effectId: string): EffectNode | null {
+  private createInsertNode(
+    effectId: string,
+    params: Readonly<Record<string, number>>,
+  ): EffectNode | null {
     const contribution = defaultPluginHost.effects().find((effect) => effect.id === effectId)
-    return contribution ? contribution.createNode({ tempo: this.tempo }) : null
+    if (!contribution) return null
+    // Keep factory invocation behind the shared SDK wrapper. The controller
+    // normalizes earlier for hydration/live updates; this boundary check ensures
+    // no future direct engine caller can feed a factory a partial snapshot.
+    return createEffectNode(contribution, {
+      tempo: this.tempo,
+      params,
+    })
   }
 
   /**
@@ -141,7 +154,7 @@ export class ToneAudioEngine implements AudioEngine {
   private buildEffectChain(): void {
     const active = defaultPluginHost.effects().filter((e) => e.enabledByDefault)
     for (const contribution of active) {
-      this.effectNodes.push(contribution.createNode({ tempo: this.tempo }))
+      this.effectNodes.push(createEffectNode(contribution, { tempo: this.tempo }))
     }
     connectEffectChain(this.voiceBus, this.effectNodes, this.master)
   }
@@ -354,8 +367,12 @@ export function isAudioSupported(): boolean {
 export class SilentAudioEngine implements AudioEngine {
   private _state: TransportState = 'stopped'
   private readonly listeners = new Set<(state: TransportState) => void>()
-  // A state-only mixer (no audio graph): the panel stays fully interactive.
-  private readonly _mixer: MixerController = createMixerController()
+  // A state-only mixer (no audio graph): the panel stays fully interactive,
+  // while descriptor resolution remains identical to the Tone-backed engine.
+  private readonly _mixer: MixerController = createMixerController({
+    resolveEffect: (effectId) =>
+      defaultPluginHost.effects().find((effect) => effect.id === effectId),
+  })
 
   get state(): TransportState {
     return this._state

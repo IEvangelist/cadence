@@ -99,6 +99,11 @@ export interface InstrumentContribution extends InstrumentDefinition {
 export interface EffectNode {
   readonly input: Tone.ToneAudioNode
   readonly output: Tone.ToneAudioNode
+  /**
+   * Apply a complete, sanitized parameter snapshot without rebuilding the node.
+   * Optional so existing effects remain source-compatible.
+   */
+  updateParams?: (params: Readonly<Record<string, number>>) => void
   dispose(): void
 }
 
@@ -106,10 +111,34 @@ export interface EffectNode {
 export interface EffectContext {
   /** Current tempo in BPM (for tempo-synced effects). */
   readonly tempo: number
+  /**
+   * Current sanitized insert parameters. Optional for source compatibility with
+   * effects created outside the mixer; descriptor defaults apply when omitted.
+   */
+  readonly params?: Readonly<Record<string, number>>
 }
 
 /** Builds an {@link EffectNode}. */
 export type EffectFactory = (context: EffectContext) => EffectNode
+
+/**
+ * A numeric effect parameter the mixer can edit. The discriminator keeps the
+ * descriptor contract extensible while matching ProjectMixInsert.params today.
+ */
+export interface EffectNumberParameterDescriptor {
+  readonly type: 'number'
+  /** Stable key persisted in ProjectMixInsert.params. */
+  readonly id: string
+  readonly name: string
+  readonly defaultValue: number
+  readonly min: number
+  readonly max: number
+  readonly step: number
+  /** Short display suffix such as `dB`, `s`, or `%`. */
+  readonly unit?: string
+}
+
+export type EffectParameterDescriptor = EffectNumberParameterDescriptor
 
 /** An audio effect a plugin contributes. */
 export interface EffectContribution {
@@ -118,6 +147,11 @@ export interface EffectContribution {
   description: string
   /** When true, the effect is applied unless the user disables it. */
   enabledByDefault?: boolean
+  /**
+   * Parameters exposed by mixer inserts. Omit to preserve the original fixed
+   * effect behavior and render no parameter controls.
+   */
+  parameters?: readonly EffectParameterDescriptor[]
   createNode: EffectFactory
 }
 

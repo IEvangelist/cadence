@@ -86,7 +86,8 @@ interface PluginManifest {
 `PluginManifestError` (mirroring `MidiImportError` / `ProjectFileError`) if the
 `id`/`name` is missing or `version` isn't a semantic version. There is **no schema
 library** — the check is a few lines of hand-rolled validation, so the SDK adds
-zero runtime dependencies.
+zero runtime dependencies. Registration also rejects malformed, duplicate, or
+reserved effect parameter descriptors before the plugin becomes visible.
 
 ```ts
 import { validateManifest, PluginManifestError } from '../plugins'
@@ -159,7 +160,10 @@ through this exact same seam (see `plugins/builtins/synthVoices.ts` and
 An effect returns an `EffectNode` (`input` → effect → `output`). Effects with
 `enabledByDefault: true` are inserted into the master chain when the engine is
 built; the built-in `softener` ships **off** so the default signal path is
-unchanged.
+unchanged. Mixer inserts may add typed numeric descriptors. Their defaults seed
+new `ProjectMixInsert.params`; current sanitized params reach `createNode`, and
+`updateParams` applies slider changes to the live node. Every field is optional,
+so existing fixed effects remain compatible and render no parameter controls.
 
 ```ts
 import * as Tone from 'tone'
@@ -171,13 +175,41 @@ effects: [
     name: 'High-Cut Softener',
     description: 'A gentle low-pass filter on the master bus.',
     enabledByDefault: false,
-    createNode: (): EffectNode => {
-      const filter = new Tone.Filter(8000, 'lowpass')
-      return { input: filter, output: filter, dispose: () => filter.dispose() }
+    parameters: [
+      {
+        type: 'number',
+        id: 'frequency',
+        name: 'Cutoff',
+        defaultValue: 8000,
+        min: 200,
+        max: 20000,
+        step: 100,
+        unit: 'Hz',
+      },
+    ],
+    createNode: ({ params }): EffectNode => {
+      const filter = new Tone.Filter(params?.frequency ?? 8000, 'lowpass')
+      return {
+        input: filter,
+        output: filter,
+        updateParams: (next) => {
+          filter.frequency.value = next.frequency ?? 8000
+        },
+        dispose: () => filter.dispose(),
+      }
     },
   },
 ]
 ```
+
+Descriptors are runtime-validated before controls render. Reserved prototype
+keys are rejected. Values are finite, clamped to `min`/`max`, and snapped to
+`step` through the exported `sanitizeEffectParameterValue` helper. Safe unknown
+keys are preserved for plugin evolution, and params for a currently unavailable
+plugin survive project load/save unchanged. Factory creation, hydration, live
+updates, and `MixerController.setInsertParams` share the same normalizer, so the
+factory's `params` and node's `updateParams` callback always receive complete
+snapshots—not a single changed key.
 
 ### (c) Format
 
@@ -354,8 +386,9 @@ current surface is the seam they'll grow from:
 - **Binary/async formats stay dedicated controls.** `export` is synchronous and
   returns `string | Uint8Array`; MIDI (binary import) and WAV (async offline
   render) remain first-class toolbar controls rather than generic contributions.
-- **Runtime effect toggling.** Effects are resolved when the engine is built;
-  per-session enable/disable of an *already-built* chain is a follow-up.
+- **Master-chain runtime toggling.** Master effects are resolved when the engine
+  is built. Mixer inserts already support live enable/disable and parameter
+  updates; per-session toggling of the separate master chain remains a follow-up.
 - **Plugin-instrument persistence.** Saved projects store an instrument by id,
   and the persistence layer's coercion seam is registry-aware: any id the host
   currently knows (built-in or contributed by an active plugin) round-trips

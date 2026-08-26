@@ -21,6 +21,28 @@ function fakeGraph() {
 }
 
 const fakeEffect = (): EffectNode => ({ input: {}, output: {}, dispose: vi.fn() }) as unknown as EffectNode
+const parameterEffect = {
+  parameters: [
+    {
+      type: 'number' as const,
+      id: 'amount',
+      name: 'Amount',
+      defaultValue: 0.5,
+      min: 0,
+      max: 1,
+      step: 0.25,
+    },
+    {
+      type: 'number' as const,
+      id: 'tone',
+      name: 'Tone',
+      defaultValue: 2,
+      min: 1,
+      max: 3,
+      step: 1,
+    },
+  ],
+}
 
 describe('mixerController (state-only)', () => {
   it('starts empty with a default master bus', () => {
@@ -28,6 +50,34 @@ describe('mixerController (state-only)', () => {
     const snapshot = mixer.getSnapshot()
     expect(snapshot.tracks).toEqual({})
     expect(snapshot.master).toEqual({ gainDb: 0, limiterEnabled: false, limiterThresholdDb: -1 })
+  })
+
+  it('normalizes complete params through the public controller surface', () => {
+    const mixer = createMixerController({
+      resolveEffect: (effectId) => (effectId === 'parameterized' ? parameterEffect : null),
+    })
+    mixer.hydrate({
+      tracks: {
+        t1: {
+          gainDb: 0,
+          pan: 0,
+          solo: false,
+          inserts: [
+            {
+              id: 'fx',
+              effectId: 'parameterized',
+              enabled: true,
+              params: { amount: 9 },
+            },
+          ],
+        },
+      },
+      master: { gainDb: 0, limiterEnabled: false, limiterThresholdDb: -1 },
+    })
+    expect(mixer.listInserts('t1')[0].params).toEqual({ amount: 1, tone: 2 })
+
+    mixer.setInsertParams('t1', 'fx', { amount: -4 })
+    expect(mixer.listInserts('t1')[0].params).toEqual({ amount: 0, tone: 2 })
   })
 
   it('syncs tracks and mirrors Track.muted', () => {
@@ -39,6 +89,31 @@ describe('mixerController (state-only)', () => {
     const snapshot = mixer.getSnapshot()
     expect(Object.keys(snapshot.tracks)).toEqual(['t1', 't2'])
     expect(snapshot.tracks.t2.muted).toBe(true)
+  })
+
+  it('hydrates prototype-like track ids as own snapshot properties', () => {
+    const ids = ['__proto__', 'constructor', 'prototype']
+    const mixer = createMixerController()
+    mixer.syncTracks(ids.map((id) => ({ id, muted: false })))
+    mixer.hydrate({
+      tracks: Object.fromEntries(
+        ids.map((id, index) => [
+          id,
+          {
+            gainDb: -2 * (index + 1),
+            pan: 0,
+            solo: false,
+            inserts: [],
+          },
+        ]),
+      ),
+      master: { gainDb: 0, limiterEnabled: false, limiterThresholdDb: -1 },
+    })
+
+    ids.forEach((id, index) => {
+      expect(Object.hasOwn(mixer.getSnapshot().tracks, id)).toBe(true)
+      expect(mixer.getSnapshot().tracks[id].gainDb).toBe(-2 * (index + 1))
+    })
   })
 
   it('drops state for tracks that disappear', () => {
@@ -314,7 +389,7 @@ describe('mixerController (with graph)', () => {
 
     mixer.refreshInserts()
 
-    expect(createEffect).toHaveBeenCalledWith('reverb')
+    expect(createEffect).toHaveBeenCalledWith('reverb', {})
     expect(graph.setTrackInserts).toHaveBeenCalledWith('t1', [expect.anything()])
   })
 
@@ -322,7 +397,7 @@ describe('mixerController (with graph)', () => {
     const createEffect = vi.fn(() => fakeEffect())
     const mixer = createMixerController({ graph, createEffect })
     mixer.addInsert('t1', 'reverb')
-    expect(createEffect).toHaveBeenCalledWith('reverb')
+    expect(createEffect).toHaveBeenCalledWith('reverb', {})
     expect(graph.setTrackInserts).toHaveBeenLastCalledWith('t1', [expect.anything()])
 
     // Disabling the insert rebuilds the chain with no nodes.
@@ -335,6 +410,148 @@ describe('mixerController (with graph)', () => {
     const mixer = createMixerController({ graph, createEffect: () => null })
     mixer.addInsert('t1', 'ghost')
     expect(graph.setTrackInserts).toHaveBeenLastCalledWith('t1', [])
+  })
+
+  it('updates a live insert node without rebuilding its audio chain', () => {
+    const updateParams = vi.fn()
+    const createEffect = vi.fn(
+      () =>
+        ({
+          ...fakeEffect(),
+          updateParams,
+        }) as EffectNode,
+    )
+    const mixer = createMixerController({ graph, createEffect })
+    const initial: ProjectMix = {
+      tracks: {
+        t1: {
+          gainDb: 0,
+          pan: 0,
+          solo: false,
+          inserts: [
+            {
+              id: 'verb',
+              effectId: 'reverb',
+              enabled: true,
+              params: { wet: 0.32 },
+            },
+          ],
+        },
+      },
+      master: { gainDb: 0, limiterEnabled: false, limiterThresholdDb: -1 },
+    }
+    mixer.hydrate(initial)
+    graph.setTrackInserts.mockClear()
+    createEffect.mockClear()
+
+    mixer.setInsertParams('t1', 'verb', { wet: 0.75 })
+
+    expect(updateParams).toHaveBeenCalledWith({ wet: 0.75 })
+    expect(createEffect).not.toHaveBeenCalled()
+    expect(graph.setTrackInserts).not.toHaveBeenCalled()
+    expect(mixer.listInserts('t1')[0].params).toEqual({ wet: 0.75 })
+  })
+
+  it('isolates and freezes externally returned insert parameter snapshots', () => {
+    const updateParams = vi.fn()
+    const mixer = createMixerController({
+      graph,
+      createEffect: () => ({ ...fakeEffect(), updateParams }) as EffectNode,
+    })
+    mixer.hydrate({
+      tracks: {
+        t1: {
+          gainDb: 0,
+          pan: 0,
+          solo: false,
+          inserts: [
+            {
+              id: 'verb',
+              effectId: 'reverb',
+              enabled: true,
+              params: { wet: 0.32 },
+            },
+          ],
+        },
+      },
+      master: { gainDb: 0, limiterEnabled: false, limiterThresholdDb: -1 },
+    })
+    updateParams.mockClear()
+    graph.setTrackInserts.mockClear()
+    const listener = vi.fn()
+    const unsubscribe = mixer.subscribe(listener)
+
+    const listed = mixer.listInserts('t1') as unknown as ReadonlyArray<{
+      params: Record<string, number>
+    }>
+    listed[0].params.wet = 0.99
+    expect(mixer.listInserts('t1')[0].params.wet).toBe(0.32)
+    expect(updateParams).not.toHaveBeenCalled()
+    expect(graph.setTrackInserts).not.toHaveBeenCalled()
+    expect(listener).not.toHaveBeenCalled()
+
+    const viewed = mixer.getView().insertsByTrack.t1[0]
+    expect(Object.isFrozen(viewed.params)).toBe(true)
+    expect(() => {
+      ;(viewed.params as Record<string, number>).wet = 0.1
+    }).toThrow(TypeError)
+    expect(mixer.listInserts('t1')[0].params.wet).toBe(0.32)
+    unsubscribe()
+  })
+
+  it('passes complete normalized snapshots to factories and same-structure updates', () => {
+    const updateParams = vi.fn()
+    const createEffect = vi.fn(
+      () => ({ ...fakeEffect(), updateParams }) as EffectNode,
+    )
+    const mixer = createMixerController({
+      graph,
+      createEffect,
+      resolveEffect: () => parameterEffect,
+    })
+    const initial: ProjectMix = {
+      tracks: {
+        t1: {
+          gainDb: 0,
+          pan: 0,
+          solo: false,
+          inserts: [
+            {
+              id: 'fx',
+              effectId: 'parameterized',
+              enabled: true,
+              params: {},
+            },
+          ],
+        },
+      },
+      master: { gainDb: 0, limiterEnabled: false, limiterThresholdDb: -1 },
+    }
+
+    mixer.hydrate(initial)
+    expect(createEffect).toHaveBeenCalledWith('parameterized', {
+      amount: 0.5,
+      tone: 2,
+    })
+    createEffect.mockClear()
+
+    mixer.hydrate({
+      ...initial,
+      tracks: {
+        t1: {
+          ...initial.tracks.t1,
+          inserts: [
+            {
+              ...initial.tracks.t1.inserts[0],
+              params: { amount: 8 },
+            },
+          ],
+        },
+      },
+    })
+
+    expect(updateParams).toHaveBeenCalledWith({ amount: 1, tone: 2 })
+    expect(createEffect).not.toHaveBeenCalled()
   })
 
   it('applies interpolated automation to the graph', () => {

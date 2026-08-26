@@ -693,6 +693,14 @@ export const interactionManifest: readonly InteractionManifestEntry[] = [
     'repeated',
   ),
   mixer(
+    'studio.mixer.insert.parameter',
+    'studio',
+    'slider',
+    '/.+/',
+    'Edits a registered insert-effect parameter and commits one undoable gesture.',
+    'repeated',
+  ),
+  mixer(
     'studio.mixer.master.gain',
     'studio',
     'slider',

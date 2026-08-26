@@ -13,6 +13,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { MasterBusState, TrackInsert } from '../contract/mixing'
 import type { AutomationLane, AutomationTarget } from '../model/automation'
 import { defaultPluginHost } from '../plugins/defaultHost'
+import {
+  effectParameterDescriptors,
+  sanitizeEffectParams,
+} from '../plugins/effectParameters'
+import type { EffectParameterDescriptor } from '../plugins/types'
 import type { ComposerController } from './useComposer'
 
 /** A per-track mixer strip, merged from the project track + mixer overlay. */
@@ -33,6 +38,7 @@ export interface MixerTrackView {
 export interface MixerEffectOption {
   id: string
   name: string
+  parameters: readonly EffectParameterDescriptor[]
 }
 
 export interface MixerViewModel {
@@ -42,6 +48,8 @@ export interface MixerViewModel {
   availableEffects: MixerEffectOption[]
   /** Human label for an effect id (falls back to the id). */
   effectName: (effectId: string) => string
+  /** Registered, validated controls for an effect (empty when unavailable/fixed). */
+  effectParameters: (effectId: string) => readonly EffectParameterDescriptor[]
   /** Current playhead in beats (for the "write at playhead" affordances). */
   positionBeats: number
   /** Project length in beats — the automation lane's horizontal span. */
@@ -59,6 +67,12 @@ export interface MixerViewModel {
   addInsert: (trackId: string, effectId: string) => void
   removeInsert: (trackId: string, insertId: string) => void
   toggleInsert: (trackId: string, insertId: string) => void
+  setInsertParam: (
+    trackId: string,
+    insertId: string,
+    parameterId: string,
+    value: number,
+  ) => void
 
   setMasterGain: (gainDb: number) => void
   setLimiterEnabled: (enabled: boolean) => void
@@ -89,7 +103,11 @@ export interface MixerViewModel {
 }
 
 const listEffectOptions = (): MixerEffectOption[] =>
-  defaultPluginHost.effects().map((effect) => ({ id: effect.id, name: effect.name }))
+  defaultPluginHost.effects().map((effect) => ({
+    id: effect.id,
+    name: effect.name,
+    parameters: effectParameterDescriptors(effect),
+  }))
 
 const laneMatchesTrack = (lane: AutomationLane, trackId: string): boolean =>
   (lane.target === 'trackGain' || lane.target === 'trackPan') && lane.trackId === trackId
@@ -108,6 +126,7 @@ export function useMixer(controller: ComposerController): MixerViewModel {
     addMixInsert: dispatchAddInsert,
     removeMixInsert: dispatchRemoveInsert,
     setMixInsertEnabled: dispatchSetInsertEnabled,
+    setMixInsertParam: dispatchSetInsertParam,
     setMasterMix: dispatchMasterMix,
   } = controller
   const view = useSyncExternalStore(mixer.subscribe, mixer.getView, mixer.getView)
@@ -180,15 +199,20 @@ export function useMixer(controller: ComposerController): MixerViewModel {
     [automation],
   )
 
-  const effectLabels = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const effect of availableEffects) map.set(effect.id, effect.name)
+  const effectOptionsById = useMemo(() => {
+    const map = new Map<string, MixerEffectOption>()
+    for (const effect of availableEffects) map.set(effect.id, effect)
     return map
   }, [availableEffects])
 
   const effectName = useCallback(
-    (effectId: string) => effectLabels.get(effectId) ?? `${effectId} (unavailable)`,
-    [effectLabels],
+    (effectId: string) =>
+      effectOptionsById.get(effectId)?.name ?? `${effectId} (unavailable)`,
+    [effectOptionsById],
+  )
+  const effectParameters = useCallback(
+    (effectId: string) => effectOptionsById.get(effectId)?.parameters ?? [],
+    [effectOptionsById],
   )
 
   const setTrackGain = useCallback(
@@ -222,6 +246,35 @@ export function useMixer(controller: ComposerController): MixerViewModel {
       if (insert) dispatchSetInsertEnabled(trackId, insertId, !insert.enabled)
     },
     [dispatchSetInsertEnabled, project.mix],
+  )
+  const setInsertParam = useCallback(
+    (
+      trackId: string,
+      insertId: string,
+      parameterId: string,
+      value: number,
+    ) => {
+      const insert = project.mix?.tracks[trackId]?.inserts.find(
+        (entry) => entry.id === insertId,
+      )
+      const descriptor = effectParameters(insert?.effectId ?? '').find(
+        (candidate) => candidate.id === parameterId,
+      )
+      if (!insert || !descriptor) return
+      const liveInsert = mixer
+        .listInserts(trackId)
+        .find((candidate) => candidate.id === insertId)
+      const params = sanitizeEffectParams(
+        { parameters: effectParameters(insert.effectId) },
+        {
+          ...(liveInsert?.params ?? insert.params),
+          [parameterId]: value,
+        },
+      )
+      mixer.setInsertParams(trackId, insertId, params)
+      dispatchSetInsertParam(trackId, insertId, parameterId, params[parameterId])
+    },
+    [dispatchSetInsertParam, effectParameters, mixer, project.mix],
   )
 
   const setMasterGain = useCallback(
@@ -279,6 +332,7 @@ export function useMixer(controller: ComposerController): MixerViewModel {
     masterAutomated,
     availableEffects,
     effectName,
+    effectParameters,
     positionBeats,
     lengthBeats: project.lengthBeats,
     snap,
@@ -290,6 +344,7 @@ export function useMixer(controller: ComposerController): MixerViewModel {
     addInsert,
     removeInsert,
     toggleInsert,
+    setInsertParam,
     setMasterGain,
     setLimiterEnabled,
     setLimiterThreshold,

@@ -12,6 +12,7 @@ import {
   selectedTrack,
   type ComposerState,
 } from './reducer'
+import { setTrackMix } from './mix'
 
 function seed(): ComposerState {
   const project = createEmptyProject('p')
@@ -243,6 +244,23 @@ describe('tracks', () => {
   })
 
   describe('persisted mix', () => {
+    it('updates a prototype-like track id without reading object prototypes', () => {
+      const project = createEmptyProject('p')
+      project.tracks = [createTrack({ name: 'Odd' }, '__proto__')]
+      let state = initialState(project)
+      state = composerReducer(state, {
+        type: 'set-track-mix',
+        trackId: '__proto__',
+        changes: { gainDb: -7, pan: 0.5 },
+      })
+
+      expect(Object.hasOwn(state.project.mix!.tracks, '__proto__')).toBe(true)
+      expect(state.project.mix!.tracks['__proto__']).toMatchObject({
+        gainDb: -7,
+        pan: 0.5,
+      })
+    })
+
     it('writes clamped track and master settings through the reducer', () => {
       let state = composerReducer(seed(), {
         type: 'set-track-mix',
@@ -295,7 +313,37 @@ describe('tracks', () => {
       expect(state.project.mix?.tracks.track_a.inserts).toEqual([])
     })
 
-    it('preserves local mix across collaboration sync without claiming CRDT convergence', () => {
+    it('updates and sanitizes insert params while preserving the effect identity', () => {
+      let state = composerReducer(seed(), {
+        type: 'add-mix-insert',
+        trackId: 'track_a',
+        insert: {
+          id: 'verb',
+          effectId: 'reverb',
+          enabled: true,
+          params: { wet: 0.32, legacy: 9 },
+        },
+      })
+      state = composerReducer(state, {
+        type: 'set-mix-insert-params',
+        trackId: 'track_a',
+        insertId: 'verb',
+        params: {
+          wet: 0.75,
+          legacy: 2_000_000,
+          invalid: Number.NaN,
+        },
+      })
+
+      expect(state.project.mix?.tracks.track_a.inserts[0]).toEqual({
+        id: 'verb',
+        effectId: 'reverb',
+        enabled: true,
+        params: { wet: 0.75, legacy: 1_000_000 },
+      })
+    })
+
+    it('adopts the shared mix across collaboration sync', () => {
       let state = composerReducer(seed(), {
         type: 'set-track-mix',
         trackId: 'track_a',
@@ -303,8 +351,9 @@ describe('tracks', () => {
       })
       const remote = createEmptyProject('p')
       remote.tracks = [createTrack({ name: 'Remote' }, 'track_a')]
+      remote.mix = setTrackMix(remote.mix, 'track_a', { gainDb: -18 })
       state = composerReducer(state, { type: 'sync-remote', project: remote })
-      expect(state.project.mix?.tracks.track_a.gainDb).toBe(-8)
+      expect(state.project.mix?.tracks.track_a.gainDb).toBe(-18)
     })
   })
 

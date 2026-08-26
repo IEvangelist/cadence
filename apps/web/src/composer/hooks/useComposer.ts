@@ -42,6 +42,11 @@ import { type OfflineRenderer, renderProjectToWav } from '../formats/audioExport
 import { defaultPluginHost } from '../plugins/defaultHost'
 import type { FormatContribution } from '../plugins/types'
 import {
+  defaultEffectParams,
+  effectParameterDescriptors,
+  sanitizeEffectParams,
+} from '../plugins/effectParameters'
+import {
   type ShareSnapshot,
   createShareSnapshot,
   decodeProjectFromFragment,
@@ -316,6 +321,12 @@ export interface ComposerController {
   addMixInsert: (trackId: string, effectId: string) => void
   removeMixInsert: (trackId: string, insertId: string) => void
   setMixInsertEnabled: (trackId: string, insertId: string, enabled: boolean) => void
+  setMixInsertParam: (
+    trackId: string,
+    insertId: string,
+    parameterId: string,
+    value: number,
+  ) => void
   setMasterMix: (changes: Partial<ProjectMasterMix>) => void
 
   setProjectName: (name: string) => void
@@ -427,6 +438,10 @@ function historyGroupKey(action: ComposerAction): string | undefined {
       if (action.changes.gainDb !== undefined) return 'mix-master-gain'
       if (action.changes.limiterThresholdDb !== undefined) return 'mix-master-threshold'
       return undefined
+    case 'set-mix-insert-params':
+      return `mix-insert-params:${action.trackId}:${action.insertId}`
+    case 'set-mix-insert-param':
+      return `mix-insert-param:${action.trackId}:${action.insertId}:${action.parameterId}`
     default:
       return undefined
   }
@@ -1332,12 +1347,19 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     [dispatch],
   )
   const addMixInsert = useCallback(
-    (trackId: string, effectId: string) =>
+    (trackId: string, effectId: string) => {
+      const effect = defaultPluginHost.effects().find((candidate) => candidate.id === effectId)
       dispatch({
         type: 'add-mix-insert',
         trackId,
-        insert: { id: newId('insert'), effectId, enabled: true, params: {} },
-      }),
+        insert: {
+          id: newId('insert'),
+          effectId,
+          enabled: true,
+          params: defaultEffectParams(effect),
+        },
+      })
+    },
     [dispatch],
   )
   const removeMixInsert = useCallback(
@@ -1348,6 +1370,31 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   const setMixInsertEnabled = useCallback(
     (trackId: string, insertId: string, enabled: boolean) =>
       dispatch({ type: 'set-mix-insert-enabled', trackId, insertId, enabled }),
+    [dispatch],
+  )
+  const setMixInsertParam = useCallback(
+    (trackId: string, insertId: string, parameterId: string, value: number) => {
+      const insert = stateRef.current.project.mix?.tracks[trackId]?.inserts.find(
+        (candidate) => candidate.id === insertId,
+      )
+      if (!insert) return
+      const effect = defaultPluginHost.effects().find(
+        (candidate) => candidate.id === insert.effectId,
+      )
+      const descriptor = effectParameterDescriptors(effect).find(
+        (candidate) => candidate.id === parameterId,
+      )
+      if (!descriptor) return
+      dispatch({
+        type: 'set-mix-insert-param',
+        trackId,
+        insertId,
+        parameterId,
+        value: sanitizeEffectParams(effect, {
+          [parameterId]: value,
+        })[parameterId],
+      })
+    },
     [dispatch],
   )
   const setMasterMix = useCallback(
@@ -1818,6 +1865,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     addMixInsert,
     removeMixInsert,
     setMixInsertEnabled,
+    setMixInsertParam,
     setMasterMix,
     setProjectName,
     newProject,

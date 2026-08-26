@@ -511,6 +511,7 @@ test.describe('production interaction contract', () => {
 
     const mixer = await openMixWorkspace(authenticatedPage)
     const firstStrip = mixer.locator('fieldset').first()
+    await firstStrip.getByRole('combobox', { name: /Add insert/ }).selectOption('reverb')
     await firstStrip.getByRole('button', { name: 'Add', exact: true }).click()
     const volumeAutomation = firstStrip.getByRole('group', { name: 'Volume automation' })
     await volumeAutomation.getByRole('button', { name: 'Add point' }).click()

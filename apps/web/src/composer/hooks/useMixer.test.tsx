@@ -10,6 +10,7 @@ import {
   removeMixInsert,
   setMasterMix,
   setMixInsertEnabled,
+  setMixInsertParams,
   setTrackMix,
   createProjectMix,
 } from '../model/mix'
@@ -81,6 +82,25 @@ function setup() {
         project = {
           ...project,
           mix: setMixInsertEnabled(project.mix, trackId, insertId, enabled),
+        }
+        rerender({ controller: build() })
+      },
+      setMixInsertParam: (
+        trackId: Parameters<ComposerController['setMixInsertParam']>[0],
+        insertId: Parameters<ComposerController['setMixInsertParam']>[1],
+        parameterId: Parameters<ComposerController['setMixInsertParam']>[2],
+        value: Parameters<ComposerController['setMixInsertParam']>[3],
+      ) => {
+        const insert = project.mix?.tracks[trackId]?.inserts.find(
+          (candidate) => candidate.id === insertId,
+        )
+        if (!insert) return
+        project = {
+          ...project,
+          mix: setMixInsertParams(project.mix, trackId, insertId, {
+            ...insert.params,
+            [parameterId]: value,
+          }),
         }
         rerender({ controller: build() })
       },
@@ -179,6 +199,39 @@ describe('useMixer', () => {
 
     act(() => view.result.current.removeInsert('t1', insertId))
     expect(view.result.current.tracks[0].inserts).toHaveLength(0)
+  })
+
+  it('exposes descriptors and persists sanitized live insert parameter edits', () => {
+    const { view, mixer } = setup()
+    act(() => view.result.current.addInsert('t1', 'reverb'))
+    const insertId = view.result.current.tracks[0].inserts[0].id
+    expect(view.result.current.effectParameters('reverb').map((p) => p.id)).toContain('wet')
+    const runtimeSpy = vi.spyOn(mixer, 'setInsertParams')
+
+    act(() => view.result.current.setInsertParam('t1', insertId, 'wet', 4))
+
+    expect(runtimeSpy).toHaveBeenCalledWith('t1', insertId, { wet: 1 })
+    expect(view.result.current.tracks[0].inserts[0].params.wet).toBe(1)
+  })
+
+  it('keeps same-tick edits to different params in live and project state', () => {
+    const { view, mixer } = setup()
+    act(() => view.result.current.addInsert('t1', 'delay'))
+    const insertId = view.result.current.tracks[0].inserts[0].id
+
+    act(() => {
+      view.result.current.setInsertParam('t1', insertId, 'feedback', 0.6)
+      view.result.current.setInsertParam('t1', insertId, 'wet', 0.7)
+    })
+
+    expect(view.result.current.tracks[0].inserts[0].params).toEqual({
+      feedback: 0.6,
+      wet: 0.7,
+    })
+    expect(mixer.listInserts('t1')[0].params).toEqual({
+      feedback: 0.6,
+      wet: 0.7,
+    })
   })
 
   it('labels unavailable effects without discarding their ids', () => {

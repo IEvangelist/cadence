@@ -90,7 +90,10 @@ describe('a plugin-contributed effect through the engine seam', () => {
 
     // The engine built the node and wired its output onward through the chain.
     expect(createNode).toHaveBeenCalledTimes(1)
-    expect(createNode).toHaveBeenCalledWith({ tempo: expect.any(Number) })
+    expect(createNode).toHaveBeenCalledWith({
+      tempo: expect.any(Number),
+      params: {},
+    })
     expect(output.connect).toHaveBeenCalledTimes(1)
 
     // Disposing the engine disposes the effect node.

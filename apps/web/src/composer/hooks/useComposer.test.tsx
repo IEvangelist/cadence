@@ -330,6 +330,47 @@ describe('useComposer', () => {
     expect(hook.result.current.status).toBe('Saved')
   })
 
+  it('saves insert effect parameters to the local project store', async () => {
+    const { store, hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+    act(() => hook.result.current.addMixInsert(trackId, 'reverb'))
+    const insert = hook.result.current.project.mix!.tracks[trackId].inserts[0]
+    act(() =>
+      hook.result.current.setMixInsertParam(trackId, insert.id, 'wet', 0.64),
+    )
+
+    await act(async () => {
+      await hook.result.current.saveProject()
+    })
+
+    const saved = await store.load(hook.result.current.project.id)
+    expect(saved?.mix?.tracks[trackId].inserts[0].params).toMatchObject({
+      wet: 0.64,
+    })
+  })
+
+  it('atomically persists different insert params edited in the same tick', async () => {
+    const { store, hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+    act(() => hook.result.current.addMixInsert(trackId, 'delay'))
+    const insertId = hook.result.current.project.mix!.tracks[trackId].inserts[0].id
+
+    act(() => {
+      hook.result.current.setMixInsertParam(trackId, insertId, 'feedback', 0.6)
+      hook.result.current.setMixInsertParam(trackId, insertId, 'wet', 0.7)
+    })
+
+    expect(
+      hook.result.current.project.mix!.tracks[trackId].inserts[0].params,
+    ).toEqual({ feedback: 0.6, wet: 0.7 })
+    await act(async () => {
+      await hook.result.current.saveProject()
+    })
+    expect((await store.load(hook.result.current.project.id))?.mix?.tracks[
+      trackId
+    ].inserts[0].params).toEqual({ feedback: 0.6, wet: 0.7 })
+  })
+
   it('polls the audio clock for the playhead while playing', async () => {
     // Drive a single rAF frame synchronously so the playhead reads the engine.
     const frames: FrameRequestCallback[] = []
@@ -431,6 +472,22 @@ describe('useComposer — single-user undo/redo history (#156)', () => {
     expect(hook.result.current.project.mix?.tracks[trackId].solo).toBe(true)
     act(() => hook.result.current.undo())
     expect(hook.result.current.project.mix?.tracks[trackId].solo).toBe(false)
+  })
+
+  it('undoes and redoes an insert parameter gesture as one history entry', () => {
+    const { hook } = setup()
+    const trackId = hook.result.current.selectedTrackId
+    act(() => hook.result.current.addMixInsert(trackId, 'reverb'))
+    const insertId = hook.result.current.project.mix!.tracks[trackId].inserts[0].id
+    act(() => hook.result.current.setMixInsertParam(trackId, insertId, 'wet', 0.4))
+    act(() => hook.result.current.setMixInsertParam(trackId, insertId, 'wet', 0.5))
+    act(() => hook.result.current.setMixInsertParam(trackId, insertId, 'wet', 0.6))
+    act(() => hook.result.current.stopHistoryCapture())
+
+    act(() => hook.result.current.undo())
+    expect(hook.result.current.project.mix?.tracks[trackId].inserts[0].params.wet).toBe(0.32)
+    act(() => hook.result.current.redo())
+    expect(hook.result.current.project.mix?.tracks[trackId].inserts[0].params.wet).toBe(0.6)
   })
 
   it('does not coalesce discrete one-shot commands even when they land back-to-back', () => {

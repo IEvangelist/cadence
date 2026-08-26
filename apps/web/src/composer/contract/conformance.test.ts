@@ -31,7 +31,7 @@ import type { Entitlements } from '../../billing/entitlementsClient'
 describe('composer contract conformance', () => {
   it('keeps the controller aligned with the frozen public surface (forward conformance)', () => {
     expect(controllerImplementsContract).toBe(true)
-    expect(COMPOSER_CONTRACT_VERSION).toBe('1.3.0')
+    expect(COMPOSER_CONTRACT_VERSION).toBe('1.4.0')
   })
 
   it('excludes #9 collaboration sync internals from the public contract', () => {

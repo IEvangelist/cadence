@@ -22,7 +22,8 @@ import type {
   TrackInsert,
   TrackMixerState,
 } from '../contract/mixing'
-import type { EffectNode } from '../plugins/types'
+import type { EffectContribution, EffectNode } from '../plugins/types'
+import { sanitizeEffectParams } from '../plugins/effectParameters'
 import { newId } from '../model/project'
 import { createProjectMix, type ProjectMix } from '../model/mix'
 import { sampleAutomation, upsertPoint } from './automation'
@@ -69,7 +70,14 @@ export interface MixerControllerDeps {
   /** The audio graph to drive. Omit for a state-only controller (no Web Audio). */
   graph?: MixerGraph | null
   /** Build an effect node for an insert's effect id (from the plugin host). */
-  createEffect?: (effectId: string) => EffectNode | null
+  createEffect?: (
+    effectId: string,
+    params: Readonly<Record<string, number>>,
+  ) => EffectNode | null
+  /** Resolve the active contribution used to normalize complete parameter snapshots. */
+  resolveEffect?: (
+    effectId: string,
+  ) => Pick<EffectContribution, 'parameters'> | null | undefined
 }
 
 const GAIN_MIN = -60
@@ -100,19 +108,34 @@ const EMPTY_INSERTS: readonly TrackInsert[] = Object.freeze([])
 export function createMixerController(deps: MixerControllerDeps = {}): MixerController {
   const graph = deps.graph ?? null
   const createEffect = deps.createEffect ?? (() => null)
+  const resolveEffect = deps.resolveEffect ?? (() => null)
 
   const trackStates = new Map<string, TrackMixerState>()
   const insertsByTrack = new Map<string, TrackInsert[]>()
+  const liveNodesByTrack = new Map<string, Map<string, EffectNode>>()
   let master: MasterBusState = { ...DEFAULT_MASTER }
   let lanes: AutomationLane[] = []
   const listeners = new Set<() => void>()
   let view: MixerView = buildView()
 
   function buildView(): MixerView {
-    const tracks: Record<string, TrackMixerState> = {}
-    for (const [id, state] of trackStates) tracks[id] = { ...state }
-    const inserts: Record<string, readonly TrackInsert[]> = {}
-    for (const [id, list] of insertsByTrack) inserts[id] = list.map((insert) => ({ ...insert }))
+    const tracks = Object.fromEntries(
+      [...trackStates].map(([id, state]) => [id, { ...state }]),
+    )
+    const inserts = Object.fromEntries(
+      [...insertsByTrack].map(([id, list]) => [
+        id,
+        Object.freeze(
+          list.map((insert) =>
+            Object.freeze({
+              ...insert,
+              params: Object.freeze({ ...insert.params }),
+            }),
+          ),
+        ),
+      ]),
+    )
+    Object.freeze(inserts)
     return {
       snapshot: { tracks, master: { ...master } },
       insertsByTrack: inserts,
@@ -150,16 +173,30 @@ export function createMixerController(deps: MixerControllerDeps = {}): MixerCont
     }
   }
 
+  function normalizeParams(
+    effectId: string,
+    params: Readonly<Record<string, number>>,
+  ): Record<string, number> {
+    return sanitizeEffectParams(resolveEffect(effectId) ?? undefined, params)
+  }
+
   function rebuildGraphInserts(trackId: string): void {
     if (!graph) return
     const list = insertsByTrack.get(trackId) ?? []
     const nodes: EffectNode[] = []
+    const liveNodes = new Map<string, EffectNode>()
     for (const insert of list) {
       if (!insert.enabled) continue
-      const node = createEffect(insert.effectId)
-      if (node) nodes.push(node)
+      const params = normalizeParams(insert.effectId, insert.params)
+      insert.params = params
+      const node = createEffect(insert.effectId, params)
+      if (node) {
+        nodes.push(node)
+        liveNodes.set(insert.id, node)
+      }
     }
     graph.setTrackInserts(trackId, nodes)
+    liveNodesByTrack.set(trackId, liveNodes)
   }
 
   function paramsEqual(
@@ -193,6 +230,45 @@ export function createMixerController(deps: MixerControllerDeps = {}): MixerCont
     )
   }
 
+  function insertStructureEqual(
+    left: readonly TrackInsert[],
+    right: readonly TrackInsert[],
+  ): boolean {
+    return (
+      left.length === right.length &&
+      left.every((insert, index) => {
+        const candidate = right[index]
+        return (
+          candidate !== undefined &&
+          insert.id === candidate.id &&
+          insert.effectId === candidate.effectId &&
+          insert.enabled === candidate.enabled
+        )
+      })
+    )
+  }
+
+  function updateGraphInsertParams(
+    trackId: string,
+    previous: readonly TrackInsert[],
+    next: readonly TrackInsert[],
+  ): void {
+    if (!graph) return
+    const liveNodes = liveNodesByTrack.get(trackId)
+    for (let index = 0; index < next.length; index += 1) {
+      const insert = next[index]
+      const before = previous[index]
+      if (!insert.enabled || paramsEqual(before.params, insert.params)) continue
+      insert.params = normalizeParams(insert.effectId, insert.params)
+      const node = liveNodes?.get(insert.id)
+      if (!node?.updateParams) {
+        rebuildGraphInserts(trackId)
+        return
+      }
+      node.updateParams(insert.params)
+    }
+  }
+
   function findLane(target: AutomationTarget, trackId?: string): AutomationLane | undefined {
     return lanes.find((lane) => lane.target === target && lane.trackId === trackId)
   }
@@ -217,6 +293,7 @@ export function createMixerController(deps: MixerControllerDeps = {}): MixerCont
         if (nextIds.has(id)) continue
         trackStates.delete(id)
         insertsByTrack.delete(id)
+        liveNodesByTrack.delete(id)
         graph?.disposeChannel(id)
       }
       // Ensure state + mirror mute for the current tracks.
@@ -234,6 +311,7 @@ export function createMixerController(deps: MixerControllerDeps = {}): MixerCont
         if (nextTrackIds.has(id)) continue
         trackStates.delete(id)
         insertsByTrack.delete(id)
+        liveNodesByTrack.delete(id)
         graph?.disposeChannel(id)
       }
       for (const [trackId, persisted] of Object.entries(mix.tracks)) {
@@ -241,8 +319,9 @@ export function createMixerController(deps: MixerControllerDeps = {}): MixerCont
         const previousInserts = insertsByTrack.get(trackId) ?? EMPTY_INSERTS
         const nextInserts = persisted.inserts.map((insert) => ({
           ...insert,
-          params: { ...insert.params },
+          params: normalizeParams(insert.effectId, insert.params),
         }))
+        const structureChanged = !insertStructureEqual(previousInserts, nextInserts)
         const insertsChanged = !insertsEqual(previousInserts, nextInserts)
         trackStates.set(trackId, {
           trackId,
@@ -255,7 +334,11 @@ export function createMixerController(deps: MixerControllerDeps = {}): MixerCont
         graph?.ensureChannel(trackId)
         graph?.setTrackGain(trackId, persisted.gainDb)
         graph?.setTrackPan(trackId, persisted.pan)
-        if (insertsChanged) rebuildGraphInserts(trackId)
+        if (structureChanged) {
+          rebuildGraphInserts(trackId)
+        } else if (insertsChanged) {
+          updateGraphInsertParams(trackId, previousInserts, nextInserts)
+        }
       }
       master = { ...mix.master }
       graph?.setMasterGain(master.gainDb)
@@ -264,7 +347,13 @@ export function createMixerController(deps: MixerControllerDeps = {}): MixerCont
       commit()
     },
     refreshInserts() {
-      for (const trackId of trackStates.keys()) rebuildGraphInserts(trackId)
+      for (const [trackId, inserts] of insertsByTrack) {
+        for (const insert of inserts) {
+          insert.params = normalizeParams(insert.effectId, insert.params)
+        }
+        rebuildGraphInserts(trackId)
+      }
+      commit()
     },
     setTrackGain(trackId, gainDb) {
       const state = ensureTrack(trackId)
@@ -298,12 +387,22 @@ export function createMixerController(deps: MixerControllerDeps = {}): MixerCont
       commit()
     },
     listInserts(trackId) {
-      return view.insertsByTrack[trackId] ?? EMPTY_INSERTS
+      return (
+        view.insertsByTrack[trackId]?.map((insert) => ({
+          ...insert,
+          params: { ...insert.params },
+        })) ?? EMPTY_INSERTS
+      )
     },
     addInsert(trackId, effectId) {
       ensureTrack(trackId)
       const list = insertsByTrack.get(trackId) ?? []
-      list.push({ id: newId('insert'), effectId, enabled: true, params: {} })
+      list.push({
+        id: newId('insert'),
+        effectId,
+        enabled: true,
+        params: normalizeParams(effectId, {}),
+      })
       insertsByTrack.set(trackId, list)
       rebuildGraphInserts(trackId)
       commit()
@@ -325,6 +424,19 @@ export function createMixerController(deps: MixerControllerDeps = {}): MixerCont
       if (!insert) return
       insert.enabled = enabled
       rebuildGraphInserts(trackId)
+      commit()
+    },
+    setInsertParams(trackId, insertId, params) {
+      const list = insertsByTrack.get(trackId)
+      if (!list) return
+      const index = list.findIndex((entry) => entry.id === insertId)
+      if (index < 0) return
+      const previous = list.map((insert) => ({ ...insert, params: { ...insert.params } }))
+      list[index] = {
+        ...list[index],
+        params: normalizeParams(list[index].effectId, params),
+      }
+      updateGraphInsertParams(trackId, previous, list)
       commit()
     },
     writeAutomationPoint(target, trackId, point) {
@@ -363,6 +475,7 @@ export function createMixerController(deps: MixerControllerDeps = {}): MixerCont
     },
     dispose() {
       listeners.clear()
+      liveNodesByTrack.clear()
       graph?.dispose()
     },
   }

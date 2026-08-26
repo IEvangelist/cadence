@@ -19,6 +19,7 @@ test.describe('persisted Mix workspace', () => {
     await track.getByRole('button', { name: 'Mute' }).click()
     await track.getByRole('combobox', { name: /Add insert/ }).selectOption('reverb')
     await track.getByRole('button', { name: 'Add', exact: true }).click()
+    await track.getByRole('slider', { name: 'Wet' }).fill('0.64')
     await master.getByRole('slider', { name: /Gain/ }).fill('-4')
     await master.getByRole('checkbox', { name: 'Limiter' }).check()
     await master.getByRole('slider', { name: /Ceiling/ }).fill('-3')
@@ -40,6 +41,7 @@ test.describe('persisted Mix workspace', () => {
       'true',
     )
     await expect(reloadedTrack.getByRole('checkbox', { name: /Studio Reverb/ })).toBeChecked()
+    await expect(reloadedTrack.getByRole('slider', { name: 'Wet' })).toHaveValue('0.64')
     await expect(reloadedMaster.getByRole('slider', { name: /Gain/ })).toHaveValue('-4')
     await expect(reloadedMaster.getByRole('checkbox', { name: 'Limiter' })).toBeChecked()
     await expect(reloadedMaster.getByRole('slider', { name: /Ceiling/ })).toHaveValue('-3')
@@ -50,6 +52,7 @@ test.describe('persisted Mix workspace', () => {
     const remountedMixer = await openMixWorkspace(page)
     const remountedTrack = await firstTrackStrip(remountedMixer)
     await expect(remountedTrack.getByRole('slider', { name: /Gain/ })).toHaveValue('-12')
+    await expect(remountedTrack.getByRole('slider', { name: 'Wet' })).toHaveValue('0.64')
     await expect(remountedTrack.getByRole('button', { name: 'Solo' })).toHaveAttribute(
       'aria-pressed',
       'true',

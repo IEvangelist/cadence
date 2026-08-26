@@ -22,6 +22,8 @@ export type {
   EffectNode,
   EffectContext,
   EffectFactory,
+  EffectNumberParameterDescriptor,
+  EffectParameterDescriptor,
   EffectContribution,
   FormatImportOptions,
   FormatContribution,
@@ -35,6 +37,14 @@ export type {
   PluginHostApi,
   CadencePlugin,
 } from './types'
+export {
+  isEffectParameterDescriptor,
+  effectParameterDescriptors,
+  sanitizeEffectParameterValue,
+  defaultEffectParams,
+  sanitizeEffectParams,
+  createEffectNode,
+} from './effectParameters'
 
 export { PluginManifestError, validateManifest } from './manifest'
 export {

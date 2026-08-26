@@ -31,6 +31,8 @@ import {
   removeTrackMix,
   setMasterMix,
   setMixInsertEnabled,
+  setMixInsertParam,
+  setMixInsertParams,
   setTrackMix,
 } from './mix'
 
@@ -78,6 +80,19 @@ export type ComposerAction =
   | { type: 'add-mix-insert'; trackId: string; insert: ProjectMixInsert }
   | { type: 'remove-mix-insert'; trackId: string; insertId: string }
   | { type: 'set-mix-insert-enabled'; trackId: string; insertId: string; enabled: boolean }
+  | {
+      type: 'set-mix-insert-params'
+      trackId: string
+      insertId: string
+      params: Readonly<Record<string, number>>
+    }
+  | {
+      type: 'set-mix-insert-param'
+      trackId: string
+      insertId: string
+      parameterId: string
+      value: number
+    }
   | { type: 'set-master-mix'; changes: Partial<ProjectMasterMix> }
 
 /** Smallest allowed note length in beats (a 64th note). */
@@ -170,12 +185,11 @@ export function composerReducer(
       // editor's cursor: keep the selected track/notes when they still exist,
       // otherwise fall back to the first track / drop stale note ids. Automation
       // is NOT carried by the CRDT binding yet, so preserve this editor's local
-      // lanes or mix rather than letting a remote sync wipe them (single-user for
-      // now). Neither field is carried by the CRDT binding.
+      // lanes rather than letting a remote sync wipe them (single-user for now).
+      // Mix is carried by the CRDT and must be adopted for convergence/undo.
       const project = {
         ...action.project,
         automation: state.project.automation,
-        mix: state.project.mix,
       }
       const selectedTrackId = project.tracks.some((t) => t.id === state.selectedTrackId)
         ? state.selectedTrackId
@@ -507,6 +521,37 @@ export function composerReducer(
             action.trackId,
             action.insertId,
             action.enabled,
+          ),
+        },
+      }
+    }
+
+    case 'set-mix-insert-params': {
+      return {
+        ...state,
+        project: {
+          ...state.project,
+          mix: setMixInsertParams(
+            state.project.mix,
+            action.trackId,
+            action.insertId,
+            action.params,
+          ),
+        },
+      }
+    }
+
+    case 'set-mix-insert-param': {
+      return {
+        ...state,
+        project: {
+          ...state.project,
+          mix: setMixInsertParam(
+            state.project.mix,
+            action.trackId,
+            action.insertId,
+            action.parameterId,
+            action.value,
           ),
         },
       }

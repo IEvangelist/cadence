@@ -18,6 +18,36 @@ describe('serialize/parse round trip', () => {
     const restored = parseProject(serializeProject(project))
     expect(restored).toEqual(project)
   })
+
+  it('round-trips prototype-like track ids as own mix properties', () => {
+    const ids = ['__proto__', 'constructor', 'prototype']
+    const project = migrateProject({
+      schemaVersion: SCHEMA_VERSION,
+      tracks: ids.map((id) => ({
+        id,
+        instrumentId: 'poly-synth',
+        notes: [],
+      })),
+      mix: {
+        tracks: Object.fromEntries(
+          ids.map((id, index) => [
+            id,
+            { gainDb: -3 * (index + 1), pan: 0, solo: false, inserts: [] },
+          ]),
+        ),
+        master: { gainDb: 0, limiterEnabled: false, limiterThresholdDb: -1 },
+      },
+    })
+    const restored = parseProject(serializeProject(project))
+
+    ids.forEach((id, index) => {
+      expect(Object.hasOwn(restored.mix!.tracks, id)).toBe(true)
+      expect(restored.mix!.tracks[id].gainDb).toBe(-3 * (index + 1))
+    })
+    expect(
+      (Object.prototype as unknown as Record<string, unknown>).gainDb,
+    ).toBeUndefined()
+  })
 })
 
 describe('parseProject errors', () => {

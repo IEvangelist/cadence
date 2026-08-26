@@ -192,6 +192,7 @@ export function useCollaboration(
       user: activeConfig.user,
       canWrite: role !== 'viewer',
       initialProject: deferSeed ? undefined : bindingRef.current.project,
+      fallbackProject: bindingRef.current.project,
       onRemoteProject: (project) => bindingRef.current.applyRemoteProject(project),
     })
     sessionRef.current = session

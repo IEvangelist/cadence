@@ -5,9 +5,13 @@
  * persists its manual values without adding fields to Track; Track.muted remains
  * the source of truth. Insert effects come from the Plugin SDK surface.
  */
-import type { EffectContribution, EffectNode } from '../plugins/types'
+import type {
+  EffectContribution,
+  EffectNode,
+  EffectParameterDescriptor,
+} from '../plugins/types'
 
-export type { EffectContribution, EffectNode }
+export type { EffectContribution, EffectNode, EffectParameterDescriptor }
 
 export interface TrackMixerState {
   trackId: string
@@ -45,6 +49,11 @@ export interface MixerController {
   setTrackSolo(trackId: string, solo: boolean): void
   setMaster(master: Partial<MasterBusState>): void
   listInserts(trackId: string): readonly TrackInsert[]
+  setInsertParams(
+    trackId: string,
+    insertId: string,
+    params: Readonly<Record<string, number>>,
+  ): void
 }
 
 export interface AutomationPoint {
