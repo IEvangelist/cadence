@@ -58,7 +58,7 @@ test('preserves query and hash routes across direct loads and the 404 fallback',
     '/cadence/app/stems?collab=room-1&role=viewer&share=token#project=encoded'
   await page.goto(route)
   await expect(page.getByRole('heading', { name: 'Stem separation' })).toBeVisible()
-  await expect(page).toHaveURL(new RegExp(`${route.replace(/[?]/g, '\\?')}$`))
+  expect(`${locationPath(page.url())}`).toBe(route)
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Stem separation' })).toBeVisible()
 
@@ -66,8 +66,13 @@ test('preserves query and hash routes across direct loads and the 404 fallback',
     '/cadence/app/not-a-route?collab=room-2&role=viewer&share=token#project=encoded'
   await page.goto(missing)
   await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible()
-  await expect(page).toHaveURL(new RegExp(`${missing.replace(/[?]/g, '\\?')}$`))
+  expect(locationPath(page.url())).toBe(missing)
 })
+
+function locationPath(value: string): string {
+  const url = new URL(value)
+  return `${url.pathname}${url.search}${url.hash}`
+}
 
 test('serves a prefetched route from the app-scoped service worker while offline', async ({
   page,

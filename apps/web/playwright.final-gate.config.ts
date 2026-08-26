@@ -60,7 +60,11 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium-final-gate',
-      testIgnore: ['mobile-contract.spec.ts', 'final-gate/visual.spec.ts'],
+      testIgnore: [
+        'mobile-contract.spec.ts',
+        'final-gate/visual.spec.ts',
+        'pages-deployment.spec.ts',
+      ],
       use: { ...devices['Desktop Chrome'] },
     },
     {

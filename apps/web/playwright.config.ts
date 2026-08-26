@@ -46,6 +46,7 @@ export default defineConfig({
       testIgnore: [
         'mobile-contract.spec.ts',
         'final-gate/**/*.spec.ts',
+        'pages-deployment.spec.ts',
       ],
       use: { ...devices['Desktop Chrome'] },
     },
