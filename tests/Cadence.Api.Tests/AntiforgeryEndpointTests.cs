@@ -1,7 +1,9 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 
 namespace Cadence.Api.Tests;
 
@@ -77,6 +79,44 @@ public class AntiforgeryEndpointTests(CadenceApiFactory factory) : IClassFixture
             new SaveProjectRequest("rollout", "Rollout", 1, "{}"));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(true, "Rejected request because antiforgery validation failed.")]
+    [InlineData(false, "Antiforgery validation failed in report-only mode.")]
+    public async Task Antiforgery_warnings_never_include_untrusted_method_or_path(
+        bool enforced,
+        string expectedMessage)
+    {
+        var logs = new CapturingLoggerProvider();
+        await using var factory = new CadenceApiFactory
+        {
+            ConfigOverrides = new Dictionary<string, string?>
+            {
+                [CadenceAntiforgery.EnforcedConfigKey] = enforced.ToString(),
+            },
+            LoggerProvider = logs,
+        };
+        var client = factory.CreateClient();
+        await client.RegisterAsync($"csrf.log.{enforced}@example.com");
+        client.DefaultRequestHeaders.Remove(CadenceAntiforgery.HeaderName);
+        client.DefaultRequestHeaders.Add(CadenceAntiforgery.HeaderName, "invalid-token");
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            "/api/projects/log-forging-%0D%0AFORGED-CONTENT");
+        request.Content = JsonContent.Create(
+            new SaveProjectRequest("ignored", "Hostile log input", 1, "{}"));
+
+        await client.SendAsync(request);
+
+        var warning = Assert.Single(logs.Entries, entry =>
+            entry.Category.Contains("CadenceAntiforgeryMiddleware", StringComparison.Ordinal) &&
+            entry.Level == LogLevel.Warning);
+        Assert.Equal(expectedMessage, warning.Message);
+        Assert.DoesNotContain("PUT", warning.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("FORGED-CONTENT", warning.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain('\r', warning.Message);
+        Assert.DoesNotContain('\n', warning.Message);
     }
 
     [Theory]
@@ -238,4 +278,34 @@ public class AntiforgeryEndpointTests(CadenceApiFactory factory) : IClassFixture
     }
 
     private sealed record ProjectSummary(string Id, string Name);
+}
+
+internal sealed record CapturedLog(string Category, LogLevel Level, string Message);
+
+internal sealed class CapturingLoggerProvider : ILoggerProvider
+{
+    public ConcurrentQueue<CapturedLog> Entries { get; } = new();
+
+    public ILogger CreateLogger(string categoryName) => new CapturingLogger(categoryName, Entries);
+
+    public void Dispose()
+    {
+    }
+
+    private sealed class CapturingLogger(
+        string category,
+        ConcurrentQueue<CapturedLog> entries) : ILogger
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter) =>
+            entries.Enqueue(new CapturedLog(category, logLevel, formatter(state, exception)));
+    }
 }

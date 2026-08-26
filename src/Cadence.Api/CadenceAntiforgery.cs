@@ -60,18 +60,12 @@ public static class CadenceAntiforgery
                 {
                     if (!configuration.GetValue(EnforcedConfigKey, true))
                     {
-                        logger.LogWarning(
-                            "Report-only antiforgery failure for authenticated {Method} {Path}.",
-                            context.Request.Method,
-                            context.Request.Path);
+                        logger.LogWarning("Antiforgery validation failed in report-only mode.");
                         await next(context);
                         return;
                     }
 
-                    logger.LogWarning(
-                        "Rejected authenticated {Method} {Path}: invalid antiforgery token.",
-                        context.Request.Method,
-                        context.Request.Path);
+                    logger.LogWarning("Rejected request because antiforgery validation failed.");
 
                     await Results.Problem(
                         statusCode: StatusCodes.Status400BadRequest,
