@@ -80,15 +80,22 @@ public static class StemModelIntegrity
     /// </summary>
     public static void RequireSecureModelUri(string uri) => ParseModelLocation(uri);
 
+    /// <summary>
+    /// Normalize an optional checksum consistently for startup validation and model
+    /// loading. Missing or whitespace-only values mean no checksum is configured.
+    /// </summary>
+    public static string? NormalizeOptionalSha256(string? digest) =>
+        string.IsNullOrWhiteSpace(digest) ? null : digest.Trim();
+
     /// <summary>Whether <paramref name="digest"/> is a 64-digit SHA-256 hex value.</summary>
     public static bool IsValidSha256(string digest)
     {
-        if (string.IsNullOrWhiteSpace(digest))
+        var normalized = NormalizeOptionalSha256(digest);
+        if (normalized is null)
         {
             return false;
         }
 
-        var normalized = digest.Trim();
         if (normalized.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
         {
             normalized = normalized["sha256:".Length..];
@@ -115,10 +122,11 @@ public static class StemModelIntegrity
     /// <exception cref="InvalidOperationException">The digests differ.</exception>
     public static void VerifyChecksum(string expectedHex, string actualHex)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(expectedHex);
         ArgumentException.ThrowIfNullOrWhiteSpace(actualHex);
 
-        var expected = expectedHex.Trim().Replace("sha256:", string.Empty, StringComparison.OrdinalIgnoreCase);
+        var expected = NormalizeOptionalSha256(expectedHex)
+            ?? throw new ArgumentException("The expected SHA-256 checksum is required.", nameof(expectedHex));
+        expected = expected.Replace("sha256:", string.Empty, StringComparison.OrdinalIgnoreCase);
         var actual = actualHex.Trim();
         if (!string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
         {

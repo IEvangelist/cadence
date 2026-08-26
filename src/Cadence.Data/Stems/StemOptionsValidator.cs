@@ -15,7 +15,7 @@ public sealed class StemOptionsValidator(bool isProduction) : IValidateOptions<S
         AddPositiveFailure(options.ProcessingLeaseSeconds, nameof(StemOptions.ProcessingLeaseSeconds), failures);
         AddPositiveFailure(options.MaxAttempts, nameof(StemOptions.MaxAttempts), failures);
 
-        var checksum = NullIfWhiteSpace(options.ModelSha256);
+        var checksum = StemModelIntegrity.NormalizeOptionalSha256(options.ModelSha256);
 
         if (string.IsNullOrWhiteSpace(options.ModelUri))
         {
@@ -59,7 +59,4 @@ public sealed class StemOptionsValidator(bool isProduction) : IValidateOptions<S
             failures.Add($"Stems:{propertyName} must be greater than zero.");
         }
     }
-
-    private static string? NullIfWhiteSpace(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

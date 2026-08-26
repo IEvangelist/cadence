@@ -219,6 +219,8 @@ When `Stems:ModelUri` is set, the model download is now hardened by
   match); an already-cached file is re-verified on each start and **purged** on
   mismatch, then immediately re-downloaded and verified so a corrupted cache
   self-heals. A bad replacement still throws and the worker refuses to run it.
+  Surrounding whitespace is trimmed once; a whitespace-only value is consistently
+  treated as unset by both startup validation and the model provider.
 - **Production startup is fail-fast.** A remote Production model must configure
   both an HTTPS `ModelUri` and a valid `ModelSha256`. Supplying only a checksum,
   a malformed digest, plaintext/unsupported remote transport, or a non-positive

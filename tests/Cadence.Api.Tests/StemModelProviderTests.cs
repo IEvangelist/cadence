@@ -101,6 +101,81 @@ public class StemModelProviderTests
         }
     }
 
+    [Fact]
+    public async Task GetModelPathAsync_WhitespaceChecksum_LocalModelLoadsWithoutVerification()
+    {
+        var model = "local model without checksum"u8.ToArray();
+        var directory = Path.Combine(
+            AppContext.BaseDirectory,
+            $"stem-local-model-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var modelPath = Path.Combine(directory, "model.onnx");
+        await File.WriteAllBytesAsync(modelPath, model);
+        var options = new StemOptions
+        {
+            ModelUri = $" \t{modelPath}\r\n ",
+            ModelSha256 = " \t\r\n ",
+        };
+        var handler = new ModelHandler(model);
+        using var httpClient = new HttpClient(handler);
+
+        try
+        {
+            Assert.True(new StemOptionsValidator(isProduction: true).Validate(null, options).Succeeded);
+            var provider = new HttpStemModelProvider(
+                httpClient,
+                options,
+                NullLogger<HttpStemModelProvider>.Instance,
+                Path.Combine(directory, "cache"));
+
+            Assert.Equal(modelPath, await provider.GetModelPathAsync());
+            Assert.Equal(0, handler.RequestCount);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task GetModelPathAsync_WhitespaceChecksum_NonProductionRemoteModelDownloadsWithoutVerification()
+    {
+        var model = "development remote model"u8.ToArray();
+        var options = new StemOptions
+        {
+            ModelUri = " \thttps://models.example.test/development.onnx\r\n ",
+            ModelSha256 = " \t\r\n ",
+        };
+        var handler = new ModelHandler(model);
+        using var httpClient = new HttpClient(handler);
+        var cacheDirectory = Path.Combine(
+            AppContext.BaseDirectory,
+            $"stem-model-cache-{Guid.NewGuid():N}");
+
+        try
+        {
+            Assert.True(new StemOptionsValidator(isProduction: false).Validate(null, options).Succeeded);
+            var provider = new HttpStemModelProvider(
+                httpClient,
+                options,
+                NullLogger<HttpStemModelProvider>.Instance,
+                cacheDirectory);
+
+            var modelPath = await provider.GetModelPathAsync();
+
+            Assert.Equal(model, await File.ReadAllBytesAsync(modelPath));
+            Assert.Single(handler.RequestUris);
+            Assert.Equal("https://models.example.test/development.onnx", handler.RequestUris[0].AbsoluteUri);
+        }
+        finally
+        {
+            if (Directory.Exists(cacheDirectory))
+            {
+                Directory.Delete(cacheDirectory, recursive: true);
+            }
+        }
+    }
+
     private sealed class ModelHandler(byte[] model) : HttpMessageHandler
     {
         public int RequestCount { get; private set; }

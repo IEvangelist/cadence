@@ -56,6 +56,16 @@ public class StemModelIntegrityTests
         }
     }
 
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    [InlineData(" \t\r\n ", null)]
+    [InlineData(" abc123 ", "abc123")]
+    public void NormalizeOptionalSha256_TrimsAndTreatsWhitespaceAsMissing(
+        string? configured,
+        string? expected) =>
+        Assert.Equal(expected, StemModelIntegrity.NormalizeOptionalSha256(configured));
+
     [Fact]
     public void ComputeSha256Hex_MatchesKnownVector()
     {

@@ -164,7 +164,8 @@ public sealed class HttpStemModelProvider : IStemModelProvider
     /// </summary>
     private async Task VerifyIfPinnedAsync(string path, bool purgeOnMismatch, CancellationToken cancellationToken)
     {
-        if (_options.ModelSha256 is not { Length: > 0 } expected)
+        var expected = StemModelIntegrity.NormalizeOptionalSha256(_options.ModelSha256);
+        if (expected is null)
         {
             _logger.LogWarning("Stems:ModelSha256 is not set; the stem model is not integrity-verified.");
             return;
