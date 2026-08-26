@@ -2,6 +2,7 @@
 const APP_BASE = new URL(self.registration.scope).pathname
 const CACHE_PREFIX = `cadence-shell:${APP_BASE}:`
 const CACHE = `${CACHE_PREFIX}v2`
+const LEGACY_CACHES = new Set(['cadence-shell-v1'])
 const APP_SHELL = [
   APP_BASE,
   `${APP_BASE}index.html`,
@@ -29,7 +30,11 @@ self.addEventListener('activate', (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE)
+            .filter(
+              (key) =>
+                LEGACY_CACHES.has(key) ||
+                (key.startsWith(CACHE_PREFIX) && key !== CACHE),
+            )
             .map((key) => caches.delete(key)),
         ),
       )
@@ -57,17 +62,20 @@ self.addEventListener('fetch', (event) => {
       fetch(request)
         .then(async (response) => {
           if (response.status !== 404) return response
+          const cache = await caches.open(CACHE)
           return (
-            (await caches.match(`${APP_BASE}index.html`)) ||
-            (await caches.match(APP_BASE)) ||
+            (await cache.match(`${APP_BASE}index.html`)) ||
+            (await cache.match(APP_BASE)) ||
             response
           )
         })
-        .catch(
-          async () =>
-            (await caches.match(`${APP_BASE}index.html`)) ||
-            caches.match(APP_BASE),
-        ),
+        .catch(async () => {
+          const cache = await caches.open(CACHE)
+          return (
+            (await cache.match(`${APP_BASE}index.html`)) ||
+            cache.match(APP_BASE)
+          )
+        }),
     )
     return
   }
@@ -77,7 +85,8 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    caches.match(request, { ignoreVary: true }).then((cached) => {
+    caches.open(CACHE).then(async (cache) => {
+      const cached = await cache.match(request, { ignoreVary: true })
       if (cached) {
         return cached
       }
@@ -86,7 +95,6 @@ self.addEventListener('fetch', (event) => {
         if (response.status === 200 && response.type === 'basic') {
           try {
             const copy = response.clone()
-            const cache = await caches.open(CACHE)
             await cache.put(request, copy)
           } catch {
             // Caching is an optimization; never discard a successful network asset.

@@ -37,5 +37,10 @@ assert.doesNotMatch(
   /["']\/favicon\.svg["']/,
   'runtime favicon URLs must include the app base',
 )
+assert.doesNotMatch(
+  scriptSource,
+  /["']\/licenses\/[^"']+["']/,
+  'runtime license URLs must include the app base',
+)
 
 console.log(`Verified Pages artifact for ${APP_BASE}`)

@@ -106,6 +106,43 @@ test('routes base-aware AI plan links inside the Pages app', async ({ page }) =>
   await expect(page.getByRole('heading', { name: 'Plans & pricing' })).toBeVisible()
 })
 
+test('keeps every bundled acknowledgement link inside the app base', async ({
+  page,
+}) => {
+  const route = '/cadence/app/licenses'
+  await page.goto(route)
+  const localLinks = page.locator(
+    'a[href^="/cadence/app/licenses/"]',
+  )
+  await expect(localLinks).toHaveCount(2)
+
+  const hrefs = await localLinks.evaluateAll((links) =>
+    links.map((link) => (link as HTMLAnchorElement).getAttribute('href')!),
+  )
+  expect(hrefs.sort()).toEqual([
+    '/cadence/app/licenses/OFL-1.1.txt',
+    '/cadence/app/licenses/lucide-ISC.txt',
+  ])
+
+  const rootRelativeHrefs = await page.locator('a[href]').evaluateAll((links) =>
+    links
+      .map((link) => (link as HTMLAnchorElement).getAttribute('href')!)
+      .filter((href) => href.startsWith('/')),
+  )
+  expect(
+    rootRelativeHrefs.every((href) => href.startsWith('/cadence/app/')),
+  ).toBe(true)
+
+  for (const href of hrefs) {
+    await page.goto(route)
+    const [response] = await Promise.all([
+      page.waitForResponse((candidate) => new URL(candidate.url()).pathname === href),
+      page.locator(`a[href="${href}"]`).click(),
+    ])
+    expect(response.ok()).toBe(true)
+  }
+})
+
 test('preserves query and hash routes across direct loads and the 404 fallback', async ({
   page,
 }) => {

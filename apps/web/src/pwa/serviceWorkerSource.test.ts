@@ -18,8 +18,8 @@ describe('service worker static cache failure', () => {
           listeners.set(type, listener),
       },
       caches: {
-        match: vi.fn(async () => undefined),
         open: vi.fn(async () => ({
+          match: vi.fn(async () => undefined),
           put: vi.fn(async () => Promise.reject(new Error('quota denied'))),
         })),
       },
@@ -55,9 +55,17 @@ describe('service worker static cache failure', () => {
     expect(context.fetch).toHaveBeenCalledTimes(1)
   })
 
-  it('deletes only stale caches owned by the current Cadence app base', async () => {
+  it('migrates legacy caches and serves only the current app cache', async () => {
     const listeners = new Map<string, (event: unknown) => void>()
     const remove = vi.fn(async () => true)
+    const currentResponse = { source: 'current' }
+    const legacyResponse = { source: 'legacy' }
+    const currentCache = {
+      match: vi.fn(async () => currentResponse),
+      put: vi.fn(),
+    }
+    const globalMatch = vi.fn(async () => legacyResponse)
+    const network = vi.fn()
     const context = {
       self: {
         location: { origin: 'https://cadence.test' },
@@ -69,11 +77,17 @@ describe('service worker static cache failure', () => {
       caches: {
         keys: vi.fn(async () => [
           'unrelated-image-cache',
+          'cadence-shell-v1',
           'cadence-shell:/:v2',
           'cadence-shell:/cadence/app/:v1',
           'cadence-shell:/cadence/app/:v2',
         ]),
         delete: remove,
+        match: globalMatch,
+        open: vi.fn(async (name: string) => {
+          expect(name).toBe('cadence-shell:/cadence/app/:v2')
+          return currentCache
+        }),
       },
     }
     const source = readFileSync(
@@ -87,7 +101,7 @@ describe('service worker static cache failure', () => {
       'URL',
       source,
     )
-    execute(context.self, context.caches, vi.fn(), URL)
+    execute(context.self, context.caches, network, URL)
 
     let activation: Promise<unknown> | undefined
     listeners.get('activate')?.({
@@ -97,9 +111,26 @@ describe('service worker static cache failure', () => {
     })
     await activation
 
-    expect(remove).toHaveBeenCalledOnce()
+    expect(remove).toHaveBeenCalledTimes(2)
+    expect(remove).toHaveBeenCalledWith('cadence-shell-v1')
     expect(remove).toHaveBeenCalledWith('cadence-shell:/cadence/app/:v1')
     expect(remove).not.toHaveBeenCalledWith('unrelated-image-cache')
     expect(remove).not.toHaveBeenCalledWith('cadence-shell:/:v2')
+
+    let responsePromise: Promise<unknown> | undefined
+    listeners.get('fetch')?.({
+      request: {
+        method: 'GET',
+        url: 'https://cadence.test/cadence/app/assets/app.js',
+        mode: 'cors',
+      },
+      respondWith: (promise: Promise<unknown>) => {
+        responsePromise = promise
+      },
+    })
+
+    await expect(responsePromise).resolves.toBe(currentResponse)
+    expect(globalMatch).not.toHaveBeenCalled()
+    expect(network).not.toHaveBeenCalled()
   })
 })
