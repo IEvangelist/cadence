@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { test, expect, type Route } from '@playwright/test'
 import { createBlankProject } from './projectActions'
+import { E2E_CSRF_TOKEN, mockAntiforgery } from './mockAntiforgery'
 
 // Auth + remote-persistence smoke against the production build. There is no
 // backend in e2e, so every `/api/**` call is mocked with `page.route`. We prove:
@@ -23,6 +24,7 @@ async function mockApi(
   route: Route,
   onCreateProject: () => void,
 ): Promise<void> {
+  if (await mockAntiforgery(route)) return
   const request = route.request()
   const url = new URL(request.url())
   const path = url.pathname
@@ -35,6 +37,7 @@ async function mockApi(
   if (path === '/api/auth/login' && method === 'POST') return json(me)
   if (path === '/api/projects' && method === 'GET') return json([])
   if (path === '/api/projects' && method === 'POST') {
+    expect(request.headers()['x-csrf-token']).toBe(E2E_CSRF_TOKEN)
     onCreateProject()
     const payload = request.postDataJSON() as { id: string; name: string; data: string }
     return json(
@@ -135,6 +138,7 @@ test.describe('auth', () => {
   test('returns local sign-in to the guarded profile route', async ({ page }) => {
     let authenticated = false
     await page.route('**/api/**', async (route) => {
+      if (await mockAntiforgery(route)) return
       const request = route.request()
       const path = new URL(request.url()).pathname
       const method = request.method()
@@ -341,6 +345,7 @@ test.describe('auth', () => {
       releaseLogout = resolve
     })
     await page.route('**/api/**', async (route) => {
+      if (await mockAntiforgery(route)) return
       const request = route.request()
       const path = new URL(request.url()).pathname
       const json = (body: unknown, status = 200) =>

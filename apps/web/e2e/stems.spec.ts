@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { test, expect, type Route } from '@playwright/test'
 import { openStudioDestination } from './studioActions'
+import { mockAntiforgery } from './mockAntiforgery'
 
 // Standalone stems UI e2e against the production build. There is no backend in
 // e2e, so every `/api/**` call is mocked with `page.route`. We prove:
@@ -40,6 +41,7 @@ const completedJob = {
 }
 
 async function mockApi(route: Route, pro: boolean): Promise<void> {
+  if (await mockAntiforgery(route)) return
   const request = route.request()
   const url = new URL(request.url())
   const path = url.pathname

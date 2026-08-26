@@ -3,6 +3,7 @@ import {
   defaultProjectDetailDto,
   defaultProjectSummaryDto,
 } from './projectFixtures'
+import { mockAntiforgery } from './mockAntiforgery'
 
 const user = { id: 'u1', email: 'ada@example.com', displayName: 'Ada', tier: 'Pro' }
 const entitlements = {
@@ -29,6 +30,7 @@ async function routeAuthenticatedProjects(
   route: Route,
   options: { delayList?: number; failList?: boolean; failSave?: () => boolean } = {},
 ) {
+  if (await mockAntiforgery(route)) return
   const request = route.request()
   const url = new URL(request.url())
   const path = url.pathname
