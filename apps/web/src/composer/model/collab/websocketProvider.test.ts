@@ -257,6 +257,27 @@ describe('createWebsocketProvider IndexedDB lifecycle', () => {
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const backup = project()
     backup.name = 'Offline backup'
+    backup.automation = [
+      {
+        target: 'masterGain',
+        points: [{ beat: 2, value: -4 }],
+      },
+    ]
+    backup.mix = {
+      tracks: {
+        'track-1': {
+          gainDb: -6,
+          pan: 0.25,
+          solo: true,
+          inserts: [],
+        },
+      },
+      master: {
+        gainDb: -3,
+        limiterEnabled: true,
+        limiterThresholdDb: -5,
+      },
+    }
     backup.tracks[0].notes.push(
       createNote({ pitch: 64, start: 1 }, 'offline'),
     )
@@ -298,7 +319,9 @@ describe('createWebsocketProvider IndexedDB lifecycle', () => {
     seedProjectDoc(serverDoc, server)
     Y.applyUpdate(provider.doc, Y.encodeStateAsUpdate(serverDoc), 'relay')
     const synced = vi.fn()
+    const recoveredFullProject = vi.fn()
     provider.onSynced?.(synced)
+    provider.onSerializedBackupRecovered?.(recoveredFullProject)
     socket.fireSynced()
 
     const recovered = readProject(provider.doc)
@@ -307,6 +330,11 @@ describe('createWebsocketProvider IndexedDB lifecycle', () => {
     expect(recovered.tracks).toHaveLength(1)
     expect(recovered.tracks[0].notes.map((note) => note.id).sort())
       .toEqual(['initial', 'offline', 'server'])
+    expect(recoveredFullProject).toHaveBeenCalledOnce()
+    expect(recoveredFullProject.mock.calls[0][0]).toMatchObject({
+      automation: backup.automation,
+      mix: backup.mix,
+    })
 
     resolveLateSync()
     await Promise.resolve()

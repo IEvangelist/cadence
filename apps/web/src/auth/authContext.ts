@@ -29,6 +29,8 @@ export interface AuthPersistenceChange {
   mode: 'authenticated' | 'offline' | 'anonymous'
   ownerId: string | null
   purgeOwnerIds: string[]
+  /** False only when applying an already-broadcast cross-tab invalidation. */
+  broadcast?: boolean
 }
 
 export interface AuthContextValue {

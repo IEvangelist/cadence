@@ -58,12 +58,14 @@ const renderWith = (
   client: AuthClient,
   onAuthChange?: (change: AuthPersistenceChange) => void | Promise<void>,
   offlineIdentityStore?: OfflineIdentityStore,
+  logoutTimeoutMs?: number,
 ) =>
   render(
     <AuthProvider
       client={client}
       onAuthChange={onAuthChange}
       offlineIdentityStore={offlineIdentityStore}
+      logoutTimeoutMs={logoutTimeoutMs}
     >
       <Harness />
     </AuthProvider>,
@@ -412,6 +414,73 @@ describe('AuthProvider / useAuth', () => {
     releaseStore()
     await waitFor(() =>
       expect(screen.getByTestId('signout-complete')).toHaveTextContent('true'),
+    )
+  })
+
+  it('finishes local sign-out and aborts a server logout that never settles', async () => {
+    let logoutSignal: AbortSignal | undefined
+    const client = fakeClient({
+      me: vi.fn(async () => user),
+      logout: vi.fn((signal?: AbortSignal) => {
+        logoutSignal = signal
+        return new Promise<void>(() => {})
+      }),
+    })
+    const identityStorage = new MemoryStorage()
+    const identityStore = new OfflineIdentityStore(identityStorage)
+    const onAuthChange = vi.fn(async () => undefined)
+    renderWith(client, onAuthChange, identityStore, 20)
+    await waitFor(() =>
+      expect(screen.getByTestId('status')).toHaveTextContent('authenticated'),
+    )
+
+    fireEvent.click(screen.getByText('signout'))
+    await waitFor(() =>
+      expect(screen.getByTestId('status')).toHaveTextContent('anonymous'),
+    )
+
+    expect(logoutSignal?.aborted).toBe(true)
+    expect(identityStore.read()).toBeNull()
+    expect(onAuthChange).toHaveBeenLastCalledWith({
+      generation: expect.any(Number),
+      mode: 'anonymous',
+      ownerId: null,
+      purgeOwnerIds: ['1'],
+    })
+    expect(screen.getByTestId('signout-complete')).toHaveTextContent('true')
+  })
+
+  it('surfaces a relevant server logout error that arrives after the timeout', async () => {
+    let rejectLogout!: (error: Error) => void
+    const client = fakeClient({
+      me: vi.fn(async () => user),
+      logout: vi.fn(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            rejectLogout = reject
+          }),
+      ),
+    })
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    renderWith(client, undefined, new OfflineIdentityStore(new MemoryStorage()), 20)
+    await waitFor(() =>
+      expect(screen.getByTestId('status')).toHaveTextContent('authenticated'),
+    )
+    fireEvent.click(screen.getByText('signout'))
+    await waitFor(() =>
+      expect(screen.getByTestId('status')).toHaveTextContent('anonymous'),
+    )
+
+    rejectLogout(new Error('late logout failure'))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('error')).toHaveTextContent(
+        'late logout failure',
+      ),
+    )
+    expect(warning).toHaveBeenCalledWith(
+      expect.stringContaining('server sign-out request failed'),
+      expect.any(Error),
     )
   })
 

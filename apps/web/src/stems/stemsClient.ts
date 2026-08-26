@@ -9,6 +9,10 @@
  * owner-scoped download URLs the API returns.
  */
 import { CsrfClient, type FetchLike } from '../api/csrfClient'
+import {
+  captureAuthMutation,
+  type AuthMutationContextFactory,
+} from '../auth/authMutationCoordinator'
 
 /** Lifecycle states a separation job moves through, mirroring the server enum. */
 export type StemJobStatus = 'Queued' | 'Processing' | 'Completed' | 'Failed'
@@ -66,11 +70,18 @@ export class StemsClient {
   private readonly fetchImpl: FetchLike
   private readonly baseUrl: string
   private readonly csrf: CsrfClient
+  private readonly mutationContext?: AuthMutationContextFactory
 
-  constructor(fetchImpl?: FetchLike, baseUrl?: string) {
+  constructor(
+    fetchImpl?: FetchLike,
+    baseUrl?: string,
+    mutationContext?: AuthMutationContextFactory,
+  ) {
     this.fetchImpl = fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
     this.baseUrl = baseUrl ?? defaultBaseUrl()
     this.csrf = new CsrfClient(this.fetchImpl, this.baseUrl)
+    this.mutationContext =
+      mutationContext ?? (fetchImpl === undefined ? captureAuthMutation : undefined)
   }
 
   private url(path: string): string {
@@ -88,7 +99,7 @@ export class StemsClient {
       method: 'POST',
       headers: { 'Content-Type': file.type || 'application/octet-stream' },
       body: file,
-    })
+    }, this.mutationContext?.())
     if (!response.ok) {
       throw new StemsError(response.status, uploadErrorMessage(response.status))
     }

@@ -113,7 +113,8 @@ public static class CollaborationEndpoints
         string token,
         ClaimsPrincipal principal,
         UserManager<ApplicationUser> users,
-        CadenceDbContext db)
+        CadenceDbContext db,
+        CollabHub hub)
     {
         var ownerId = users.GetUserId(principal)!;
         var link = await db.ProjectShareLinks
@@ -125,6 +126,7 @@ public static class CollaborationEndpoints
 
         db.ProjectShareLinks.Remove(link);
         await db.SaveChangesAsync();
+        await hub.RevokeGrantAsync(RoomKey(ownerId, projectId), token);
         return Results.NoContent();
     }
 
@@ -181,6 +183,12 @@ public static class CollaborationEndpoints
             room,
             socket,
             role.Value,
+            callerId,
+            ownerId,
+            projectId,
+            role == CollaborationRole.Owner
+                ? null
+                : context.Request.Query["token"].ToString(),
             () => documents.LoadAsync(ownerId, projectId, context.RequestAborted),
             context.RequestAborted);
         try
@@ -208,7 +216,9 @@ public static class CollaborationEndpoints
         var buffer = new byte[32 * 1024];
         using var frame = new MemoryStream();
 
-        while (socket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
+        while (socket.State == WebSocketState.Open &&
+               !connection.IsRevoked &&
+               !cancellationToken.IsCancellationRequested)
         {
             frame.SetLength(0);
             WebSocketReceiveResult result;
@@ -237,6 +247,7 @@ public static class CollaborationEndpoints
             }
 
             var message = frame.ToArray();
+            if (connection.IsRevoked) return;
 
             // Server-side role enforcement: a viewer's document-write frames are
             // dropped here and never reach other peers. This is the authoritative

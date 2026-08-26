@@ -385,6 +385,16 @@ paths first. See [`collaboration.md`](collaboration.md) for the design.
 - **Auth/save races**: StrictMode and deferred old-user responses cannot
   overwrite a newer sign-out/user or recreate the identity cache; deferred
   remote saves cannot recreate an owner backup after purge.
+- **Mutation ownership**: deferred CSRF acquisition and typed CSRF retry are
+  invalidated by account switch before another send; expected-owner mismatch is
+  rejected server-side. BroadcastChannel tests prove another tab aborts the
+  captured owner generation.
+- **Complete recovery**: serialized fallback tests merge backup-precedence mix
+  inserts/params and automation points while retaining server-only entries.
+- **Revocation/logout**: live TestServer editor sockets receive policy-close on
+  grant revoke and cannot broadcast another write; logout closes every caller
+  socket. A never-resolving logout still reaches anonymous UI and purges caches
+  within the configured bound.
 - **Auth + production-store wiring**: real `AppProviders` and
   `SyncingProjectStore` prove remote-primary autosave also writes an
   owner/project/grant-scoped serialized backup, full API failure reloads only

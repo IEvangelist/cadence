@@ -21,6 +21,24 @@ public sealed class CollabHub
 {
     private readonly ConcurrentDictionary<string, CollabRoom> _rooms = new();
 
+    /// <summary>Compatibility overload for transport-identity-neutral hub tests.</summary>
+    public Task<CollabConnection> JoinAsync(
+        string room,
+        WebSocket socket,
+        CollaborationRole role,
+        Func<Task<IReadOnlyList<byte[]>>> load,
+        CancellationToken cancellationToken) =>
+        JoinAsync(
+            room,
+            socket,
+            role,
+            callerId: string.Empty,
+            ownerId: string.Empty,
+            projectId: string.Empty,
+            grantToken: null,
+            load,
+            cancellationToken);
+
     /// <summary>
     /// Register a connection in a room, loading the room's persisted update log the
     /// first time the room materializes so a reconnecting collaborator can be
@@ -30,6 +48,10 @@ public sealed class CollabHub
         string room,
         WebSocket socket,
         CollaborationRole role,
+        string callerId,
+        string ownerId,
+        string projectId,
+        string? grantToken,
         Func<Task<IReadOnlyList<byte[]>>> load,
         CancellationToken cancellationToken)
     {
@@ -60,7 +82,13 @@ public sealed class CollabHub
                     candidate.Loaded = true;
                 }
 
-                var connection = new CollabConnection(socket, role);
+                var connection = new CollabConnection(
+                    socket,
+                    role,
+                    callerId,
+                    ownerId,
+                    projectId,
+                    grantToken);
                 candidate.Members[connection.Id] = connection;
                 return connection;
             }
@@ -176,6 +204,47 @@ public sealed class CollabHub
 
     /// <summary>Number of active connections in a room (used by tests).</summary>
     public int Count(string room) => _rooms.TryGetValue(room, out var current) ? current.Members.Count : 0;
+
+    /// <summary>Close every live socket authenticated by one revoked share grant.</summary>
+    public Task RevokeGrantAsync(
+        string room,
+        string grantToken,
+        CancellationToken cancellationToken = default) =>
+        RevokeWhereAsync(
+            member =>
+                string.Equals(member.GrantToken, grantToken, StringComparison.Ordinal),
+            "Collaboration access was revoked.",
+            cancellationToken,
+            room);
+
+    /// <summary>Close every collaboration socket owned by one signed-out account.</summary>
+    public Task RevokeUserAsync(
+        string callerId,
+        CancellationToken cancellationToken = default) =>
+        RevokeWhereAsync(
+            member =>
+                string.Equals(member.CallerId, callerId, StringComparison.Ordinal),
+            "The authenticated session ended.",
+            cancellationToken);
+
+    private async Task RevokeWhereAsync(
+        Func<CollabConnection, bool> predicate,
+        string reason,
+        CancellationToken cancellationToken,
+        string? onlyRoom = null)
+    {
+        IEnumerable<CollabRoom> rooms = onlyRoom is null
+            ? _rooms.Values
+            : _rooms.TryGetValue(onlyRoom, out var room)
+                ? [room]
+                : [];
+        var matches = rooms
+            .SelectMany(room => room.Members.Values)
+            .Where(predicate)
+            .ToArray();
+        await Task.WhenAll(matches.Select(member =>
+            member.RevokeAsync(reason, cancellationToken)));
+    }
 
     /// <summary>
     /// A live room: its connected members plus the durable, ordered log of Yjs

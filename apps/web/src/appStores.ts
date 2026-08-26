@@ -11,6 +11,7 @@ import { createProjectStore } from './composer/model/storage'
 import { RemoteProjectStore } from './composer/model/remoteStore'
 import { SyncingProjectStore, type AuthFlag } from './composer/model/syncingStore'
 import type { AuthPersistenceChange } from './auth/authContext'
+import { authMutationCoordinator } from './auth/authMutationCoordinator'
 
 const authFlag: AuthFlag = {
   current: false,
@@ -30,6 +31,8 @@ export async function handleAuthChange(
 ): Promise<void> {
   if (change.generation < authFlag.generation) return
   const wasAuthenticated = authFlag.current
+  // Abort every in-flight mutation before cookie/session ownership can change.
+  authMutationCoordinator.transition(change, change.broadcast !== false)
   // Deny every owner-scoped view while cleanup/reconciliation is in flight.
   authFlag.generation = change.generation
   authFlag.current = false

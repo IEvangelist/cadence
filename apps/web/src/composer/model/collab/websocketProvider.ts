@@ -106,6 +106,7 @@ export function createWebsocketProvider(
   const persistenceStatusListeners = new Set<
     (status: OfflinePersistenceStatus) => void
   >()
+  const serializedBackupListeners = new Set<(project: Project) => void>()
   let persistence: PersistenceAdapter | undefined
   let persistenceSynced = false
   let persistenceStatus: OfflinePersistenceStatus = 'loading'
@@ -130,6 +131,7 @@ export function createWebsocketProvider(
       : mergeSerializedBackup(readProject(doc), serializedBackup)
     serializedBackupMerged = true
     reconcileDoc(doc, merged, Symbol('cadence-collab-backup-recovery'))
+    serializedBackupListeners.forEach((listener) => listener(merged))
   }
 
   const recoverSerializedBackup = async () => {
@@ -264,6 +266,10 @@ export function createWebsocketProvider(
       listener(persistenceStatus)
       return () => persistenceStatusListeners.delete(listener)
     },
+    onSerializedBackupRecovered: (listener) => {
+      serializedBackupListeners.add(listener)
+      return () => serializedBackupListeners.delete(listener)
+    },
     destroy: () => {
       if (destroyed) return
       destroyed = true
@@ -271,6 +277,7 @@ export function createWebsocketProvider(
       cancelInitialization?.()
       persistenceListeners.clear()
       persistenceStatusListeners.clear()
+      serializedBackupListeners.clear()
       socket?.destroy()
       localAwareness?.destroy()
       if (persistence) {

@@ -240,6 +240,30 @@ after every await. Collaborative autosaves capture the same auth generation:
 if a remote request completes after sign-out/account switch, it cannot create a
 new backup, and a local backup write that crosses the boundary is removed.
 
+Authenticated HTTP mutations capture the same owner/generation before token
+acquisition. Auth transitions abort the shared signal; `CsrfClient` validates
+before its first send and before its one allowed token-refresh retry, and emits
+`X-Cadence-Expected-Owner`. The API compares that optional hint with its own
+cookie-resolved user and rejects a mismatch before endpoint execution. Auth
+transitions are broadcast across tabs (`BroadcastChannel`, with a `storage`
+event fallback), invalidating other tabs' auth operations, sockets, and store
+generation without trusting the broadcast as a new login.
+
+Server connections retain caller, room, and validated share-grant identity.
+Revoking a grant marks and closes every matching live socket before returning;
+the relay loop rechecks revocation before persisting or broadcasting another
+frame. Logout likewise closes every socket for that authenticated account.
+Client logout and owner cleanup are bounded: local anonymous state is published
+after the fixed deadline even when fetch never settles, while late non-abort
+errors remain observable.
+
+Serialized recovery merges the complete `Project`: notes/tracks plus automation
+lanes/points and mixer state/inserts/parameters. Backup conflicts win while
+server-only lanes, points, tracks, and inserts survive. The recovery callback
+also reapplies non-CRDT fields to the composer. Final collaboration integration
+will rebase onto PR #190's shared mix/automation CRDT schema rather than creating
+a competing effect schema here.
+
 ## Activation
 
 Collaboration turns on only when the composer is given a collaboration config —

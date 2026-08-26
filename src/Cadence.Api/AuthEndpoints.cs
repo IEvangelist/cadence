@@ -1,5 +1,6 @@
 using Cadence.Data;
 using Cadence.Data.Entities;
+using Cadence.Api.Collaboration;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -207,8 +208,17 @@ public static class AuthEndpoints
         return Results.Ok(await AccountHelpers.BuildMeAsync(db, user));
     }
 
-    private static async Task<IResult> LogoutAsync(SignInManager<ApplicationUser> signIn)
+    private static async Task<IResult> LogoutAsync(
+        ClaimsPrincipal principal,
+        UserManager<ApplicationUser> users,
+        SignInManager<ApplicationUser> signIn,
+        CollabHub collab)
     {
+        var callerId = users.GetUserId(principal);
+        if (!string.IsNullOrEmpty(callerId))
+        {
+            await collab.RevokeUserAsync(callerId);
+        }
         await signIn.SignOutAsync();
         return Results.Ok();
     }

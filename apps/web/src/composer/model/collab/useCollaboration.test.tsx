@@ -70,12 +70,14 @@ function fakePersistentSyncingProvider() {
   let persistenceStatusListener:
     | ((status: 'loading' | 'ready' | 'unavailable') => void)
     | null = null
+  let serializedBackupListener: ((project: Project) => void) | null = null
   let syncedListener: (() => void) | null = null
   const provider: CollabProvider & {
     firePersistenceSync: () => void
     firePersistenceStatus: (
       status: 'loading' | 'ready' | 'unavailable',
     ) => void
+    fireSerializedBackup: (project: Project) => void
     fireSync: () => void
   } = {
     doc,
@@ -97,6 +99,12 @@ function fakePersistentSyncingProvider() {
         persistenceStatusListener = null
       }
     },
+    onSerializedBackupRecovered: (listener) => {
+      serializedBackupListener = listener
+      return () => {
+        serializedBackupListener = null
+      }
+    },
     onSynced: (listener) => {
       syncedListener = listener
       return () => {
@@ -105,6 +113,7 @@ function fakePersistentSyncingProvider() {
     },
     firePersistenceSync: () => persistenceListener?.(),
     firePersistenceStatus: (status) => persistenceStatusListener?.(status),
+    fireSerializedBackup: (project) => serializedBackupListener?.(project),
     fireSync: () => syncedListener?.(),
   }
   return provider
@@ -419,6 +428,33 @@ describe('useCollaboration', () => {
     expect(result.current.offlinePersistence).toBe('loading')
     act(() => built[0].firePersistenceStatus('unavailable'))
     expect(result.current.offlinePersistence).toBe('unavailable')
+  })
+
+  it('applies the complete serialized recovery overlay to the composer', () => {
+    const built: Array<ReturnType<typeof fakePersistentSyncingProvider>> = []
+    const persistentFactory = () => {
+      const provider = fakePersistentSyncingProvider()
+      built.push(provider)
+      return provider
+    }
+    const binding = makeBinding(seedProject())
+    renderHook(() => useCollaboration(binding, config, persistentFactory))
+    const recovered = seedProject()
+    recovered.automation = [
+      { target: 'masterGain', points: [{ beat: 2, value: -4 }] },
+    ]
+    recovered.mix = {
+      tracks: {},
+      master: {
+        gainDb: -3,
+        limiterEnabled: true,
+        limiterThresholdDb: -5,
+      },
+    }
+
+    act(() => built[0].fireSerializedBackup(recovered))
+
+    expect(binding.applyRemoteProject).toHaveBeenCalledWith(recovered)
   })
 
   it('keeps serialized project autosave after adopting the persisted CRDT', async () => {

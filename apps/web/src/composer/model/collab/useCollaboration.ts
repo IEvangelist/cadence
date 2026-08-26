@@ -71,6 +71,10 @@ export interface CollabProvider {
   onPersistenceStatus?: (
     listener: (status: OfflinePersistenceStatus) => void,
   ) => () => void
+  /** Full serialized recovery overlay (including non-CRDT mix/automation). */
+  onSerializedBackupRecovered?: (
+    listener: (project: Project) => void,
+  ) => () => void
 }
 
 export type CollabProviderFactory = (config: CollabConfig) => CollabProvider
@@ -241,6 +245,9 @@ export function useCollaboration(
     )
     const offStatus = provider.onStatus?.((isConnected) => setConnected(isConnected))
     const offPersistenceStatus = provider.onPersistenceStatus?.(setOfflinePersistence)
+    const offSerializedBackup = provider.onSerializedBackupRecovered?.(
+      (project) => bindingRef.current.applyRemoteProject(project),
+    )
     const offProjectTransitions = subscribeProjectTransitions?.((transition) => {
       if (!mirrorReadyRef.current) return
       pushTransition(session, transition)
@@ -282,6 +289,7 @@ export function useCollaboration(
       offUndoStack()
       offStatus?.()
       offPersistenceStatus?.()
+      offSerializedBackup?.()
       offProjectTransitions?.()
       offPersistenceSynced?.()
       offSynced?.()

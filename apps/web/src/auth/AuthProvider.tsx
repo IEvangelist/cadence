@@ -20,6 +20,7 @@ import {
   type OfflineAuthIdentity,
 } from './offlineIdentity'
 import { backendConfig } from '../platform/backendConfig'
+import { authMutationCoordinator } from './authMutationCoordinator'
 
 interface AuthProviderProps {
   children: ReactNode
@@ -29,11 +30,14 @@ interface AuthProviderProps {
   offlineIdentityStore?: OfflineIdentityStore
   /** Called whenever live/offline/anonymous persistence ownership changes. */
   onAuthChange?: (change: AuthPersistenceChange) => void | Promise<void>
+  /** Bounded server logout/cleanup wait; injectable for deterministic tests. */
+  logoutTimeoutMs?: number
 }
 
 interface AuthOperation {
   generation: number
   controller: AbortController
+  broadcast: boolean
 }
 
 function messageFor(error: unknown, fallback: string): string {
@@ -47,6 +51,7 @@ export function AuthProvider({
   client: injected,
   offlineIdentityStore: injectedIdentityStore,
   onAuthChange,
+  logoutTimeoutMs = 2_000,
 }: AuthProviderProps) {
   const [client] = useState<AuthClient>(() => injected ?? new AuthClient())
   const [offlineIdentityStore] = useState(
@@ -69,11 +74,12 @@ export function AuthProvider({
     onAuthChangeRef.current = onAuthChange
   }, [onAuthChange])
 
-  const beginOperation = useCallback((): AuthOperation => {
+  const beginOperation = useCallback((broadcast = true): AuthOperation => {
     operationRef.current.controller?.abort()
     const operation = {
       generation: nextAuthGeneration(),
       controller: new AbortController(),
+      broadcast,
     }
     operationRef.current = operation
     return operation
@@ -114,6 +120,7 @@ export function AuthProvider({
         await onAuthChangeRef.current?.({
           ...change,
           generation: operation.generation,
+          ...(operation.broadcast ? {} : { broadcast: false }),
         })
       } catch {
         // Authentication is authoritative; local cleanup/reconciliation is best-effort.
@@ -205,6 +212,40 @@ export function AuthProvider({
     await performRefresh(operation)
   }, [beginOperation, performRefresh])
 
+  useEffect(
+    () =>
+      authMutationCoordinator.subscribeInvalidation((transition) => {
+        operationRef.current.controller?.abort()
+        if (transition.mode !== 'anonymous') {
+          const operation = beginOperation(false)
+          void performRefresh(operation)
+          return
+        }
+        const generation = nextAuthGeneration()
+        operationRef.current = {
+          generation,
+          controller: null,
+        }
+        const cached = offlineIdentityStore.read()
+        offlineIdentityStore.clear()
+        setUser(null)
+        setOfflineUser(null)
+        setStatus('anonymous')
+        void Promise.resolve(
+          onAuthChangeRef.current?.({
+            generation,
+            mode: 'anonymous',
+            ownerId: null,
+            purgeOwnerIds: cached ? [cached.id] : [],
+            broadcast: false,
+          }),
+        ).catch((error) => {
+          console.warn('Cross-tab auth cleanup did not complete.', error)
+        })
+      }),
+    [beginOperation, offlineIdentityStore, performRefresh],
+  )
+
   useEffect(() => {
     if (!backendConfig.available) return
     const operation = beginOperation()
@@ -283,30 +324,64 @@ export function AuthProvider({
     const cached = offlineIdentityStore.read()
     offlineIdentityStore.clear()
     setStatus('signing-out')
-    let logoutError: unknown
-    const logout = client.logout(operation.controller.signal).catch((error) => {
-      logoutError = error
-    })
+    const logoutController = new AbortController()
+    const logoutSignal = AbortSignal.any([
+      operation.controller.signal,
+      logoutController.signal,
+    ])
+    const logout = client.logout(logoutSignal).then(
+      () => ({ kind: 'success' as const }),
+      (error: unknown) => ({ kind: 'error' as const, error }),
+    )
     // Explicit local sign-out revokes access to cached owner data immediately;
     // the best-effort server request is never allowed to delay that cleanup.
-    try {
-      await onAuthChangeRef.current?.({
+    const cleanup = Promise.resolve()
+      .then(() => onAuthChangeRef.current?.({
         generation: operation.generation,
         mode: 'anonymous',
         ownerId: null,
         purgeOwnerIds: cached ? [cached.id] : [],
-      })
-    } catch {
-      // Local identity is already revoked; cleanup is best-effort and bounded.
-    }
-    if (!isCurrent(operation)) return
-    await logout
+      }))
+      .then(
+        () => ({ kind: 'success' as const }),
+        (error: unknown) => ({ kind: 'error' as const, error }),
+      )
+    const timeout = new Promise<{ kind: 'timeout' }>((resolve) => {
+      setTimeout(() => resolve({ kind: 'timeout' }), logoutTimeoutMs)
+    })
+    const [logoutOutcome, cleanupOutcome] = await Promise.all([
+      Promise.race([logout, timeout]),
+      Promise.race([cleanup, timeout]),
+    ])
+    if (logoutOutcome.kind === 'timeout') logoutController.abort()
     if (!isCurrent(operation)) return
     setUser(null)
     setOfflineUser(null)
     setStatus('anonymous')
-    if (logoutError !== undefined) throw logoutError
-  }, [beginOperation, client, isCurrent, offlineIdentityStore])
+    if (cleanupOutcome.kind === 'error') {
+      console.warn('Local collaboration cleanup did not complete during sign-out.', cleanupOutcome.error)
+    }
+    if (logoutOutcome.kind === 'error') throw logoutOutcome.error
+    if (logoutOutcome.kind === 'timeout') {
+      void logout.then((late) => {
+        if (
+          late.kind === 'error' &&
+          !(late.error instanceof DOMException && late.error.name === 'AbortError')
+        ) {
+          console.warn('The server sign-out request failed after local sign-out.', late.error)
+          if (isCurrent(operation)) {
+            setError(messageFor(late.error, 'Server sign-out did not complete.'))
+          }
+        }
+      })
+    }
+  }, [
+    beginOperation,
+    client,
+    isCurrent,
+    logoutTimeoutMs,
+    offlineIdentityStore,
+  ])
 
   const value = useMemo<AuthContextValue>(
     () => ({

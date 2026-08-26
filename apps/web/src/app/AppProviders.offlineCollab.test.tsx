@@ -30,7 +30,10 @@ const bea: Me = {
   tier: 'Free',
 }
 
-function authClient(me: () => Promise<Me | null>): AuthClient {
+function authClient(
+  me: () => Promise<Me | null>,
+  overrides: Partial<AuthClient> = {},
+): AuthClient {
   return {
     me: vi.fn(me),
     providers: vi.fn(async () => []),
@@ -38,6 +41,7 @@ function authClient(me: () => Promise<Me | null>): AuthClient {
     register: vi.fn(async () => undefined),
     requestMagicLink: vi.fn(async () => undefined),
     logout: vi.fn(async () => undefined),
+    ...overrides,
   } as unknown as AuthClient
 }
 
@@ -96,10 +100,13 @@ function Harness() {
   )
 }
 
-function renderProviders(client: AuthClient) {
+function renderProviders(client: AuthClient, logoutTimeoutMs?: number) {
   return render(
     <MemoryRouter>
-      <AppProviders authClient={client}>
+      <AppProviders
+        authClient={client}
+        logoutTimeoutMs={logoutTimeoutMs}
+      >
         <Harness />
       </AppProviders>
     </MemoryRouter>,
@@ -258,7 +265,12 @@ describe('AppProviders collaborative persistence wiring', () => {
       return new Response(null, { status: 204 })
     })
     vi.stubGlobal('fetch', fetchImpl)
-    renderProviders(authClient(async () => ada))
+    renderProviders(
+      authClient(async () => ada, {
+        logout: vi.fn(() => new Promise<void>(() => {})),
+      }),
+      20,
+    )
     await waitFor(() =>
       expect(screen.getByTestId('auth-status')).toHaveTextContent('authenticated'),
     )

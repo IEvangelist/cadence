@@ -9,6 +9,10 @@
  */
 import { backendConfig } from '../platform/backendConfig'
 import { CsrfClient, type FetchLike } from '../api/csrfClient'
+import {
+  captureAuthMutation,
+  type AuthMutationContextFactory,
+} from './authMutationCoordinator'
 
 /** The signed-in user's identity summary (mirror of the API's MeResponse). */
 export interface Me {
@@ -67,12 +71,20 @@ export class AuthClient {
   private readonly baseUrl: string
   private readonly available: boolean
   private readonly csrf: CsrfClient
+  private readonly mutationContext?: AuthMutationContextFactory
 
-  constructor(fetchImpl?: FetchLike, baseUrl?: string, available?: boolean) {
+  constructor(
+    fetchImpl?: FetchLike,
+    baseUrl?: string,
+    available?: boolean,
+    mutationContext?: AuthMutationContextFactory,
+  ) {
     this.fetchImpl = fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
     this.baseUrl = (baseUrl ?? backendConfig.apiBaseUrl).replace(/\/+$/, '')
     this.available = available ?? (baseUrl !== undefined || backendConfig.available)
     this.csrf = new CsrfClient(this.fetchImpl, this.baseUrl)
+    this.mutationContext =
+      mutationContext ?? (fetchImpl === undefined ? captureAuthMutation : undefined)
   }
 
   private url(path: string): string {
@@ -144,11 +156,24 @@ export class AuthClient {
   /** Sign out the current session. */
   async logout(signal?: AbortSignal): Promise<void> {
     this.assertAvailable()
+    const captured = this.mutationContext?.()
+    const logoutSignal = signal ?? new AbortController().signal
+    // Logout is the one mutation allowed to outlive the local transition that
+    // invalidates every other owner-A request. It remains bound to owner A and
+    // its own bounded signal; the server rejects it if the cookie already became B.
+    const logoutContext = captured
+      ? {
+          ownerId: captured.ownerId,
+          cacheKey: `${captured.cacheKey}:logout`,
+          signal: logoutSignal,
+          isCurrent: () => !logoutSignal.aborted,
+        }
+      : undefined
     try {
       await this.csrf.mutation('/api/auth/logout', {
         method: 'POST',
-        signal,
-      })
+        signal: logoutSignal,
+      }, logoutContext)
     } finally {
       this.csrf.clear()
     }
@@ -192,7 +217,7 @@ export class AuthClient {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
-    })
+    }, this.mutationContext?.())
     if (!response.ok) throw new AuthError(response.status, await readError(response, 'Could not save your profile.'))
     return (await response.json()) as Profile
   }

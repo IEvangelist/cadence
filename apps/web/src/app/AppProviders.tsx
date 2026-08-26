@@ -16,6 +16,7 @@ interface AppProvidersProps {
   platformCapabilities?: PlatformCapabilitySource
   authClient?: AuthClient
   offlineIdentityStore?: OfflineIdentityStore
+  logoutTimeoutMs?: number
 }
 
 export function AppProviders({
@@ -24,6 +25,7 @@ export function AppProviders({
   platformCapabilities,
   authClient,
   offlineIdentityStore,
+  logoutTimeoutMs,
 }: AppProvidersProps) {
   return (
     <PlatformCapabilitiesProvider source={platformCapabilities}>
@@ -32,6 +34,7 @@ export function AppProviders({
           client={authClient}
           offlineIdentityStore={offlineIdentityStore}
           onAuthChange={handleAuthChange}
+          logoutTimeoutMs={logoutTimeoutMs}
         >
           <AuthDialogProvider>
             <ProjectStoreContext value={store}>{children}</ProjectStoreContext>

@@ -128,6 +128,7 @@ app.UseRateLimiter();
 app.UseWebSockets();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseExpectedOwnerGuard();
 app.UseCadenceAntiforgery();
 
 app.MapGet("/api/info", () => new ApiInfo("Cadence.Api", "0.0.0"))

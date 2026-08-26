@@ -11,6 +11,10 @@ import { type Project } from './project'
 import { parseProject, serializeProject } from './persistence'
 import { type ProjectStore, type StoredProjectMeta } from './storage'
 import { CsrfClient, type FetchLike } from '../../api/csrfClient'
+import {
+  captureAuthMutation,
+  type AuthMutationContextFactory,
+} from '../../auth/authMutationCoordinator'
 
 interface ProjectSummaryDto {
   id: string
@@ -40,12 +44,19 @@ export class RemoteProjectStore implements ProjectStore {
   private readonly fetchImpl: FetchLike
   private readonly baseUrl: string
   private readonly csrf: CsrfClient
+  private readonly mutationContext?: AuthMutationContextFactory
   private lastId: string | null = null
 
-  constructor(fetchImpl?: FetchLike, baseUrl?: string) {
+  constructor(
+    fetchImpl?: FetchLike,
+    baseUrl?: string,
+    mutationContext?: AuthMutationContextFactory,
+  ) {
     this.fetchImpl = fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
     this.baseUrl = baseUrl ?? defaultBaseUrl()
     this.csrf = new CsrfClient(this.fetchImpl, this.baseUrl)
+    this.mutationContext =
+      mutationContext ?? (fetchImpl === undefined ? captureAuthMutation : undefined)
   }
 
   private url(path: string): string {
@@ -61,18 +72,19 @@ export class RemoteProjectStore implements ProjectStore {
     }
 
     // Upsert: try to create, and fall back to update when the id already exists.
+    const context = this.mutationContext?.()
     let response = await this.csrf.mutation('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    })
+    }, context)
 
     if (response.status === 409) {
       response = await this.csrf.mutation(`/api/projects/${encodeURIComponent(project.id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-      })
+      }, context)
     }
 
     if (!response.ok) {
@@ -115,7 +127,7 @@ export class RemoteProjectStore implements ProjectStore {
   async remove(id: string): Promise<void> {
     const response = await this.csrf.mutation(`/api/projects/${encodeURIComponent(id)}`, {
       method: 'DELETE',
-    })
+    }, this.mutationContext?.())
     if (!response.ok && response.status !== 404) {
       throw new Error(`Failed to delete project (${response.status}).`)
     }

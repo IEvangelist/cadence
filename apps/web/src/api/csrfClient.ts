@@ -1,3 +1,8 @@
+import {
+  EXPECTED_OWNER_HEADER,
+  type AuthMutationContext,
+} from '../auth/authMutationCoordinator'
+
 export const CSRF_HEADER = 'X-CSRF-TOKEN'
 export const CSRF_ENDPOINT = '/api/auth/csrf'
 export const INVALID_CSRF_PROBLEM = 'https://cadence.app/problems/invalid-csrf-token'
@@ -21,6 +26,7 @@ export class CsrfTokenError extends Error {
  */
 export class CsrfClient {
   private tokenPromise: Promise<string> | null = null
+  private tokenCacheKey: string | null = null
   private readonly fetchImpl: FetchLike
   private readonly baseUrl: string
 
@@ -31,12 +37,26 @@ export class CsrfClient {
 
   clear(): void {
     this.tokenPromise = null
+    this.tokenCacheKey = null
   }
 
-  async mutation(path: string, init: RequestInit): Promise<Response> {
+  async mutation(
+    path: string,
+    init: RequestInit,
+    context?: AuthMutationContext,
+  ): Promise<Response> {
     this.assertApiPath(path)
-    const tokenPromise = this.getToken()
-    const response = await this.send(path, init, await tokenPromise)
+    this.ensureCurrent(context)
+    if (context && this.tokenCacheKey !== context.cacheKey) this.clear()
+    if (context) this.tokenCacheKey = context.cacheKey
+    const guardedInit = {
+      ...init,
+      signal: combineSignals(init.signal, context?.signal),
+    }
+    const tokenPromise = this.getToken(context)
+    const token = await tokenPromise
+    this.ensureCurrent(context)
+    const response = await this.send(path, guardedInit, token, context)
 
     if (!(await isInvalidCsrfResponse(response))) return response
 
@@ -44,13 +64,16 @@ export class CsrfClient {
     // the token used by this request (another concurrent request may already have
     // refreshed it), fetch a fresh pair, and retry exactly once.
     if (this.tokenPromise === tokenPromise) this.tokenPromise = null
-    return this.send(path, init, await this.getToken())
+    this.ensureCurrent(context)
+    const refreshed = await this.getToken(context)
+    this.ensureCurrent(context)
+    return this.send(path, guardedInit, refreshed, context)
   }
 
-  private getToken(): Promise<string> {
+  private getToken(context?: AuthMutationContext): Promise<string> {
     if (this.tokenPromise) return this.tokenPromise
 
-    const tokenPromise = this.fetchToken()
+    const tokenPromise = this.fetchToken(context?.signal)
     this.tokenPromise = tokenPromise
     void tokenPromise.catch(() => {
       // Do not let one transient acquisition failure poison this singleton.
@@ -60,11 +83,12 @@ export class CsrfClient {
     return tokenPromise
   }
 
-  private async fetchToken(): Promise<string> {
+  private async fetchToken(signal?: AbortSignal): Promise<string> {
     const response = await this.fetchImpl(this.url(CSRF_ENDPOINT), {
       credentials: 'include',
       cache: 'no-store',
       redirect: 'error',
+      ...(signal ? { signal } : {}),
     })
     if (!response.ok) {
       throw new CsrfTokenError(response.status, 'Could not establish a secure request session.')
@@ -77,15 +101,28 @@ export class CsrfClient {
     return body.requestToken
   }
 
-  private send(path: string, init: RequestInit, token: string): Promise<Response> {
+  private send(
+    path: string,
+    init: RequestInit,
+    token: string,
+    context?: AuthMutationContext,
+  ): Promise<Response> {
+    this.ensureCurrent(context)
     const headers = new Headers(init.headers)
     headers.set(CSRF_HEADER, token)
+    if (context) headers.set(EXPECTED_OWNER_HEADER, context.ownerId)
     return this.fetchImpl(this.url(path), {
       ...init,
       credentials: 'include',
       redirect: 'error',
       headers,
     })
+  }
+
+  private ensureCurrent(context?: AuthMutationContext): void {
+    if (context && !context.isCurrent()) {
+      throw new DOMException('Authenticated mutation was invalidated.', 'AbortError')
+    }
   }
 
   private url(path: string): string {
@@ -97,6 +134,18 @@ export class CsrfClient {
       throw new TypeError('Antiforgery tokens may only be sent to API-relative paths.')
     }
   }
+}
+
+function combineSignals(
+  requestSignal?: AbortSignal | null,
+  authSignal?: AbortSignal,
+): AbortSignal | undefined {
+  const signals = [requestSignal, authSignal].filter(
+    (signal): signal is AbortSignal => signal !== undefined && signal !== null,
+  )
+  if (signals.length === 0) return undefined
+  if (signals.length === 1) return signals[0]
+  return AbortSignal.any(signals)
 }
 
 async function isInvalidCsrfResponse(response: Response): Promise<boolean> {

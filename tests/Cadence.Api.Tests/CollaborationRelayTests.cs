@@ -1,4 +1,7 @@
+using System.Net;
 using System.Net.Http.Json;
+using Cadence.Api.Collaboration;
+using Microsoft.Extensions.DependencyInjection;
 using System.Net.WebSockets;
 
 namespace Cadence.Api.Tests;
@@ -85,6 +88,13 @@ public class CollaborationRelayTests(CadenceApiFactory factory) : IClassFixture<
         }
         while (!result.EndOfMessage);
         return stream.ToArray();
+    }
+
+    private static async Task<WebSocketReceiveResult> ReceiveCloseAsync(WebSocket socket)
+    {
+        using var cts = new CancellationTokenSource(ReceiveTimeout);
+        var buffer = new byte[1024];
+        return await socket.ReceiveAsync(buffer, cts.Token);
     }
 
     // Try to read one full frame within a short window; returns null on timeout
@@ -187,6 +197,58 @@ public class CollaborationRelayTests(CadenceApiFactory factory) : IClassFixture<
         await SendAsync(viewer, SyncUpdate(0x66));
         await SendAsync(viewer, Awareness(0x99));
         Assert.Equal(Awareness(0x99), await ReceiveAsync(editor));
+    }
+
+    [Fact]
+    public async Task Revoked_editor_grant_closes_live_socket_and_blocks_further_writes()
+    {
+        var (owner, ownerCookie) = await RegisterAsync("relay.revoke.owner@example.com");
+        await (await owner.PostAsJsonAsync("/api/projects", NewProject("relay-revoke"))).AssertOkAsync();
+        var editorToken = await CreateShareAsync(owner, "relay-revoke", "editor");
+        var (_, editorCookie) = await RegisterAsync("relay.revoke.editor@example.com");
+
+        using var ownerSocket = await ConnectAsync(ownerCookie, "relay-revoke", token: null);
+        using var editorSocket = await ConnectAsync(editorCookie, "relay-revoke", editorToken);
+        await HandshakeAsync(ownerSocket, editorSocket);
+
+        var revoke = await owner.DeleteAsync(
+            $"/api/projects/relay-revoke/shares/{editorToken}");
+        Assert.Equal(HttpStatusCode.NoContent, revoke.StatusCode);
+
+        var close = await ReceiveCloseAsync(editorSocket);
+        Assert.Equal(WebSocketMessageType.Close, close.MessageType);
+        Assert.Equal(WebSocketCloseStatus.PolicyViolation, close.CloseStatus);
+        Assert.NotEqual(WebSocketState.Open, editorSocket.State);
+        await SendAsync(editorSocket, SyncUpdate(0xCC));
+        Assert.Null(await TryReceiveAsync(ownerSocket, TimeSpan.FromMilliseconds(500)));
+        Assert.Equal(WebSocketState.Open, ownerSocket.State);
+    }
+
+    [Fact]
+    public async Task Logout_closes_every_live_socket_for_that_account()
+    {
+        var (owner, ownerCookie) = await RegisterAsync("relay.logout.owner@example.com");
+        await (await owner.PostAsJsonAsync("/api/projects", NewProject("relay-logout"))).AssertOkAsync();
+        using var socket = await ConnectAsync(ownerCookie, "relay-logout", token: null);
+        var me = await owner.GetFromJsonAsync<MeResponse>("/api/auth/me");
+        var hub = _factory.Services.GetRequiredService<CollabHub>();
+        await WaitUntilAsync(() => hub.Count($"{me!.Id}:relay-logout") == 1);
+
+        var logout = await owner.PostAsync("/api/auth/logout", content: null);
+        logout.EnsureSuccessStatusCode();
+
+        var close = await ReceiveCloseAsync(socket);
+        Assert.Equal(WebSocketMessageType.Close, close.MessageType);
+        Assert.Equal(WebSocketCloseStatus.PolicyViolation, close.CloseStatus);
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        using var cts = new CancellationTokenSource(ReceiveTimeout);
+        while (!condition())
+        {
+            await Task.Delay(25, cts.Token);
+        }
     }
 
     [Fact]
