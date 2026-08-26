@@ -3,10 +3,14 @@ import { CircleHelp, FileText, Scissors, WalletCards } from 'lucide-react'
 import { Icon } from '../ui/Icon'
 
 interface StudioHelpMenuProps {
+  backendAvailable?: boolean
   onNavigate(path: '/stems' | '/pricing' | '/licenses'): void
 }
 
-export function StudioHelpMenu({ onNavigate }: StudioHelpMenuProps) {
+export function StudioHelpMenu({
+  backendAvailable = true,
+  onNavigate,
+}: StudioHelpMenuProps) {
   return (
     <DropdownMenu.Root modal={false}>
       <DropdownMenu.Trigger asChild>
@@ -22,7 +26,7 @@ export function StudioHelpMenu({ onNavigate }: StudioHelpMenuProps) {
       <DropdownMenu.Portal>
         <DropdownMenu.Content className="ui-menu" align="end" sideOffset={8}>
           <DropdownMenu.Label className="ui-menu__label">Help and resources</DropdownMenu.Label>
-          <DropdownMenu.Item asChild>
+          {backendAvailable ? <DropdownMenu.Item asChild>
             <button
               type="button"
               className="ui-menu__item"
@@ -32,7 +36,7 @@ export function StudioHelpMenu({ onNavigate }: StudioHelpMenuProps) {
               <Icon icon={Scissors} size={16} />
               <span>Stems</span>
             </button>
-          </DropdownMenu.Item>
+          </DropdownMenu.Item> : null}
           <DropdownMenu.Item asChild>
             <button
               type="button"

@@ -18,7 +18,10 @@ run('npm', ['run', 'build', '--prefix', 'site'])
 run(
   'npm',
   ['run', 'build', '--workspace', '@cadence/web'],
-  { CADENCE_BASE_PATH: '/cadence/app/' },
+  {
+    CADENCE_BASE_PATH: '/cadence/app/',
+    VITE_BACKEND_MODE: 'disabled',
+  },
 )
 run('node', ['tools/pages-artifact.mjs'])
 run('node', ['tools/verify-pages-artifact.mjs'])

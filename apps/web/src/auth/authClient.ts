@@ -5,8 +5,9 @@
  * session flows to the backend. The fetch implementation and base URL are
  * injectable to keep the client unit-testable without a live server. The base
  * URL defaults to same-origin; set `VITE_API_BASE_URL` to target a separate API
- * origin during local development.
+ * origin during local development. Backend-disabled builds reject before fetch.
  */
+import { backendConfig } from '../platform/backendConfig'
 
 /** The signed-in user's identity summary (mirror of the API's MeResponse). */
 export interface Me {
@@ -47,11 +48,6 @@ export class AuthError extends Error {
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
-function defaultBaseUrl(): string {
-  const configured = import.meta.env?.VITE_API_BASE_URL as string | undefined
-  return (configured ?? '').replace(/\/+$/, '')
-}
-
 async function readError(response: Response, fallback: string): Promise<string> {
   try {
     const problem = (await response.json()) as { title?: string; errors?: Record<string, string[]> }
@@ -70,17 +66,26 @@ async function readError(response: Response, fallback: string): Promise<string> 
 export class AuthClient {
   private readonly fetchImpl: FetchLike
   private readonly baseUrl: string
+  private readonly available: boolean
 
-  constructor(fetchImpl?: FetchLike, baseUrl?: string) {
+  constructor(fetchImpl?: FetchLike, baseUrl?: string, available?: boolean) {
     this.fetchImpl = fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
-    this.baseUrl = baseUrl ?? defaultBaseUrl()
+    this.baseUrl = (baseUrl ?? backendConfig.apiBaseUrl).replace(/\/+$/, '')
+    this.available = available ?? (baseUrl !== undefined || backendConfig.available)
   }
 
   private url(path: string): string {
     return `${this.baseUrl}${path}`
   }
 
+  private assertAvailable(): void {
+    if (!this.available) {
+      throw new AuthError(0, 'Accounts are unavailable in this static app.')
+    }
+  }
+
   private async postJson(path: string, body: unknown): Promise<Response> {
+    this.assertAvailable()
     return this.fetchImpl(this.url(path), {
       method: 'POST',
       credentials: 'include',
@@ -91,6 +96,7 @@ export class AuthClient {
 
   /** The current session, or null when signed out (401). */
   async me(): Promise<Me | null> {
+    this.assertAvailable()
     const response = await this.fetchImpl(this.url('/api/auth/me'), { credentials: 'include' })
     if (response.status === 401) return null
     if (!response.ok) throw new AuthError(response.status, 'Could not load the current session.')
@@ -119,6 +125,7 @@ export class AuthClient {
 
   /** Sign out the current session. */
   async logout(): Promise<void> {
+    this.assertAvailable()
     await this.fetchImpl(this.url('/api/auth/logout'), { method: 'POST', credentials: 'include' })
   }
 
@@ -129,6 +136,7 @@ export class AuthClient {
 
   /** The external OAuth providers the server has wired. */
   async providers(): Promise<string[]> {
+    this.assertAvailable()
     const response = await this.fetchImpl(this.url('/api/auth/providers'), { credentials: 'include' })
     if (!response.ok) return []
     const body = (await response.json()) as { providers: string[] }
@@ -137,11 +145,13 @@ export class AuthClient {
 
   /** Absolute URL that starts the external OAuth challenge for a provider. */
   externalSignInUrl(provider: string): string {
+    this.assertAvailable()
     return this.url(`/api/auth/external/${encodeURIComponent(provider)}`)
   }
 
   /** Load the current user's profile. */
   async getProfile(): Promise<Profile> {
+    this.assertAvailable()
     const response = await this.fetchImpl(this.url('/api/profile'), { credentials: 'include' })
     if (!response.ok) throw new AuthError(response.status, 'Could not load your profile.')
     return (await response.json()) as Profile
@@ -149,6 +159,7 @@ export class AuthClient {
 
   /** Update the current user's profile. */
   async updateProfile(patch: ProfilePatch): Promise<Profile> {
+    this.assertAvailable()
     const response = await this.fetchImpl(this.url('/api/profile'), {
       method: 'PUT',
       credentials: 'include',

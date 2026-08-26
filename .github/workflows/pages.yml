@@ -57,6 +57,7 @@ jobs:
       - name: Build web composer for Pages
         env:
           CADENCE_BASE_PATH: /cadence/app/
+          VITE_BACKEND_MODE: disabled
         run: npm run build --workspace @cadence/web
       - name: Assemble collision-free Pages artifact
         run: node tools/pages-artifact.mjs

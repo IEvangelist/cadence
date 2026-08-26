@@ -131,7 +131,10 @@ test.describe('pwa', () => {
             .map((url) => url.href),
         ),
       ]
-      const cache = await caches.open('cadence-shell-v1')
+      const registration = await navigator.serviceWorker.ready
+      const cache = await caches.open(
+        `cadence-shell:${new URL(registration.scope).pathname}:v2`,
+      )
       const missing = []
       for (const url of urls) {
         if (!(await cache.match(url, { ignoreVary: true }))) missing.push(url)
@@ -173,7 +176,10 @@ test.describe('pwa', () => {
     // Verify the SW never caches authenticated API responses — even paths that
     // look like static assets (e.g. stem artwork under /api/stems/jobs/x/cover.png).
     const cachedApi = await page.evaluate(async () => {
-      const cache = await caches.open('cadence-shell-v1')
+      const registration = await navigator.serviceWorker.ready
+      const cache = await caches.open(
+        `cadence-shell:${new URL(registration.scope).pathname}:v2`,
+      )
       const plain = await cache.match('/api/entitlements')
       const assetLike = await cache.match('/api/stems/jobs/1/cover.png')
       return { plain: plain !== undefined, assetLike: assetLike !== undefined }

@@ -20,6 +20,8 @@ import { StemsClient, StemsError, type StemJob } from './stemsClient'
 import './stems.css'
 
 interface StemsPageProps {
+  /** Whether this build has a configured backend. */
+  backendAvailable?: boolean
   /** Whether the visitor is signed in (server still enforces auth). */
   authenticated: boolean
   /** Whether the visitor's entitlements include stem separation (Pro). */
@@ -53,6 +55,7 @@ function formatBytes(bytes: number): string {
 }
 
 export function StemsPage({
+  backendAvailable = true,
   authenticated,
   entitled,
   onUpgrade,
@@ -71,7 +74,7 @@ export function StemsPage({
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const canSeparate = authenticated && entitled
+  const canSeparate = backendAvailable && authenticated && entitled
 
   const upsertJob = useCallback((job: StemJob) => {
     setJobs((previous) => {
@@ -158,7 +161,14 @@ export function StemsPage({
       }
     >
 
-      {!authenticated ? (
+      {!backendAvailable ? (
+        <RouteState
+          kind="info"
+          label="Stem separation unavailable"
+          title="Stems need a Cadence backend"
+          message="The public static composer does not upload audio. Anonymous composing, local projects, and on-device AI remain available."
+        />
+      ) : !authenticated ? (
         <RouteState
           kind="info"
           label="Sign in required"

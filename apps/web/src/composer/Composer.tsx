@@ -38,6 +38,7 @@ import {
   type CollabProviderFactory,
   useCollaboration,
 } from './model/collab/useCollaboration'
+import { appAssetUrl } from '../app/paths'
 import { CollaborationStatusContext } from './contract/collaborationContext'
 import { selectCollaborationStatus } from './contract/collaborationSelector'
 import { StudioNavigationGuard } from '../app/StudioNavigationGuard'
@@ -96,7 +97,7 @@ interface ComposerProps {
 function StudioIdentity({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`studio-identity${compact ? ' studio-identity--compact' : ''}`}>
-      <img className="studio-identity__mark" src="/favicon.svg" alt="" aria-hidden="true" />
+      <img className="studio-identity__mark" src={appAssetUrl('favicon.svg')} alt="" aria-hidden="true" />
       <div>
         <h1>{appName}</h1>
         <p className="studio-identity__tagline">{tagline}</p>

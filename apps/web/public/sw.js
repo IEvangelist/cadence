@@ -1,6 +1,7 @@
 // Offline shell service worker: precache the document shell, then cache same-origin static assets as they are visited.
-const CACHE = 'cadence-shell-v1'
 const APP_BASE = new URL(self.registration.scope).pathname
+const CACHE_PREFIX = `cadence-shell:${APP_BASE}:`
+const CACHE = `${CACHE_PREFIX}v2`
 const APP_SHELL = [
   APP_BASE,
   `${APP_BASE}index.html`,
@@ -25,7 +26,13 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE)
+            .map((key) => caches.delete(key)),
+        ),
+      )
       .then(() => self.clients.claim()),
   )
 })

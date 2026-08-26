@@ -20,6 +20,17 @@ Self-hosting is a separate choice: it runs the repository's existing Aspire
 service graph and can pair a web build with that backend. Publishing the static
 app neither provisions Azure nor changes the API topology described below.
 
+The web build makes that distinction explicit with `VITE_BACKEND_MODE`:
+
+- `disabled` is used for the public Pages artifact. It performs no API startup
+  requests and does not render account, sync, billing, collaboration, or stem
+  controls.
+- `same-origin` uses the existing `/api` topology, including the Aspire/Vite
+  development proxy.
+- `remote` requires `VITE_API_BASE_URL` to name the backend origin. If it is
+  missing, the app fails closed in local-only mode instead of submitting
+  credentials to the static host.
+
 Cadence's backend deploys to **Azure Container Apps** using
 [`azd`](https://learn.microsoft.com/azure/developer/azure-developer-cli/) and the
 **Aspire azd integration**. There is no hand-authored Bicep to drift from the

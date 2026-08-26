@@ -15,8 +15,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { RoutedPage, RouteState } from '../ui/RoutedPage'
 import { EntitlementsClient, type Entitlements } from './entitlementsClient'
 import './pricing.css'
+import { backendConfig } from '../platform/backendConfig'
 
 interface PricingPageProps {
+  backendAvailable?: boolean
   /** Close the pricing view and return to the app. */
   onClose?: () => void
   /** Injectable client (tests pass a fake); defaults to the real API client. */
@@ -67,7 +69,12 @@ const PLANS: PlanCopy[] = [
   },
 ]
 
-export function PricingPage({ onClose, client, redirect }: PricingPageProps) {
+export function PricingPage({
+  backendAvailable = backendConfig.available,
+  onClose,
+  client,
+  redirect,
+}: PricingPageProps) {
   const resolvedClient = useMemo(() => client ?? new EntitlementsClient(), [client])
   const navigate = useMemo(
     () => redirect ?? ((url: string) => window.location.assign(url)),
@@ -75,12 +82,15 @@ export function PricingPage({ onClose, client, redirect }: PricingPageProps) {
   )
 
   const [entitlements, setEntitlements] = useState<Entitlements | null>(null)
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error' | 'unavailable'>(
+    backendAvailable ? 'loading' : 'unavailable',
+  )
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [busy, setBusy] = useState<'checkout' | 'portal' | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (!backendAvailable) return
     let cancelled = false
     void (async () => {
       try {
@@ -96,7 +106,7 @@ export function PricingPage({ onClose, client, redirect }: PricingPageProps) {
     return () => {
       cancelled = true
     }
-  }, [loadAttempt, resolvedClient])
+  }, [backendAvailable, loadAttempt, resolvedClient])
 
   const currentTier = entitlements?.tier ?? 'Free'
   const isPro = currentTier === 'Pro'
@@ -144,6 +154,14 @@ export function PricingPage({ onClose, client, redirect }: PricingPageProps) {
 
       {status === 'loading' && (
         <RouteState kind="loading" label="Loading your plan" />
+      )}
+      {status === 'unavailable' && (
+        <RouteState
+          kind="info"
+          label="Billing unavailable"
+          title="Plans are not connected"
+          message="The public static composer has no account or billing backend. You can keep composing anonymously and offline."
+        />
       )}
       {status === 'error' && (
         <RouteState
@@ -208,7 +226,7 @@ export function PricingPage({ onClose, client, redirect }: PricingPageProps) {
               </ul>
 
               <div className="pricing-actions">
-                {plan.id === 'Pro' && !isPro && (
+                {backendAvailable && plan.id === 'Pro' && !isPro && (
                   <button
                     type="button"
                     className="btn btn-primary"
@@ -219,7 +237,7 @@ export function PricingPage({ onClose, client, redirect }: PricingPageProps) {
                     {busy === 'checkout' ? 'Starting checkout…' : 'Upgrade to Pro'}
                   </button>
                 )}
-                {plan.id === 'Pro' && isPro && (
+                {backendAvailable && plan.id === 'Pro' && isPro && (
                   <button
                     type="button"
                     className="btn"

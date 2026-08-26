@@ -8,6 +8,23 @@ const json = (body: unknown, status = 200): Response =>
   })
 
 describe('AuthClient', () => {
+  it('never submits credentials when backend access is disabled', async () => {
+    const fetchImpl = vi.fn()
+    const client = new AuthClient(fetchImpl, '', false)
+
+    await expect(client.login('person@example.com', 'secret')).rejects.toMatchObject({
+      status: 0,
+      message: 'Accounts are unavailable in this static app.',
+    })
+    await expect(
+      client.register('person@example.com', 'secret', 'Person'),
+    ).rejects.toMatchObject({ status: 0 })
+    await expect(client.requestMagicLink('person@example.com')).rejects.toMatchObject({
+      status: 0,
+    })
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
   it('me() returns the user on 200', async () => {
     const fetchImpl = vi.fn(async () =>
       json({ id: '1', email: 'a@b.com', displayName: 'A', tier: 'Free' }),
