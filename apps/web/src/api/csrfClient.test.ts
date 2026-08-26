@@ -6,6 +6,10 @@ import {
   CsrfTokenError,
   INVALID_CSRF_PROBLEM,
 } from './csrfClient'
+import {
+  AuthMutationCoordinator,
+  EXPECTED_OWNER_HEADER,
+} from '../auth/authMutationCoordinator'
 
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
@@ -158,5 +162,79 @@ describe('CsrfClient', () => {
       .rejects.toBeInstanceOf(TypeError)
     await expect(client.mutation('/other', { method: 'POST' })).rejects.toBeInstanceOf(TypeError)
     expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('never sends after account switch while token acquisition is deferred', async () => {
+    const coordinator = new AuthMutationCoordinator(false)
+    coordinator.transition({
+      generation: 1,
+      mode: 'authenticated',
+      ownerId: 'owner-a',
+      purgeOwnerIds: [],
+    }, false)
+    let resolveToken!: (response: Response) => void
+    const token = new Promise<Response>((resolve) => {
+      resolveToken = resolve
+    })
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) =>
+      String(input) === CSRF_ENDPOINT
+        ? token
+        : new Response(null, { status: 204 }),
+    )
+    const client = new CsrfClient(fetchImpl, '')
+    const mutation = client.mutation(
+      '/api/projects/p1',
+      { method: 'DELETE' },
+      coordinator.capture('owner-a'),
+    )
+
+    coordinator.transition({
+      generation: 2,
+      mode: 'authenticated',
+      ownerId: 'owner-b',
+      purgeOwnerIds: ['owner-a'],
+    }, false)
+    resolveToken(json({ requestToken: 'owner-a-token' }))
+
+    await expect(mutation).rejects.toMatchObject({ name: 'AbortError' })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    coordinator.dispose()
+  })
+
+  it('does not replay an invalid-CSRF mutation after the owner changes', async () => {
+    const coordinator = new AuthMutationCoordinator(false)
+    coordinator.transition({
+      generation: 1,
+      mode: 'authenticated',
+      ownerId: 'owner-a',
+      purgeOwnerIds: [],
+    }, false)
+    let mutationRequests = 0
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === CSRF_ENDPOINT) {
+        return json({ requestToken: 'owner-a-token' })
+      }
+      mutationRequests += 1
+      expect(new Headers(init?.headers).get(EXPECTED_OWNER_HEADER))
+        .toBe('owner-a')
+      coordinator.transition({
+        generation: 2,
+        mode: 'authenticated',
+        ownerId: 'owner-b',
+        purgeOwnerIds: ['owner-a'],
+      }, false)
+      return json({ type: INVALID_CSRF_PROBLEM }, 400)
+    })
+
+    await expect(
+      new CsrfClient(fetchImpl, '').mutation(
+        '/api/projects/p1',
+        { method: 'DELETE' },
+        coordinator.capture('owner-a'),
+      ),
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(mutationRequests).toBe(1)
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    coordinator.dispose()
   })
 })

@@ -250,6 +250,7 @@ function ComposerWorkspace({
       selectedTrackId: controller.selectedTrackId,
       selectedNoteIds: controller.state.selectedNoteIds,
       applyRemoteProject: controller.applyRemoteProject,
+      recoverCollaborationBackup: controller.recoverCollaborationBackup,
       historyCaptureGroup: controller.historyCaptureGroup,
       historyCaptureBoundary: controller.historyCaptureBoundary,
       subscribeProjectTransitions: controller.subscribeProjectTransitions,

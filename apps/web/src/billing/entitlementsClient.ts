@@ -8,6 +8,10 @@
  * hosted Stripe Checkout / Customer Portal flows.
  */
 import { CsrfClient, type FetchLike } from '../api/csrfClient'
+import {
+  captureAuthMutation,
+  type AuthMutationContextFactory,
+} from '../auth/authMutationCoordinator'
 
 /** The caller's current tier and the typed entitlements it grants. */
 export interface Entitlements {
@@ -41,11 +45,18 @@ export class EntitlementsClient {
   private readonly fetchImpl: FetchLike
   private readonly baseUrl: string
   private readonly csrf: CsrfClient
+  private readonly mutationContext?: AuthMutationContextFactory
 
-  constructor(fetchImpl?: FetchLike, baseUrl?: string) {
+  constructor(
+    fetchImpl?: FetchLike,
+    baseUrl?: string,
+    mutationContext?: AuthMutationContextFactory,
+  ) {
     this.fetchImpl = fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
     this.baseUrl = baseUrl ?? defaultBaseUrl()
     this.csrf = new CsrfClient(this.fetchImpl, this.baseUrl)
+    this.mutationContext =
+      mutationContext ?? (fetchImpl === undefined ? captureAuthMutation : undefined)
   }
 
   private url(path: string): string {
@@ -82,7 +93,7 @@ export class EntitlementsClient {
   private async billingUrl(path: string, fallback: string): Promise<string> {
     const response = await this.csrf.mutation(path, {
       method: 'POST',
-    })
+    }, this.mutationContext?.())
     if (!response.ok) {
       throw new BillingError(response.status, fallback)
     }

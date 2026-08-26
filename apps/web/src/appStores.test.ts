@@ -2,10 +2,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { handleAuthChange, projectStore } from './appStores'
 import { createEmptyProject } from './composer/model/project'
 import { serializeProject } from './composer/model/persistence'
+import { nextAuthGeneration } from './auth/authContext'
 
 afterEach(async () => {
-  await handleAuthChange(false)
+  await handleAuthChange({
+    generation: nextAuthGeneration(),
+    mode: 'anonymous',
+    ownerId: null,
+    purgeOwnerIds: [],
+  })
   localStorage.clear()
+  vi.restoreAllMocks()
 })
 
 describe('appStores wiring', () => {
@@ -46,7 +53,12 @@ describe('appStores wiring', () => {
     })
     vi.stubGlobal('fetch', fetchImpl)
 
-    await handleAuthChange(true)
+    await handleAuthChange({
+      generation: nextAuthGeneration(),
+      mode: 'authenticated',
+      ownerId: 'test-owner',
+      purgeOwnerIds: [],
+    })
 
     // The offline project was pushed up during sign-in sync.
     const postCalls = fetchImpl.mock.calls.filter(([, init]) => (init?.method ?? 'GET') === 'POST')
@@ -56,5 +68,25 @@ describe('appStores wiring', () => {
     fetchImpl.mockClear()
     await projectStore.save(project)
     expect(fetchImpl).toHaveBeenCalled()
+  })
+
+  it('retries retained IndexedDB cleanup on startup and owner transitions', async () => {
+    const retry = vi.spyOn(projectStore, 'retryPendingCollaborationData')
+
+    await handleAuthChange({
+      generation: nextAuthGeneration(),
+      mode: 'offline',
+      ownerId: 'owner-1',
+      purgeOwnerIds: [],
+    })
+    expect(retry).toHaveBeenLastCalledWith('owner-1')
+
+    await handleAuthChange({
+      generation: nextAuthGeneration(),
+      mode: 'anonymous',
+      ownerId: null,
+      purgeOwnerIds: [],
+    })
+    expect(retry).toHaveBeenLastCalledWith(undefined)
   })
 })

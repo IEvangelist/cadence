@@ -9,6 +9,10 @@
  */
 import { backendConfig } from '../platform/backendConfig'
 import { CsrfClient, type FetchLike } from '../api/csrfClient'
+import {
+  captureAuthMutation,
+  type AuthMutationContextFactory,
+} from './authMutationCoordinator'
 
 /** The signed-in user's identity summary (mirror of the API's MeResponse). */
 export interface Me {
@@ -67,12 +71,20 @@ export class AuthClient {
   private readonly baseUrl: string
   private readonly available: boolean
   private readonly csrf: CsrfClient
+  private readonly mutationContext?: AuthMutationContextFactory
 
-  constructor(fetchImpl?: FetchLike, baseUrl?: string, available?: boolean) {
+  constructor(
+    fetchImpl?: FetchLike,
+    baseUrl?: string,
+    available?: boolean,
+    mutationContext?: AuthMutationContextFactory,
+  ) {
     this.fetchImpl = fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
     this.baseUrl = (baseUrl ?? backendConfig.apiBaseUrl).replace(/\/+$/, '')
     this.available = available ?? (baseUrl !== undefined || backendConfig.available)
     this.csrf = new CsrfClient(this.fetchImpl, this.baseUrl)
+    this.mutationContext =
+      mutationContext ?? (fetchImpl === undefined ? captureAuthMutation : undefined)
   }
 
   private url(path: string): string {
@@ -85,20 +97,28 @@ export class AuthClient {
     }
   }
 
-  private async postJson(path: string, body: unknown): Promise<Response> {
+  private async postJson(
+    path: string,
+    body: unknown,
+    signal?: AbortSignal,
+  ): Promise<Response> {
     this.assertAvailable()
     return this.fetchImpl(this.url(path), {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal,
     })
   }
 
   /** The current session, or null when signed out (401). */
-  async me(): Promise<Me | null> {
+  async me(signal?: AbortSignal): Promise<Me | null> {
     this.assertAvailable()
-    const response = await this.fetchImpl(this.url('/api/auth/me'), { credentials: 'include' })
+    const response = await this.fetchImpl(this.url('/api/auth/me'), {
+      credentials: 'include',
+      signal,
+    })
     if (response.status === 401) return null
     if (!response.ok) throw new AuthError(response.status, 'Could not load the current session.')
     return (await response.json()) as Me
@@ -117,8 +137,16 @@ export class AuthClient {
   }
 
   /** Sign in with a local account. */
-  async login(email: string, password: string): Promise<Me> {
-    const response = await this.postJson('/api/auth/login', { email, password })
+  async login(
+    email: string,
+    password: string,
+    signal?: AbortSignal,
+  ): Promise<Me> {
+    const response = await this.postJson(
+      '/api/auth/login',
+      { email, password },
+      signal,
+    )
     if (response.status === 401) throw new AuthError(401, 'Incorrect email or password.')
     if (!response.ok) throw new AuthError(response.status, await readError(response, 'Sign in failed.'))
     this.csrf.clear()
@@ -126,10 +154,26 @@ export class AuthClient {
   }
 
   /** Sign out the current session. */
-  async logout(): Promise<void> {
+  async logout(signal?: AbortSignal): Promise<void> {
     this.assertAvailable()
+    const captured = this.mutationContext?.()
+    const logoutSignal = signal ?? new AbortController().signal
+    // Logout is the one mutation allowed to outlive the local transition that
+    // invalidates every other owner-A request. It remains bound to owner A and
+    // its own bounded signal; the server rejects it if the cookie already became B.
+    const logoutContext = captured
+      ? {
+          ownerId: captured.ownerId,
+          cacheKey: `${captured.cacheKey}:logout`,
+          signal: logoutSignal,
+          isCurrent: () => !logoutSignal.aborted,
+        }
+      : undefined
     try {
-      await this.csrf.mutation('/api/auth/logout', { method: 'POST' })
+      await this.csrf.mutation('/api/auth/logout', {
+        method: 'POST',
+        signal: logoutSignal,
+      }, logoutContext)
     } finally {
       this.csrf.clear()
     }
@@ -141,9 +185,12 @@ export class AuthClient {
   }
 
   /** The external OAuth providers the server has wired. */
-  async providers(): Promise<string[]> {
+  async providers(signal?: AbortSignal): Promise<string[]> {
     this.assertAvailable()
-    const response = await this.fetchImpl(this.url('/api/auth/providers'), { credentials: 'include' })
+    const response = await this.fetchImpl(this.url('/api/auth/providers'), {
+      credentials: 'include',
+      signal,
+    })
     if (!response.ok) return []
     const body = (await response.json()) as { providers: string[] }
     return body.providers ?? []
@@ -170,7 +217,7 @@ export class AuthClient {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
-    })
+    }, this.mutationContext?.())
     if (!response.ok) throw new AuthError(response.status, await readError(response, 'Could not save your profile.'))
     return (await response.json()) as Profile
   }

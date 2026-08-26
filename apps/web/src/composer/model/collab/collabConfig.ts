@@ -9,9 +9,11 @@
  */
 import type { CollabConfig, CollaborationRole } from './useCollaboration'
 import type { CollabUser } from './collabSession'
+import type { OfflineAuthIdentity } from '../../../auth/offlineIdentity'
 
 interface CollabParams {
   projectId: string
+  roomOwnerId?: string
   role: CollaborationRole
   token?: string
 }
@@ -27,6 +29,7 @@ export function parseCollabParams(search: string): CollabParams | null {
   if (!projectId) return null
   return {
     projectId,
+    roomOwnerId: params.get('owner') || undefined,
     role: parseRole(params.get('role')),
     token: params.get('share') ?? undefined,
   }
@@ -54,19 +57,28 @@ export interface BuildCollabConfigInput {
   search: string
   location: Pick<Location, 'protocol' | 'host'>
   user: { id: string; displayName: string } | null
+  offlineUser?: OfflineAuthIdentity | null
   relayOverride?: string
 }
 
 export function buildCollabConfig(input: BuildCollabConfigInput): CollabConfig | null {
   const parsed = parseCollabParams(input.search)
-  if (!parsed || !input.user) return null
+  const identity = input.user ?? input.offlineUser
+  if (!parsed || !identity) return null
   const user: CollabUser = {
-    id: input.user.id,
-    name: input.user.displayName,
-    color: colorForId(input.user.id),
+    id: identity.id,
+    name: identity.displayName,
+    color: colorForId(identity.id),
   }
+  const roomOwnerId =
+    parsed.roomOwnerId ??
+    (parsed.role === 'owner'
+      ? identity.id
+      : 'legacy-owner')
   return {
     projectId: parsed.projectId,
+    roomOwnerId,
+    networkEnabled: input.user !== null,
     role: parsed.role,
     token: parsed.token,
     url: resolveRelayUrl(input.location, input.relayOverride),

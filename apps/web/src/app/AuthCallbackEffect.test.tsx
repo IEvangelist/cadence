@@ -42,6 +42,7 @@ function AuthHarness({
   const value = useMemo<AuthContextValue>(
     () => ({
       user: status === 'authenticated' ? user : null,
+      offlineUser: null,
       status,
       providers: [],
       error: null,

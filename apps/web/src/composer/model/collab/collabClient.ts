@@ -7,10 +7,15 @@
  */
 import type { CollaborationRole } from './useCollaboration'
 import { CsrfClient, type FetchLike } from '../../../api/csrfClient'
+import {
+  captureAuthMutation,
+  type AuthMutationContextFactory,
+} from '../../../auth/authMutationCoordinator'
 
 /** A server-issued share link for a project. */
 export interface ShareLink {
   token: string
+  ownerId: string
   role: CollaborationRole
   createdAt: string
 }
@@ -25,6 +30,7 @@ export function shareLinkUrl(origin: string, projectId: string, share: ShareLink
   const base = origin.replace(/\/+$/, '')
   const params = new URLSearchParams({
     collab: projectId,
+    owner: share.ownerId,
     role: share.role,
     share: share.token,
   })
@@ -35,11 +41,18 @@ export class CollabShareClient {
   private readonly fetchImpl: FetchLike
   private readonly baseUrl: string
   private readonly csrf: CsrfClient
+  private readonly mutationContext?: AuthMutationContextFactory
 
-  constructor(fetchImpl?: FetchLike, baseUrl?: string) {
+  constructor(
+    fetchImpl?: FetchLike,
+    baseUrl?: string,
+    mutationContext?: AuthMutationContextFactory,
+  ) {
     this.fetchImpl = fetchImpl ?? ((input, init) => globalThis.fetch(input, init))
     this.baseUrl = baseUrl ?? defaultBaseUrl()
     this.csrf = new CsrfClient(this.fetchImpl, this.baseUrl)
+    this.mutationContext =
+      mutationContext ?? (fetchImpl === undefined ? captureAuthMutation : undefined)
   }
 
   private url(projectId: string, suffix = ''): string {
@@ -57,7 +70,7 @@ export class CollabShareClient {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role }),
-    })
+    }, this.mutationContext?.())
     if (!response.ok) throw new Error(`Failed to create share link (${response.status}).`)
     return (await response.json()) as ShareLink
   }
@@ -66,6 +79,7 @@ export class CollabShareClient {
     const response = await this.csrf.mutation(
       `/api/projects/${encodeURIComponent(projectId)}/shares/${encodeURIComponent(token)}`,
       { method: 'DELETE' },
+      this.mutationContext?.(),
     )
     if (!response.ok && response.status !== 404) {
       throw new Error(`Failed to revoke share link (${response.status}).`)

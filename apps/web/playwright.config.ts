@@ -4,8 +4,8 @@ import { returningProjectStorage } from './e2e/projectFixtures'
 // The smoke suite is intentionally run against a *production build* served by
 // `vite preview`, so it proves the app compiles and renders the same bundle we
 // ship. Playwright builds + serves it via the `webServer` block below.
-const PORT = 4173
-const RELAY_PORT = 4174
+const PORT = Number(process.env.CADENCE_E2E_PORT ?? 4173)
+const RELAY_PORT = Number(process.env.CADENCE_E2E_RELAY_PORT ?? 4174)
 const baseURL = `http://127.0.0.1:${PORT}`
 // Build-time relay URL for the live-collaboration e2e. The collaboration spec
 // activates only when a `?collab=` link is opened, so baking this in is inert

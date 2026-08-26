@@ -20,6 +20,36 @@ namespace Cadence.Api.Collaboration;
 public sealed class CollabHub
 {
     private readonly ConcurrentDictionary<string, CollabRoom> _rooms = new();
+    private readonly ICollabRevocationBus _revocations;
+
+    public CollabHub()
+        : this(new InMemoryCollabRevocationBus())
+    {
+    }
+
+    public CollabHub(ICollabRevocationBus revocations)
+    {
+        _revocations = revocations;
+        _revocations.Revoked += HandleRevocationAsync;
+    }
+
+    /// <summary>Compatibility overload for transport-identity-neutral hub tests.</summary>
+    public Task<CollabConnection> JoinAsync(
+        string room,
+        WebSocket socket,
+        CollaborationRole role,
+        Func<Task<IReadOnlyList<byte[]>>> load,
+        CancellationToken cancellationToken) =>
+        JoinAsync(
+            room,
+            socket,
+            role,
+            callerId: string.Empty,
+            ownerId: string.Empty,
+            projectId: string.Empty,
+            grantId: null,
+            load,
+            cancellationToken);
 
     /// <summary>
     /// Register a connection in a room, loading the room's persisted update log the
@@ -30,6 +60,10 @@ public sealed class CollabHub
         string room,
         WebSocket socket,
         CollaborationRole role,
+        string callerId,
+        string ownerId,
+        string projectId,
+        string? grantId,
         Func<Task<IReadOnlyList<byte[]>>> load,
         CancellationToken cancellationToken)
     {
@@ -60,7 +94,20 @@ public sealed class CollabHub
                     candidate.Loaded = true;
                 }
 
-                var connection = new CollabConnection(socket, role);
+                var grantGeneration = grantId is null
+                    ? 0
+                    : await _revocations.GetGrantGenerationAsync(grantId);
+                var userGeneration =
+                    await _revocations.GetUserGenerationAsync(callerId);
+                var connection = new CollabConnection(
+                    socket,
+                    role,
+                    callerId,
+                    ownerId,
+                    projectId,
+                    grantId,
+                    grantGeneration,
+                    userGeneration);
                 candidate.Members[connection.Id] = connection;
                 return connection;
             }
@@ -162,6 +209,11 @@ public sealed class CollabHub
             {
                 continue;
             }
+            if (!await IsCurrentAsync(member))
+            {
+                await member.RevokeAsync("Collaboration access changed.");
+                continue;
+            }
 
             try
             {
@@ -176,6 +228,105 @@ public sealed class CollabHub
 
     /// <summary>Number of active connections in a room (used by tests).</summary>
     public int Count(string room) => _rooms.TryGetValue(room, out var current) ? current.Members.Count : 0;
+
+    public string GrantId(string token) => _revocations.GrantId(token);
+
+    public Task<T> WithConnectionBarrierAsync<T>(
+        string callerId,
+        string? grantId,
+        Func<Task<T>> action) =>
+        _revocations.WithUserBarrierAsync(
+            callerId,
+            () => grantId is null
+                ? action()
+                : _revocations.WithGrantBarrierAsync(grantId, action));
+
+    public Task<bool> RevokeGrantAsync(
+        string grantId,
+        Func<Task<bool>> revokeDurable) =>
+        _revocations.WithGrantBarrierAsync(
+            grantId,
+            async () =>
+            {
+                if (!await revokeDurable()) return false;
+                await _revocations.RevokeGrantAsync(grantId);
+                return true;
+            });
+
+    /// <summary>Close every collaboration socket owned by one signed-out account.</summary>
+    public Task RevokeUserAsync(string callerId) =>
+        _revocations.WithUserBarrierAsync(
+            callerId,
+            async () =>
+            {
+                await _revocations.RevokeUserAsync(callerId);
+                return true;
+            });
+
+    /// <summary>
+    /// Serialize one accepted frame against grant/user revocation. Once a revoke
+    /// barrier completes, an old-generation frame can never append or broadcast.
+    /// </summary>
+    public Task<bool> ProcessFrameAsync(
+        CollabConnection connection,
+        Func<Task> process) =>
+        WithConnectionBarrierAsync(
+            connection.CallerId,
+            connection.GrantId,
+            async () =>
+            {
+                if (!await IsCurrentAsync(connection))
+                {
+                    await connection.RevokeAsync("Collaboration access changed.");
+                    return false;
+                }
+
+                await process();
+                return true;
+            });
+
+    private async Task<bool> IsCurrentAsync(CollabConnection connection)
+    {
+        if (connection.IsRevoked) return false;
+        var currentUser = await _revocations.GetUserGenerationAsync(
+            connection.CallerId);
+        var currentGrant = connection.GrantId is null
+            ? connection.GrantGeneration
+            : await _revocations.GetGrantGenerationAsync(connection.GrantId);
+        return currentUser == connection.UserGeneration &&
+               currentGrant == connection.GrantGeneration;
+    }
+
+    private Task HandleRevocationAsync(CollabRevocationMessage message) =>
+        message.Kind switch
+        {
+            CollabRevocationKind.Grant => RevokeWhereAsync(
+                member => string.Equals(
+                    member.GrantId,
+                    message.ScopeId,
+                    StringComparison.Ordinal),
+                "Collaboration access was revoked."),
+            CollabRevocationKind.User => RevokeWhereAsync(
+                member => string.Equals(
+                    member.CallerId,
+                    message.ScopeId,
+                    StringComparison.Ordinal),
+                "The authenticated session ended."),
+            _ => Task.CompletedTask,
+        };
+
+    private async Task RevokeWhereAsync(
+        Func<CollabConnection, bool> predicate,
+        string reason,
+        CancellationToken cancellationToken = default)
+    {
+        var matches = _rooms.Values
+            .SelectMany(room => room.Members.Values)
+            .Where(predicate)
+            .ToArray();
+        await Task.WhenAll(matches.Select(member =>
+            member.RevokeAsync(reason, cancellationToken)));
+    }
 
     /// <summary>
     /// A live room: its connected members plus the durable, ordered log of Yjs

@@ -9,6 +9,7 @@ import { AuthBar } from './AuthBar'
 function makeValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {
     user: null,
+    offlineUser: null,
     status: 'anonymous',
     providers: [],
     error: null,
@@ -69,6 +70,27 @@ describe('AuthBar', () => {
 
     await user.click(screen.getByRole('button', { name: 'Sign out' }))
     expect(onSignOut).toHaveBeenCalled()
+  })
+
+  it('offers reconfirmation and local sign-out for cached offline identity', async () => {
+    coversInteractions('auth.panel.toggle', 'auth.sign-out')
+    const user = userEvent.setup()
+    const onShowSignIn = vi.fn()
+    const onSignOut = vi.fn(async () => undefined)
+    renderBar(
+      makeValue({
+        status: 'offline',
+        offlineUser: { id: '1', displayName: 'Cached Ada' },
+      }),
+      { onShowSignIn, onSignOut },
+    )
+
+    expect(screen.getByText('Cached Ada')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Profile' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    await user.click(screen.getByRole('button', { name: 'Sign out' }))
+    expect(onShowSignIn).toHaveBeenCalledOnce()
+    expect(onSignOut).toHaveBeenCalledOnce()
   })
 
   it('disables account actions while sign-out is pending', () => {

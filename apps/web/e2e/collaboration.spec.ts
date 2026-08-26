@@ -23,18 +23,30 @@ interface Identity {
 
 function mockApi(user: Identity) {
   let savedProject: Record<string, unknown> | null = null
-  return async (route: Route): Promise<void> => {
-    if (await mockAntiforgery(route)) return
+  let signedIn = false
+  let available = true
+  let currentUser = user
+  const blockedRequests: Array<{ method: string; path: string }> = []
+  const handler = async (route: Route): Promise<void> => {
     const request = route.request()
     const url = new URL(request.url())
     const path = url.pathname
     const method = request.method()
+    if (!available) {
+      blockedRequests.push({ method, path })
+      await route.abort('failed')
+      return
+    }
+    if (await mockAntiforgery(route)) return
     const json = (body: unknown, status = 200) =>
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
 
-    if (path === '/api/auth/me') return json({}, 401)
+    if (path === '/api/auth/me') return signedIn ? json(currentUser) : json({}, 401)
     if (path === '/api/auth/providers') return json({ providers: ['GitHub'] })
-    if (path === '/api/auth/login' && method === 'POST') return json(user)
+    if (path === '/api/auth/login' && method === 'POST') {
+      signedIn = true
+      return json(currentUser)
+    }
     if (path === '/api/projects' && method === 'GET') {
       return json(
         savedProject
@@ -79,39 +91,100 @@ function mockApi(user: Identity) {
     // Anything else the app calls (entitlements, saves): succeed emptily.
     return json({}, method === 'GET' ? 200 : 204)
   }
+  return {
+    handler,
+    setAvailable(next: boolean) {
+      available = next
+    },
+    setUser(next: Identity) {
+      currentUser = next
+    },
+    blockedRequests,
+  }
 }
 
 const TOKENS = { editor: 'editor-token', viewer: 'viewer-token' } as const
+const WS_OFFLINE_KEY = 'cadence.e2e.collab-ws-offline'
 
 async function openCollaborator(
   browser: Browser,
   user: Identity,
   role: 'editor' | 'viewer',
   room: string,
+  options: { failIndexedDb?: boolean } = {},
 ) {
   const context = await browser.newContext()
   const page = await context.newPage()
-  await page.addInitScript(() => {
+  await page.addInitScript(({ offlineKey, failIndexedDb }) => {
+    if (failIndexedDb) {
+      const nativeIndexedDB = window.indexedDB
+      Object.defineProperty(window, 'indexedDB', {
+        configurable: true,
+        value: new Proxy(nativeIndexedDB, {
+          get(target, property) {
+            if (property === 'open') {
+              return () => {
+                throw new DOMException(
+                  'IndexedDB disabled by deterministic e2e fixture.',
+                  'UnknownError',
+                )
+              }
+            }
+            return Reflect.get(target, property, target)
+          },
+        }),
+      })
+    }
     const NativeWebSocket = window.WebSocket
     const counts = { created: 0, closed: 0 }
+    const sockets = new Set<WebSocket>()
     ;(window as unknown as { __CADENCE_WS_COUNTS__: typeof counts }).__CADENCE_WS_COUNTS__ =
       counts
     class CountingWebSocket extends NativeWebSocket {
       constructor(url: string | URL, protocols?: string | string[]) {
-        super(url, protocols)
+        const blocked = window.localStorage.getItem(offlineKey) === '1'
+        super(blocked ? 'ws://127.0.0.1:1/cadence-offline' : url, protocols)
         counts.created += 1
+        sockets.add(this)
         this.addEventListener('close', () => {
           counts.closed += 1
+          sockets.delete(this)
         })
       }
     }
     window.WebSocket = CountingWebSocket
-  })
-  await page.route('**/api/**', mockApi(user))
+    ;(
+      window as unknown as {
+        __CADENCE_SET_COLLAB_OFFLINE__: (offline: boolean) => void
+      }
+    ).__CADENCE_SET_COLLAB_OFFLINE__ = (offline) => {
+      if (offline) {
+        window.localStorage.setItem(offlineKey, '1')
+        sockets.forEach((socket) => socket.close())
+      } else {
+        window.localStorage.removeItem(offlineKey)
+      }
+    }
+  }, { offlineKey: WS_OFFLINE_KEY, failIndexedDb: options.failIndexedDb ?? false })
+  const api = mockApi(user)
+  await page.route('**/api/**', api.handler)
 
-  await page.goto(`/?collab=${room}&role=${role}&share=${TOKENS[role]}`)
+  await page.goto(
+    `/?collab=${room}&owner=e2e-owner&role=${role}&share=${TOKENS[role]}`,
+  )
 
-  // Sign in with the mocked local credentials.
+  await signInCollaborator(page, user)
+
+  // Collaboration activates only once signed in + a share link is present.
+  const roster = page.getByRole('region', { name: 'Collaborators' })
+  await expect(roster).toBeVisible()
+  return { context, page, roster, api }
+}
+
+async function signInCollaborator(
+  page: import('@playwright/test').Page,
+  user: Identity,
+): Promise<void> {
   await page.getByRole('button', { name: 'Sign in' }).click()
   await page.getByLabel('Email').fill(user.email)
   await page.getByLabel('Password').fill('correct horse battery')
@@ -120,11 +193,6 @@ async function openCollaborator(
     .getByRole('button', { name: 'Sign in' })
     .click()
   await expect(page.getByRole('button', { name: 'Profile' })).toBeVisible()
-
-  // Collaboration activates only once signed in + a share link is present.
-  const roster = page.getByRole('region', { name: 'Collaborators' })
-  await expect(roster).toBeVisible()
-  return { context, page, roster }
 }
 
 const grid = (page: import('@playwright/test').Page) =>
@@ -141,6 +209,73 @@ async function addNoteByKeyboard(page: import('@playwright/test').Page): Promise
   await g.press('ArrowUp')
   await g.press('ArrowUp')
   await g.press('Enter')
+}
+
+async function setCollabOffline(
+  page: import('@playwright/test').Page,
+  offline: boolean,
+): Promise<void> {
+  await page.evaluate((value) => {
+    (
+      window as unknown as {
+        __CADENCE_SET_COLLAB_OFFLINE__: (offline: boolean) => void
+      }
+    ).__CADENCE_SET_COLLAB_OFFLINE__(value)
+  }, offline)
+}
+
+async function indexeddbUpdateCount(
+  page: import('@playwright/test').Page,
+): Promise<number> {
+  return page.evaluate(async () => {
+    const databases = await indexedDB.databases()
+    const name = databases.find((database) =>
+      database.name?.startsWith('cadence.collab.v1:'),
+    )?.name
+    if (!name) return 0
+    return new Promise<number>((resolve, reject) => {
+      const request = indexedDB.open(name)
+      request.onerror = () => reject(request.error)
+      request.onsuccess = () => {
+        const database = request.result
+        const transaction = database.transaction('updates', 'readonly')
+        const count = transaction.objectStore('updates').count()
+        count.onerror = () => reject(count.error)
+        count.onsuccess = () => resolve(count.result)
+        transaction.oncomplete = () => database.close()
+      }
+
+    })
+  })
+}
+
+async function serializedBackupNoteCount(
+  page: import('@playwright/test').Page,
+): Promise<number> {
+  return page.evaluate(() => {
+    let count = 0
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index)
+      if (
+        !key?.startsWith('cadence.collab.backup.v1:') ||
+        !key.includes('cadence.v1.project.')
+      ) {
+        continue
+      }
+      try {
+        const project = JSON.parse(localStorage.getItem(key) ?? '{}') as {
+          tracks?: Array<{ notes?: unknown[] }>
+        }
+        count = Math.max(
+          count,
+          project.tracks?.[0]?.notes?.length ?? 0,
+        )
+      } catch {
+        // Ignore a concurrently replaced/corrupt test fixture value.
+      }
+    }
+    return count
+  })
 }
 
 test.describe('live collaboration', () => {
@@ -292,5 +427,160 @@ test.describe('live collaboration', () => {
       .toMatchObject({ created: 2, closed: 1 })
 
     await collaborator.context.close()
+  })
+
+  test('offline edits survive reload and converge after reconnect', async ({ browser }) => {
+    const room = `offline-reload-${Date.now()}`
+    const ada = await openCollaborator(
+      browser,
+      { id: 'u-offline', email: 'offline@example.com', displayName: 'Offline Ada', tier: 'Free' },
+      'editor',
+      room,
+    )
+    const bob = await openCollaborator(
+      browser,
+      { id: 'u-online', email: 'online@example.com', displayName: 'Online Bob', tier: 'Free' },
+      'editor',
+      room,
+    )
+    await expect(ada.roster).toContainText('2 people', { timeout: 15_000 })
+    const before = await ada.page.locator('.pr-note').count()
+    await expect(bob.page.locator('.pr-note')).toHaveCount(before)
+    const persistedBefore = await indexeddbUpdateCount(ada.page)
+
+    await setCollabOffline(ada.page, true)
+    ada.api.setAvailable(false)
+    await expect
+      .poll(() =>
+        ada.page.evaluate(
+          () =>
+            (window as unknown as {
+              __CADENCE_WS_COUNTS__: { created: number; closed: number }
+            }).__CADENCE_WS_COUNTS__.closed,
+        ),
+      )
+      .toBeGreaterThan(0)
+
+    await addNoteByKeyboard(ada.page)
+    await expect(ada.page.locator('.pr-note')).toHaveCount(before + 1)
+    await expect
+      .poll(() => indexeddbUpdateCount(ada.page))
+      .toBeGreaterThan(persistedBefore)
+
+    await addNoteByKeyboard(bob.page)
+    await expect(bob.page.locator('.pr-note')).toHaveCount(before + 1)
+
+    await ada.page.reload()
+    await expect(ada.page.getByRole('button', { name: 'Sign in' })).toBeVisible()
+    await expect(ada.roster).toBeVisible()
+    await expect(ada.page.locator('.pr-note')).toHaveCount(before + 1, { timeout: 15_000 })
+    await expect
+      .poll(() =>
+        ada.page.evaluate(
+          () =>
+            (window as unknown as {
+              __CADENCE_WS_COUNTS__: { created: number; closed: number }
+            }).__CADENCE_WS_COUNTS__.created,
+        ),
+      )
+      .toBe(0)
+
+    const reloadedPersistenceCount = await indexeddbUpdateCount(ada.page)
+    await addNoteByKeyboard(ada.page)
+    await expect(ada.page.locator('.pr-note')).toHaveCount(before + 2)
+    await expect
+      .poll(() => indexeddbUpdateCount(ada.page))
+      .toBeGreaterThan(reloadedPersistenceCount)
+    expect(
+      ada.api.blockedRequests.filter(
+        (request) =>
+          request.path.startsWith('/api/projects') &&
+          request.method !== 'GET',
+      ),
+    ).toEqual([])
+
+    ada.api.setAvailable(true)
+    await setCollabOffline(ada.page, false)
+    await signInCollaborator(ada.page, {
+      id: 'u-offline',
+      email: 'offline@example.com',
+      displayName: 'Offline Ada',
+      tier: 'Free',
+    })
+    await expect(ada.page.locator('.pr-note')).toHaveCount(before + 3, { timeout: 30_000 })
+    await expect(bob.page.locator('.pr-note')).toHaveCount(before + 3, { timeout: 30_000 })
+
+    await ada.context.close()
+    await bob.context.close()
+  })
+
+  test('serialized backup recovers and merges when IndexedDB is unavailable', async ({
+    browser,
+  }) => {
+    const room = `backup-fallback-${Date.now()}`
+    const user = {
+      id: 'u-backup',
+      email: 'backup@example.com',
+      displayName: 'Backup Ada',
+      tier: 'Free',
+    }
+    const ada = await openCollaborator(
+      browser,
+      user,
+      'editor',
+      room,
+      { failIndexedDb: true },
+    )
+    const bob = await openCollaborator(
+      browser,
+      {
+        id: 'u-backup-peer',
+        email: 'backup-peer@example.com',
+        displayName: 'Backup Bob',
+        tier: 'Free',
+      },
+      'editor',
+      room,
+    )
+    await expect(ada.roster).toContainText('2 people', { timeout: 15_000 })
+    const before = await ada.page.locator('.pr-note').count()
+    await expect(bob.page.locator('.pr-note')).toHaveCount(before)
+    const backupBefore = before
+
+    await setCollabOffline(ada.page, true)
+    ada.api.setAvailable(false)
+    await addNoteByKeyboard(ada.page)
+    await expect(ada.page.locator('.pr-note')).toHaveCount(before + 1)
+    await expect
+      .poll(() => serializedBackupNoteCount(ada.page))
+      .toBeGreaterThan(backupBefore)
+    const firstOfflineBackup = await serializedBackupNoteCount(ada.page)
+
+    await addNoteByKeyboard(bob.page)
+    await expect(bob.page.locator('.pr-note')).toHaveCount(before + 1)
+
+    await ada.page.reload()
+    await expect(ada.roster).toBeVisible()
+    await expect(ada.page.locator('.pr-note')).toHaveCount(before + 1, {
+      timeout: 15_000,
+    })
+    await addNoteByKeyboard(ada.page)
+    await expect(ada.page.locator('.pr-note')).toHaveCount(before + 2)
+    await expect
+      .poll(() => serializedBackupNoteCount(ada.page))
+      .toBeGreaterThan(firstOfflineBackup)
+
+    ada.api.setAvailable(true)
+    await setCollabOffline(ada.page, false)
+    await signInCollaborator(ada.page, user)
+    await expect(ada.page.locator('.pr-note')).toHaveCount(before + 3, {
+      timeout: 30_000,
+    })
+    await expect(bob.page.locator('.pr-note')).toHaveCount(before + 3, {
+      timeout: 30_000,
+    })
+
+    await ada.context.close()
+    await bob.context.close()
   })
 })

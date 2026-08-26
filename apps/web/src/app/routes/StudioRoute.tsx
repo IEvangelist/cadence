@@ -7,6 +7,7 @@ import { buildCollabConfig } from '../../composer/model/collab/collabConfig'
 import { StudioHelpMenu } from '../../studio'
 import { ThemeMenu } from '../../theme/ThemeMenu'
 import { useProjectStore } from '../projectStoreContext'
+import { supportsCollaborationScope } from '../../composer/model/syncingStore'
 import type { AppRouteContext } from '../routeContext'
 import { backendConfig } from '../../platform/backendConfig'
 
@@ -26,15 +27,34 @@ export function StudioRoute() {
     signOut,
     watermarkExports,
   } = useOutletContext<AppRouteContext>()
-  const collab = useMemo(
+  const baseCollab = useMemo(
     () =>
       backendConfig.available ? buildCollabConfig({
         search: location.search,
         location: window.location,
-        user: auth.user,
+        user: auth.status === 'authenticated' ? auth.user : null,
+        offlineUser: auth.status === 'offline' ? auth.offlineUser : null,
         relayOverride: import.meta.env?.VITE_COLLAB_URL as string | undefined,
       }) : null,
-    [auth.user, location.search],
+    [auth.offlineUser, auth.status, auth.user, location.search],
+  )
+  const collab = useMemo(
+    () =>
+      baseCollab && supportsCollaborationScope(store)
+        ? {
+            ...baseCollab,
+            loadSerializedBackup: () =>
+              store.loadCollaborationBackup(baseCollab),
+          }
+        : baseCollab,
+    [baseCollab, store],
+  )
+  const composerStore = useMemo(
+    () =>
+      collab && supportsCollaborationScope(store)
+        ? store.forCollaboration(collab)
+        : store,
+    [collab, store],
   )
   const consumeSharedProject = useCallback(() => {
     void navigate(
@@ -43,7 +63,11 @@ export function StudioRoute() {
     )
   }, [location.pathname, location.search, navigate])
 
-  if (auth.status === 'loading') {
+  if (
+    auth.status === 'loading' ||
+    auth.status === 'verification-pending' ||
+    auth.status === 'signing-out'
+  ) {
     return (
       <section
         className="composer-hydration"
@@ -56,17 +80,17 @@ export function StudioRoute() {
       </section>
     )
   }
-  const persistenceIdentity =
-    authenticated && auth.user
-      ? `remote:${auth.user.id}`
-      : 'local:anonymous'
+  const persistenceOwner = auth.user?.id ?? auth.offlineUser?.id
+  const persistenceIdentity = persistenceOwner
+    ? `${auth.status}:${persistenceOwner}`
+    : 'local:anonymous'
 
   return (
     <>
       <Composer
         key={persistenceIdentity}
         options={{
-          store,
+          store: composerStore,
           watermarkExports,
           storeRevision: auth.status,
           recoveryScope: persistenceIdentity,

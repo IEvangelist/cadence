@@ -364,8 +364,52 @@ paths first. See [`collaboration.md`](collaboration.md) for the design.
   `coerceNote` seam permits (a hostile peer cannot inject illegal data).
 - **Offline replay**: updates buffered while "disconnected" exchange on
   reconnect and both docs converge with no lost edits.
-- **Deferred single-seed**: only the first client to see an empty doc seeds it;
-  joiners adopt without duplicating tracks.
+- **IndexedDB reload**: real `y-indexeddb` running against deterministic
+  `fake-indexeddb` persists an offline CRDT, hydrates it into a fresh `Y.Doc`,
+  and converges its update with an independently edited relay doc.
+- **Deferred single-seed**: IndexedDB must finish before seed/adoption. A
+  non-empty persisted doc is editable while offline; an empty doc also waits
+  for relay sync, so stale serialized autosave cannot overwrite CRDT state.
+- **Isolation + cleanup**: cache names separate relay/account/owner/project,
+  persistence and listeners are destroyed on session changes, and the socket
+  connects exactly once only after local hydration.
+- **Failure bounds**: deterministic open/request failure and a hung
+  `whenSynced` both destroy the IndexedDB provider, surface a nonfatal
+  unavailable status, and connect the live socket exactly once; destroying the
+  session cancels the bound without a late connect.
+- **Fallback merge**: real browser IndexedDB failure exercises two offline
+  edits across reload, then matching-user reauthentication merges the
+  owner/project/grant serialized backup with a peer's server-only edit.
+- **Cleanup retry**: hung `indexedDB.databases()`, blocked deletes, retained
+  pending registries, and startup/auth retry are bounded and deterministic.
+- **Auth/save races**: StrictMode and deferred old-user responses cannot
+  overwrite a newer sign-out/user or recreate the identity cache; deferred
+  remote saves cannot recreate an owner backup after purge.
+- **Mutation ownership**: deferred CSRF acquisition and typed CSRF retry are
+  invalidated by account switch before another send; expected-owner mismatch is
+  rejected server-side. BroadcastChannel tests prove another tab aborts the
+  captured owner generation.
+- **Complete recovery**: serialized fallback tests merge backup-precedence mix
+  inserts/params and automation points while retaining server-only entries.
+- **Revocation/logout**: live TestServer editor sockets receive policy-close on
+  grant revoke and cannot broadcast another write; logout closes every caller
+  socket. A never-resolving logout still reaches anonymous UI and purges caches
+  within the configured bound.
+- **Distributed barriers**: two `CollabHub` replicas sharing one deterministic
+  revocation bus both close a revoked grant while an unrelated grant survives;
+  paused-join and accepted-frame barriers prove DELETE waits and no later frame
+  appends.
+- **Verification pending**: a cross-tab owner-B signal disables the owner-A
+  store before deferred `/me`; an attempted old autosave performs zero network
+  mutations until B is locally confirmed.
+- **Reducer recovery**: reducer/controller/hook integration proves the dedicated
+  recovery action adopts mixer inserts/params and automation rather than the
+  normal `sync-remote` preservation path dropping them.
+- **Auth + production-store wiring**: real `AppProviders` and
+  `SyncingProjectStore` prove remote-primary autosave also writes an
+  owner/project/grant-scoped serialized backup, full API failure reloads only
+  the matching cached identity, and sign-out/account switch purge backup and
+  registered Yjs databases without exposing either to anonymous/different users.
 - **Presence**: awareness add/remove reflects join/leave; the roster renders
   accessible avatars with WCAG-contrast ink for both hex and `hsl` colors.
 
@@ -390,6 +434,11 @@ throwaway Node relay fixture (`apps/web/e2e/collab-server.mjs`; a second
   the editor's note count unchanged (proving the server gate, not just UI
   gating).
 - The collaborative composer (presence bar + remote cursors) is **axe-clean**.
+- An editor disconnects, loses every `/api/**` request, edits, fully reloads
+  while both API and WebSocket are unavailable, hydrates without creating a
+  socket, edits again, then live-authenticates as the matching user and
+  converges both persisted changes and a peer's remote change. Socket
+  cleanup/reconnect counts remain covered by the route test.
 
 Note-adds in the e2e specs use deterministic keyboard input (focus the note
 grid, arrow to an empty pitch row, `Enter`) rather than pixel clicks, and assert

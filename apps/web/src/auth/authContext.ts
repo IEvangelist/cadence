@@ -7,12 +7,42 @@
  */
 import { createContext, useContext } from 'react'
 import { type AuthClient, type Me } from './authClient'
+import type { OfflineAuthIdentity } from './offlineIdentity'
 
-export type AuthStatus = 'loading' | 'authenticated' | 'anonymous'
+let authGeneration = 0
+
+/** Process-wide monotonic auth ordering, including StrictMode remounts. */
+export function nextAuthGeneration(): number {
+  authGeneration += 1
+  return authGeneration
+}
+
+export type AuthStatus =
+  | 'loading'
+  | 'verification-pending'
+  | 'authenticated'
+  | 'signing-out'
+  | 'offline'
+  | 'anonymous'
+
+export interface AuthPersistenceChange {
+  generation: number
+  mode: 'authenticated' | 'offline' | 'anonymous'
+  ownerId: string | null
+  purgeOwnerIds: string[]
+  /** False only when applying an already-broadcast cross-tab invalidation. */
+  broadcast?: boolean
+}
 
 export interface AuthContextValue {
   /** The signed-in user, or null when anonymous. */
   user: Me | null
+  /**
+   * Last server-confirmed identity, available only when session verification
+   * failed because the API is unreachable. It locates local collaboration data
+   * and never authorizes network or API access.
+   */
+  offlineUser: OfflineAuthIdentity | null
   /** Coarse auth lifecycle state for rendering. */
   status: AuthStatus
   /** External OAuth providers the server has wired. */

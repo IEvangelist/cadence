@@ -1,5 +1,6 @@
 using Cadence.Api;
 using Cadence.Api.Ai;
+using Cadence.Api.Collaboration;
 using Microsoft.AspNetCore.HttpOverrides;
 using Scalar.AspNetCore;
 
@@ -47,6 +48,7 @@ builder.AddCadenceAntiforgery();
 builder.AddCadenceBilling();
 
 // In-memory hub backing the collaboration WebSocket relay (per-project rooms).
+builder.AddCollabRevocation();
 builder.Services.AddSingleton<Cadence.Api.Collaboration.CollabHub>();
 
 // Durable server-side persistence for each room's Yjs document, so a room
@@ -128,6 +130,7 @@ app.UseRateLimiter();
 app.UseWebSockets();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseExpectedOwnerGuard();
 app.UseCadenceAntiforgery();
 
 app.MapGet("/api/info", () => new ApiInfo("Cadence.Api", "0.0.0"))

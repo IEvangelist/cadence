@@ -20,7 +20,8 @@ experience changes unless a session is explicitly activated (see
  │      ▲ │      │           │      ▲ │      │
  │      │ ▼      │           │      │ ▼      │
  │ useCollaboration          │ useCollaboration
- │   Y.Doc  ⟷ awareness      │   Y.Doc  ⟷ awareness
+ │ IndexedDB ⟷ Y.Doc         │ IndexedDB ⟷ Y.Doc
+ │              ⟷ awareness  │              ⟷ awareness
  └──────┬────────┘           └──────┬────────┘
         │ WSS (y-protocol sync + awareness)
         ▼                           ▼
@@ -67,15 +68,54 @@ shapes are clamped or dropped exactly as they are for `localStorage` load. A
 malicious client therefore cannot inject values the single-user path would have
 rejected. This is covered by a "remote updates are sanitized" unit test.
 
-### Deferred single-seed
+### IndexedDB-first deferred seed/adoption
 
 When a client connects, it must not blindly push its local demo project into the
 shared doc — if every joiner did, the room would accumulate duplicate tracks.
-Instead the first client to observe an **empty** server doc seeds it (once,
-guarded by `isProjectDocEmpty`) after the provider reports its initial sync;
-later joiners adopt the shared project via the normal update path. The
-local→doc mirror stays gated until that initial sync completes. In-memory/test
-providers (no network sync step) seed synchronously, preserving the unit tests.
+Each collaborative `Y.Doc` has exactly one `IndexeddbPersistence`. The cache is
+hydrated **before the WebSocket connects**, and the serialized `localStorage`
+project is never allowed to seed while IndexedDB is still loading:
+
+- A non-empty persisted `Y.Doc` is adopted immediately and can keep accepting
+  edits even while the relay is unreachable.
+- An empty persisted `Y.Doc` waits for relay sync. The first client to observe
+  both local and server state as empty seeds once (`isProjectDocEmpty`); later
+  joiners adopt the shared project.
+- Undo and the local→doc mirror start only after that hydrate/seed/adopt barrier,
+  so setup is not undoable and stale serialized state cannot overwrite CRDT
+  history.
+
+The existing versioned serialized-project autosave remains enabled. It is a
+separate crash-recovery/export seam, not a replacement for Yjs persistence.
+In-memory test providers without asynchronous sync still seed synchronously.
+
+IndexedDB initialization is bounded to eight seconds. `y-indexeddb`'s
+resolve-only `whenSynced` is raced against its underlying open-request failure,
+the timeout, and provider cancellation. Failure destroys the persistence
+instance/listeners, reports `offlinePersistence: "unavailable"` plus a nonfatal
+warning, and lets a live-authenticated client continue network-only. A cached
+offline session never constructs or connects a WebSocket, including this
+failure path.
+
+### Owner-scoped serialized backup
+
+Authenticated `SyncingProjectStore` writes remain **remote-primary**, but a
+collaborative store also writes a separately namespaced serialized backup after
+each save. A remote failure is still surfaced to autosave (never silently
+treated as success) while the backup is attempted for recovery. During a
+verified API outage, only the matching cached account/project/grant scope can
+read or write that backup; generic anonymous storage and other accounts see
+nothing. An empty safe placeholder lets the Yjs cache hydrate even if an
+autosave debounce had not completed before reload.
+
+If IndexedDB itself is unavailable, the matching serialized backup is loaded
+before the socket may connect. Local-only sessions apply it immediately. A live
+session first adopts the relay CRDT, then performs one deterministic recovery
+merge: successful IndexedDB always wins and skips the fallback; otherwise
+backup values win same-id field conflicts while server-only tracks/notes are
+retained. The merged update is written through Yjs once and converges normally.
+This additive policy favors no data loss because a plain snapshot cannot prove
+whether an absent entity was deleted locally or added remotely.
 
 ## Relay & transport
 
@@ -100,9 +140,9 @@ Transport details:
   document to enforce roles.
 - Rooms are keyed `{ownerId}:{projectId}` so two users' identically-named
   projects never collide.
-- Client transport lives in `.../collab/websocketProvider.ts` (a thin adapter
-  over `y-websocket`'s `WebsocketProvider`) behind a `CollabProvider` seam, so
-  tests inject an in-memory provider.
+- Client transport lives in `.../collab/websocketProvider.ts` (an IndexedDB-first
+  adapter over `y-websocket`'s `WebsocketProvider`) behind a `CollabProvider`
+  seam, so tests inject in-memory providers.
 
 ## Role enforcement (server-authoritative, fail closed)
 
@@ -159,21 +199,99 @@ carets/selections appear in the piano roll. Join/leave is reflected by awareness
 add/remove events (covered by unit tests). Avatar ink is computed for
 WCAG-compliant contrast against each generated color (axe-clean).
 
-## Resilience (offline + reconnect)
+## Resilience (offline + reload + reconnect)
 
-Yjs updates are commutative and idempotent, so offline editing "just works":
-a client that drops its socket keeps mutating its local `Y.Doc`, and on
-reconnect the accumulated updates exchange in both directions and converge with
-no lost edits. This is asserted by an "offline edits replay on reconnect" unit
-test (buffer updates while disconnected, reconnect, assert convergence).
+Yjs updates are commutative and idempotent. A client that drops its socket keeps
+mutating its local `Y.Doc`; `y-indexeddb` durably records those updates. A full
+page reload while still offline hydrates that same CRDT before any seed or
+socket connection, so editing can continue. On reconnect, locally persisted and
+remote updates exchange in both directions and converge with no lost edits.
+
+Caches are named from the relay URL, signed-in account id, stable room-owner id,
+project id, and a SHA-256 access-grant id (the capability token itself is never
+placed in the database name). Role and display-name changes do not fork a cache;
+a replacement share token deliberately does, so a revoked grant or tampered
+owner hint cannot make another room upload cached content. This prevents state
+from one account, owner, deployment, project, or grant appearing in another.
+Legacy links without an owner id retain an isolated fallback owner scope plus
+their hashed share grant.
+
+After a successful `/api/auth/me` or sign-in, the browser retains only
+`{ id, displayName }` as an offline cache locator. If session verification fails
+because the API is unreachable, AuthProvider exposes that identity separately
+from `user`, enters `offline` (not authenticated) state, and enables local-only
+hydration. It does **not** authorize API calls, entitlements, sharing, a socket,
+or server writes. The offline account bar offers **Sign in** to reconfirm live
+identity and **Sign out** to forget all local owner data. Matching live
+authentication rebuilds the provider with
+networking enabled and merges; a confirmed 401, explicit sign-out, or account
+switch clears the cached identity, serialized backups, and every registered
+owner-scoped Yjs database. Blocked database deletion remains registered for a
+bounded retry rather than becoming an untracked cache. Database enumeration and
+every delete request have independent time bounds. Active databases move to a
+separate pending-deletion registry during cleanup; startup and every auth
+transition retry only that pending registry, never a current account's active
+cache.
+
+Auth requests are ordered by a process-wide generation and AbortController.
+StrictMode remounts, refresh, sign-in, and sign-out cancel older operations;
+state, store ownership, and confirmed-identity writes re-check the generation
+after every await. Collaborative autosaves capture the same auth generation:
+if a remote request completes after sign-out/account switch, it cannot create a
+new backup, and a local backup write that crosses the boundary is removed.
+
+Authenticated HTTP mutations capture the same owner/generation before token
+acquisition. Auth transitions abort the shared signal; `CsrfClient` validates
+before its first send and before its one allowed token-refresh retry, and emits
+`X-Cadence-Expected-Owner`. The API compares that optional hint with its own
+cookie-resolved user and rejects a mismatch before endpoint execution. Auth
+transitions are broadcast across tabs (`BroadcastChannel`, with a `storage`
+event fallback), invalidating other tabs' auth operations, sockets, and store
+generation without trusting the broadcast as a new login.
+
+An external transition to account B first enters `verification-pending`: the
+tab clears its live user, disables the project store/mutations, and unmounts
+collaboration before calling `/me`. B becomes active only after that response
+matches and owner-specific cleanup/reconciliation completes. A stale A
+autosave therefore cannot capture B's cookie during the verification window.
+
+Server connections retain caller, room, and validated share-grant identity.
+Revoking a grant marks and closes every matching live socket before returning;
+the relay loop rechecks revocation before persisting or broadcasting another
+frame. Logout likewise closes every socket for that authenticated account.
+Client logout and owner cleanup are bounded: local anonymous state is published
+after the fixed deadline even when fetch never settles, while late non-abort
+errors remain observable.
+
+Revocation is replica-wide in ACA. Production uses the existing Redis
+connection for typed `Grant`/`User` generation markers and a versioned pub/sub
+channel; every replica's resilient subscriber closes matching local sockets.
+Tests use the same bus contract with two hubs over one deterministic in-memory
+bus. Grant validation/join and durable deletion/generation increment share a
+grant barrier. Every frame takes the caller and grant barriers, rechecks both
+durable generations, then performs gate/append/broadcast inside that critical
+section. DELETE/logout waits for already accepted frames; no older-generation
+frame can land after the response completes. Other grants, users, and rooms use
+different barriers and continue independently.
+
+Serialized recovery merges the complete `Project`: notes/tracks plus automation
+lanes/points and mixer state/inserts/parameters. Backup conflicts win while
+server-only lanes, points, tracks, and inserts survive. The recovery callback
+dispatches a dedicated one-shot reducer action that adopts non-CRDT fields
+instead of `sync-remote` preserving the bootstrap mix/automation. Final
+collaboration integration
+will rebase onto PR #190's shared mix/automation CRDT schema rather than creating
+a competing effect schema here.
 
 ## Activation
 
 Collaboration turns on only when the composer is given a collaboration config —
 in the app via URL params, in tests via direct injection. The config carries the
-relay URL, the project id, the authenticated user, the share token, and the
-resolved role. Absent a config, `useCollaboration` returns an inert state and
-the composer behaves exactly as the single-user build does.
+relay URL, project id, identity, share token, role, and a `networkEnabled` bit
+that is true only for a currently server-confirmed user. Cached offline identity
+can build a local-only config, but cannot set that bit. Absent a config,
+`useCollaboration` returns an inert state and the composer behaves exactly as
+the single-user build does.
 
 The relay URL is supplied to the web build via the `VITE_COLLAB_URL`
 environment variable (see the Aspire wiring in `src/Cadence.AppHost/AppHost.cs`).
@@ -192,7 +310,7 @@ different, per-client store and never races the shared document.
 ### Append-only update log (no server-side CRDT engine)
 
 The server does **not** run a C# port of Yjs. Re-implementing the CRDT would risk
-binary-interop drift against the pinned `yjs@13.6.31` client and add a
+binary-interop drift against the pinned `yjs@13.6.32` client and add a
 dependency/pinning burden. Instead the relay persists a **content-agnostic,
 append-only log of the raw Yjs update payloads** it already relays:
 
@@ -255,8 +373,9 @@ are commutative/idempotent, a future compaction step can replace the whole log w
 a single squashed update (materialize the doc, `encodeStateAsUpdate`, store one
 entry) with **no** change to convergence semantics. That optimization is tracked as
 a follow-up and is intentionally out of scope for #91, which establishes
-correctness (survive all-peers-disconnect) first. The client-side `y-indexeddb`
-offline-reload convergence enhancement remains a separate, complementary follow-up.
+correctness (survive all-peers-disconnect) first. Client-side `y-indexeddb` is
+complementary: it preserves a peer's unsent offline CRDT updates across reload,
+while the server log preserves relayed room state.
 No secrets are involved — share tokens are per-project capability strings minted
 and revoked through the owner-only API.
 
@@ -267,11 +386,13 @@ All collaboration packages are pinned to exact, latest-stable versions (no
 
 | Package | Version |
 |---|---|
-| `yjs` | 13.6.31 |
-| `y-websocket` | 3.0.0 |
+| `yjs` | 13.6.32 |
+| `y-indexeddb` | 9.0.12 |
+| `y-websocket` | 3.1.0 |
 | `y-protocols` | 1.0.7 |
 | `lib0` | 0.2.117 |
-| `ws` (e2e relay fixture) | 8.21.1 |
+| `ws` (e2e relay fixture) | 8.21.3 |
+| `fake-indexeddb` (unit fixture) | 6.2.5 |
 
 `@tensorflow/tfjs` and `@tensorflow/tfjs-backend-webgl` remain at 2.8.6
 (untouched). Because the relay is first-party code, there is no image tag or
@@ -284,7 +405,10 @@ digest to pin.
 | CRDT ↔ project binding | `apps/web/src/composer/model/collab/crdt.ts` |
 | Reducer sync seam | `apps/web/src/composer/model/collab/collabSession.ts` |
 | React hook / lifecycle | `apps/web/src/composer/model/collab/useCollaboration.ts` |
-| WebSocket provider | `apps/web/src/composer/model/collab/websocketProvider.ts` |
+| IndexedDB + WebSocket provider | `apps/web/src/composer/model/collab/websocketProvider.ts` |
+| Cache identity + owner cleanup | `apps/web/src/composer/model/collab/collabPersistenceIdentity.ts`, `offlineCollabStorage.ts` |
+| Confirmed/offline auth identity | `apps/web/src/auth/AuthProvider.tsx`, `offlineIdentity.ts` |
+| Remote-primary serialized backup | `apps/web/src/composer/model/syncingStore.ts` |
 | Share-link API client | `apps/web/src/composer/model/collab/collabClient.ts` |
 | Presence UI | `apps/web/src/composer/components/PresenceBar.tsx` |
 | Share UI | `apps/web/src/composer/components/ShareProjectButton.tsx` |

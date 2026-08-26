@@ -341,6 +341,8 @@ export interface ComposerController {
    * still valid, so live edits from peers don't yank the caret around.
    */
   applyRemoteProject: (project: Project) => void
+  /** One-shot full backup adoption, including local-only mix/automation. */
+  recoverCollaborationBackup: (project: Project) => void
   saveProject: () => Promise<void>
   loadProject: (id: string) => Promise<void>
   importMidi: (bytes: ArrayBuffer, name?: string) => void
@@ -386,6 +388,7 @@ const HISTORY_LIMIT = 100
 const HISTORY_RESET_ACTIONS = new Set<ComposerAction['type']>([
   'load-project',
   'sync-remote',
+  'recover-collaboration-backup',
 ])
 
 /**
@@ -1646,6 +1649,9 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
   const applyRemoteProject = useCallback((project: Project) => {
     dispatch({ type: 'sync-remote', project })
   }, [dispatch])
+  const recoverCollaborationBackup = useCallback((project: Project) => {
+    dispatch({ type: 'recover-collaboration-backup', project })
+  }, [dispatch])
   const saveProject = useCallback(async () => {
     await flushAutosave()
     if (mountedRef.current) announce('Saved', 'success')
@@ -1824,6 +1830,7 @@ export function useComposer(options: UseComposerOptions = {}): ComposerControlle
     loadDemo,
     loadProjectSnapshot,
     applyRemoteProject,
+    recoverCollaborationBackup,
     saveProject,
     loadProject,
     importMidi,

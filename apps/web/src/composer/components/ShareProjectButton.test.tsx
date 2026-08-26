@@ -7,6 +7,7 @@ import { CollabShareClient, type ShareLink } from '../model/collab/collabClient'
 
 const link = (token: string, role: ShareLink['role']): ShareLink => ({
   token,
+  ownerId: 'owner-1',
   role,
   createdAt: '2024-01-01T00:00:00Z',
 })
@@ -68,7 +69,7 @@ describe('ShareProjectButton', () => {
     const { client, clipboard } = await createAndCopy('editor')
     expect(client.create).toHaveBeenCalledWith('p1', 'editor')
     expect(clipboard).toHaveBeenCalledWith(
-      'https://app.test/?collab=p1&role=editor&share=tok-editor',
+      'https://app.test/?collab=p1&owner=owner-1&role=editor&share=tok-editor',
     )
   })
 
@@ -77,7 +78,7 @@ describe('ShareProjectButton', () => {
     const { client, clipboard } = await createAndCopy('viewer')
     expect(client.create).toHaveBeenCalledWith('p1', 'viewer')
     expect(clipboard).toHaveBeenCalledWith(
-      'https://app.test/?collab=p1&role=viewer&share=tok-viewer',
+      'https://app.test/?collab=p1&owner=owner-1&role=viewer&share=tok-viewer',
     )
   })
 
@@ -99,7 +100,7 @@ describe('ShareProjectButton', () => {
     await user.click(await screen.findByRole('button', { name: 'Copy link' }))
 
     expect(clipboard).toHaveBeenCalledWith(
-      'https://app.test/?collab=p1&role=editor&share=t1',
+      'https://app.test/?collab=p1&owner=owner-1&role=editor&share=t1',
     )
     expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
   })

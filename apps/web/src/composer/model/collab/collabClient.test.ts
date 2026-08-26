@@ -14,6 +14,7 @@ const withCsrf = (
 
 const link = (token: string, role: ShareLink['role']): ShareLink => ({
   token,
+  ownerId: 'owner-1',
   role,
   createdAt: '2024-01-01T00:00:00Z',
 })
@@ -70,11 +71,15 @@ describe('CollabShareClient', () => {
 describe('shareLinkUrl', () => {
   it('formats a joinable URL with collab params', () => {
     const url = shareLinkUrl('https://app.test', 'p1', link('tok', 'viewer'))
-    expect(url).toBe('https://app.test/?collab=p1&role=viewer&share=tok')
+    expect(url).toBe(
+      'https://app.test/?collab=p1&owner=owner-1&role=viewer&share=tok',
+    )
   })
 
   it('trims a trailing slash from the origin', () => {
     const url = shareLinkUrl('https://app.test/', 'p1', link('tok', 'editor'))
-    expect(url).toBe('https://app.test/?collab=p1&role=editor&share=tok')
+    expect(url).toBe(
+      'https://app.test/?collab=p1&owner=owner-1&role=editor&share=tok',
+    )
   })
 })

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createEmptyProject } from './project'
 import { serializeProject } from './persistence'
 import { RemoteProjectStore } from './remoteStore'
+import { AuthMutationCoordinator } from '../../auth/authMutationCoordinator'
 
 const detail = (id: string, name: string, data: string, updatedAt = '2024-01-02T00:00:00Z') => ({
   id,
@@ -151,5 +152,43 @@ describe('RemoteProjectStore', () => {
   it('loadLast() returns null with no projects', async () => {
     const store = new RemoteProjectStore(async () => json([]), '')
     expect(await store.loadLast()).toBeNull()
+  })
+
+  it('never sends a deferred owner-A save after the cookie switches to owner B', async () => {
+    const coordinator = new AuthMutationCoordinator(false)
+    coordinator.transition({
+      generation: 1,
+      mode: 'authenticated',
+      ownerId: 'owner-a',
+      purgeOwnerIds: [],
+    }, false)
+    let resolveToken!: (response: Response) => void
+    const token = new Promise<Response>((resolve) => {
+      resolveToken = resolve
+    })
+    const project = createEmptyProject('p1')
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) =>
+      String(input).endsWith('/api/auth/csrf')
+        ? token
+        : json(detail('p1', project.name, serializeProject(project)), 201),
+    )
+    const store = new RemoteProjectStore(
+      fetchImpl,
+      '',
+      () => coordinator.capture(),
+    )
+    const saving = store.save(project)
+
+    coordinator.transition({
+      generation: 2,
+      mode: 'authenticated',
+      ownerId: 'owner-b',
+      purgeOwnerIds: ['owner-a'],
+    }, false)
+    resolveToken(json({ requestToken: 'owner-a-token' }))
+
+    await expect(saving).rejects.toMatchObject({ name: 'AbortError' })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    coordinator.dispose()
   })
 })

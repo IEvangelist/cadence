@@ -12,6 +12,7 @@ import { takeAuthReturnTarget } from './authReturnTarget'
 function makeValue(overrides: Partial<AuthContextValue> = {}): AuthContextValue {
   return {
     user: null,
+    offlineUser: null,
     status: 'anonymous',
     providers: [],
     error: null,

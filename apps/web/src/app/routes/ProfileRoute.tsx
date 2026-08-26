@@ -25,7 +25,10 @@ export function ProfileRoute() {
 
   useEffect(() => {
     if (!backendConfig.available) return
-    if (auth.status !== 'anonymous' || signingOut) return
+    if (
+      (auth.status !== 'anonymous' && auth.status !== 'offline') ||
+      signingOut
+    ) return
     openAuth({ returnTarget, dismissTo })
   }, [auth.status, dismissTo, openAuth, returnTarget, signingOut])
 

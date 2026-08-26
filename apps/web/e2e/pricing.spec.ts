@@ -26,7 +26,14 @@ async function mockApi(route: Route): Promise<void> {
   const json = (body: unknown, status = 200) =>
     route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) })
 
-  if (path === '/api/auth/me') return json({}, 401)
+  if (path === '/api/auth/me') {
+    return json({
+      id: 'pricing-user',
+      email: 'pricing@example.com',
+      displayName: 'Pricing User',
+      tier: 'Free',
+    })
+  }
   if (path === '/api/auth/providers') return json({ providers: [] })
   if (path === '/api/entitlements') return json(freeEntitlements)
   if (path === '/api/billing/checkout' && method === 'POST') {

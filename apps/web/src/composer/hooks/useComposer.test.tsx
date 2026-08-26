@@ -563,6 +563,32 @@ describe('useComposer — single-user undo/redo history (#156)', () => {
     expect(hook.result.current.project.name).toBe('From peer')
   })
 
+  it('routes full collaboration recovery through the dedicated reducer path', () => {
+    const { hook } = setup()
+    const recovered = {
+      ...hook.result.current.project,
+      automation: [
+        { target: 'masterGain' as const, points: [{ beat: 3, value: -8 }] },
+      ],
+      mix: {
+        tracks: {},
+        master: {
+          gainDb: -4,
+          limiterEnabled: true,
+          limiterThresholdDb: -6,
+        },
+      },
+    }
+
+    act(() => hook.result.current.recoverCollaborationBackup(recovered))
+
+    expect(hook.result.current.project.automation).toEqual(
+      recovered.automation,
+    )
+    expect(hook.result.current.project.mix).toEqual(recovered.mix)
+    expect(hook.result.current.canUndo).toBe(false)
+  })
+
   it('setHistoryEnabled(false) suppresses capture and clears history; re-enabling clears again', () => {
     const { hook } = setup()
     const trackId = hook.result.current.selectedTrackId

@@ -18,6 +18,7 @@ const profile: Profile = {
 function makeValue(client: Partial<AuthClient>): AuthContextValue {
   return {
     user: { id: '1', email: 'a@b.com', displayName: 'Ada', tier: 'Free' },
+    offlineUser: null,
     status: 'authenticated',
     providers: [],
     error: null,
