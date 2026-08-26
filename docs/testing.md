@@ -152,8 +152,8 @@ or `@tensorflow/tfjs`, so those stay in the worker-loaded chunks.
 ### Platform capabilities and PWA
 
 - `platformCapabilities.test.ts` deterministically covers Mac and touch-iPad
-  keyboard labels, viewport/pointer combinations, SSR, standalone modes,
-  connectivity transitions, and missing browser APIs.
+  keyboard labels, real primary/available pointer media-query combinations,
+  SSR, standalone modes, connectivity transitions, and missing browser APIs.
 - `useMobileStudioLayout.test.tsx` injects capability snapshots to preserve the
   existing narrow-or-coarse mobile layout behavior.
 - `keybindings.test.ts` locks the existing Cmd/Option and Ctrl/Alt output.

@@ -2,13 +2,16 @@ import type {
   KeyboardPlatform,
   PlatformCapabilities,
   PlatformCapabilitySource,
+  PrimaryPointer,
   ViewportKind,
 } from '../composer/contract/platform'
 
 export const MOBILE_VIEWPORT_QUERY = '(max-width: 40rem)'
 export const TABLET_VIEWPORT_QUERY = '(max-width: 60rem)'
-export const COARSE_POINTER_QUERY = '(pointer: coarse)'
-export const FINE_POINTER_QUERY = '(pointer: fine)'
+export const COARSE_POINTER_QUERY = '(any-pointer: coarse)'
+export const FINE_POINTER_QUERY = '(any-pointer: fine)'
+export const PRIMARY_COARSE_POINTER_QUERY = '(pointer: coarse)'
+export const PRIMARY_FINE_POINTER_QUERY = '(pointer: fine)'
 export const STANDALONE_QUERY = '(display-mode: standalone)'
 
 interface CapabilityMediaQueryList {
@@ -52,6 +55,7 @@ const SERVER_CAPABILITIES: PlatformCapabilities = {
   },
   coarsePointer: false,
   finePointer: false,
+  primaryPointer: 'none',
   isStandalone: false,
   isOnline: true,
   hasCacheStorage: false,
@@ -111,6 +115,14 @@ export function readPlatformCapabilities(
   const height = win?.innerHeight ?? 0
   const coarsePointer = queryMatches(win, COARSE_POINTER_QUERY)
   const finePointer = queryMatches(win, FINE_POINTER_QUERY)
+  const primaryPointer: PrimaryPointer = queryMatches(
+    win,
+    PRIMARY_COARSE_POINTER_QUERY,
+  )
+    ? 'coarse'
+    : queryMatches(win, PRIMARY_FINE_POINTER_QUERY)
+      ? 'fine'
+      : 'none'
   const displayModeStandalone = queryMatches(win, STANDALONE_QUERY)
 
   return {
@@ -119,11 +131,12 @@ export function readPlatformCapabilities(
       kind: viewportKind(win, width),
       width,
       height,
-      coarsePointer,
-      finePointer,
+      coarsePointer: primaryPointer === 'coarse',
+      finePointer: primaryPointer === 'fine',
     },
     coarsePointer,
     finePointer,
+    primaryPointer,
     isStandalone: displayModeStandalone || nav?.standalone === true,
     isOnline: nav?.onLine !== false,
     hasCacheStorage: hasCacheStorage(win),
@@ -142,6 +155,7 @@ function equalCapabilities(
     left.viewport.height === right.viewport.height &&
     left.coarsePointer === right.coarsePointer &&
     left.finePointer === right.finePointer &&
+    left.primaryPointer === right.primaryPointer &&
     left.isStandalone === right.isStandalone &&
     left.isOnline === right.isOnline &&
     left.hasCacheStorage === right.hasCacheStorage &&
@@ -155,6 +169,8 @@ const MEDIA_QUERIES = [
   TABLET_VIEWPORT_QUERY,
   COARSE_POINTER_QUERY,
   FINE_POINTER_QUERY,
+  PRIMARY_COARSE_POINTER_QUERY,
+  PRIMARY_FINE_POINTER_QUERY,
   STANDALONE_QUERY,
 ] as const
 

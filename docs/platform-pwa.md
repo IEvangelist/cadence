@@ -14,10 +14,13 @@ The snapshot exposes:
   other keyboard platforms. iPad desktop mode is handled through
   `navigator.platform` plus touch points; browser user-agent strings are not
   parsed.
-- `coarsePointer` and `finePointer`: independent media-query results, allowing
-  hybrid devices to report both.
+- `coarsePointer` and `finePointer`: independent `any-pointer` media-query
+  results, allowing hybrid devices to report both.
+- `primaryPointer`: the mutually exclusive `pointer` result (`coarse`, `fine`,
+  or `none`) used when interaction layout depends on the primary input.
 - `viewport`: width, height, and the existing `mobile` (up to 40rem), `tablet`
-  (up to 60rem), or `desktop` category.
+  (up to 60rem), or `desktop` category. Its pointer flags describe the primary
+  pointer for compatibility with the pre-existing composer viewport contract.
 - `isStandalone`: the `display-mode: standalone` result with the iOS
   `navigator.standalone` capability as a fallback.
 - `isOnline`: the current navigator state, refreshed by `online` and `offline`

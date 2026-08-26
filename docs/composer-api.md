@@ -4,7 +4,7 @@ This is the stable surface the composer feature cluster builds against: live
 collaboration (#9) is the foundation, the current composer controller is
 formalized as a frozen core API, and efforts #41–#45 add typed extension seams
 without breaking the serialized `Project` shape. The contract is exported from
-`composer/contract`; the current `COMPOSER_CONTRACT_VERSION` is `1.2.0`.
+`composer/contract`; the current `COMPOSER_CONTRACT_VERSION` is `1.3.0`.
 
 ## Stability & versioning
 
@@ -280,7 +280,7 @@ do not become durable project fields.
 | `PwaController` | Browser install prompt wrapper |
 | `OfflineProjectStore` | Alias for `ProjectStore` used by offline decorators |
 | `KeyboardPlatform` | Mac-family versus Ctrl/Alt keybinding labels |
-| `PlatformCapabilities` | Observable viewport, pointer, install, connectivity, and browser API facts |
+| `PlatformCapabilities` | Observable viewport, available/primary pointer, install, connectivity, and browser API facts |
 | `PlatformCapabilitySource` | SSR-safe injectable snapshot/subscription seam |
 
 The browser implementation and PWA behavior are documented in

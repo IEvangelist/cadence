@@ -21,6 +21,7 @@ function source(
     },
     coarsePointer: false,
     finePointer: true,
+    primaryPointer: 'fine',
     isStandalone: false,
     isOnline: true,
     hasCacheStorage: true,
@@ -71,7 +72,8 @@ describe('useMobileStudioLayout', () => {
           finePointer: false,
         },
         coarsePointer: true,
-        finePointer: false,
+        finePointer: true,
+        primaryPointer: 'coarse',
       }),
     )
     const fine = mobileLayout(
@@ -83,6 +85,9 @@ describe('useMobileStudioLayout', () => {
           coarsePointer: false,
           finePointer: true,
         },
+        coarsePointer: true,
+        finePointer: true,
+        primaryPointer: 'fine',
       }),
     )
 

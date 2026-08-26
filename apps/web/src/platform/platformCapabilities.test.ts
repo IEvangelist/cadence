@@ -4,6 +4,8 @@ import {
   createPlatformCapabilitySource,
   FINE_POINTER_QUERY,
   MOBILE_VIEWPORT_QUERY,
+  PRIMARY_COARSE_POINTER_QUERY,
+  PRIMARY_FINE_POINTER_QUERY,
   readPlatformCapabilities,
   STANDALONE_QUERY,
   TABLET_VIEWPORT_QUERY,
@@ -12,8 +14,12 @@ import {
 } from './platformCapabilities'
 
 class FakeMediaQuery {
-  matches = false
+  matches: boolean
   private readonly listeners = new Set<() => void>()
+
+  constructor(matches: boolean) {
+    this.matches = matches
+  }
 
   addEventListener(_type: 'change', listener: () => void) {
     this.listeners.add(listener)
@@ -23,11 +29,18 @@ class FakeMediaQuery {
     this.listeners.delete(listener)
   }
 
-  setMatches(matches: boolean) {
+  update(matches: boolean): boolean {
+    if (this.matches === matches) return false
     this.matches = matches
+    return true
+  }
+
+  emitChange() {
     this.listeners.forEach((listener) => listener())
   }
 }
+
+type PointerKind = 'coarse' | 'fine'
 
 function environment({
   width = 1440,
@@ -37,6 +50,9 @@ function environment({
   online = true,
   cacheStorage = true,
   serviceWorker = true,
+  primaryPointer = 'fine',
+  availablePointers = ['fine'],
+  standalone = false,
 }: {
   width?: number
   height?: number
@@ -45,16 +61,52 @@ function environment({
   online?: boolean
   cacheStorage?: boolean
   serviceWorker?: boolean
+  primaryPointer?: PointerKind | 'none'
+  availablePointers?: readonly PointerKind[]
+  standalone?: boolean
 } = {}) {
   const media = new Map<string, FakeMediaQuery>()
   const events = new Map<string, Set<() => void>>()
+  let pointer = primaryPointer
+  let pointers = new Set(availablePointers)
+  let displayModeStandalone = standalone
+
+  function queryMatches(query: string): boolean {
+    switch (query) {
+      case MOBILE_VIEWPORT_QUERY:
+        return win.innerWidth <= 640
+      case TABLET_VIEWPORT_QUERY:
+        return win.innerWidth <= 960
+      case COARSE_POINTER_QUERY:
+        return pointers.has('coarse')
+      case FINE_POINTER_QUERY:
+        return pointers.has('fine')
+      case PRIMARY_COARSE_POINTER_QUERY:
+        return pointer === 'coarse'
+      case PRIMARY_FINE_POINTER_QUERY:
+        return pointer === 'fine'
+      case STANDALONE_QUERY:
+        return displayModeStandalone
+      default:
+        return false
+    }
+  }
+
+  const refreshMedia = () => {
+    const changed: FakeMediaQuery[] = []
+    media.forEach((result, query) => {
+      if (result.update(queryMatches(query))) changed.push(result)
+    })
+    changed.forEach((result) => result.emitChange())
+  }
+
   const win: CapabilityWindow & { innerWidth: number; innerHeight: number } = {
     innerWidth: width,
     innerHeight: height,
     matchMedia(query) {
       let result = media.get(query)
       if (!result) {
-        result = new FakeMediaQuery()
+        result = new FakeMediaQuery(queryMatches(query))
         media.set(query, result)
       }
       return result
@@ -84,8 +136,20 @@ function environment({
   return {
     win,
     nav,
-    media(query: string) {
-      return win.matchMedia!(query) as FakeMediaQuery
+    resize(nextWidth: number, nextHeight: number) {
+      win.innerWidth = nextWidth
+      win.innerHeight = nextHeight
+      refreshMedia()
+      events.get('resize')?.forEach((listener) => listener())
+    },
+    setPointers(nextPrimary: PointerKind | 'none', nextAvailable: readonly PointerKind[]) {
+      pointer = nextPrimary
+      pointers = new Set(nextAvailable)
+      refreshMedia()
+    },
+    setStandalone(nextStandalone: boolean) {
+      displayModeStandalone = nextStandalone
+      refreshMedia()
     },
     dispatch(type: string) {
       events.get(type)?.forEach((listener) => listener())
@@ -110,11 +174,13 @@ describe('platform capability detection', () => {
     ).toBe('other')
   })
 
-  it('classifies viewport and independently reports coarse and fine pointers', () => {
-    const runtime = environment({ width: 768, height: 1024 })
-    runtime.media(TABLET_VIEWPORT_QUERY).setMatches(true)
-    runtime.media(COARSE_POINTER_QUERY).setMatches(true)
-    runtime.media(FINE_POINTER_QUERY).setMatches(true)
+  it('classifies viewport and reports every available pointer on hybrid devices', () => {
+    const runtime = environment({
+      width: 768,
+      height: 1024,
+      primaryPointer: 'fine',
+      availablePointers: ['coarse', 'fine'],
+    })
 
     const capabilities = readPlatformCapabilities({
       window: runtime.win,
@@ -125,11 +191,12 @@ describe('platform capability detection', () => {
       kind: 'tablet',
       width: 768,
       height: 1024,
-      coarsePointer: true,
+      coarsePointer: false,
       finePointer: true,
     })
     expect(capabilities.coarsePointer).toBe(true)
     expect(capabilities.finePointer).toBe(true)
+    expect(capabilities.primaryPointer).toBe('fine')
   })
 
   it('recognizes browser, display-mode, and iOS standalone modes', () => {
@@ -139,7 +206,7 @@ describe('platform capability detection', () => {
         .isStandalone,
     ).toBe(false)
 
-    browser.media(STANDALONE_QUERY).setMatches(true)
+    browser.setStandalone(true)
     expect(
       readPlatformCapabilities({ window: browser.win, navigator: browser.nav })
         .isStandalone,
@@ -164,6 +231,7 @@ describe('platform capability detection', () => {
       viewport: { kind: 'tablet', width: 700, height: 800 },
       coarsePointer: false,
       finePointer: false,
+      primaryPointer: 'none',
       isStandalone: false,
       isOnline: true,
       hasCacheStorage: false,
@@ -211,7 +279,7 @@ describe('platform capability source transitions', () => {
   })
 
   it('publishes viewport, pointer, and standalone media changes', () => {
-    const runtime = environment({ width: 390, height: 844 })
+    const runtime = environment()
     const source = createPlatformCapabilitySource({
       window: runtime.win,
       navigator: runtime.nav,
@@ -219,13 +287,15 @@ describe('platform capability source transitions', () => {
     const listener = vi.fn()
     source.subscribe(listener)
 
-    runtime.media(MOBILE_VIEWPORT_QUERY).setMatches(true)
-    runtime.media(COARSE_POINTER_QUERY).setMatches(true)
-    runtime.media(STANDALONE_QUERY).setMatches(true)
+    runtime.resize(390, 844)
+    runtime.setPointers('coarse', ['coarse', 'fine'])
+    runtime.setStandalone(true)
 
     expect(source.getSnapshot()).toMatchObject({
-      viewport: { kind: 'mobile' },
+      viewport: { kind: 'mobile', coarsePointer: true, finePointer: false },
       coarsePointer: true,
+      finePointer: true,
+      primaryPointer: 'coarse',
       isStandalone: true,
     })
     expect(listener).toHaveBeenCalledTimes(3)
