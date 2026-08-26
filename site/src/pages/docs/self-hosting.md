@@ -120,9 +120,10 @@ Aspire AppHost (locally and on publish), so you do not set them by hand. Stripe
 settings are forwarded from the AppHost's configuration to the API only when
 present, so a local run needs none of them.
 
-The API and separation worker validate `Stems` at startup and exit before serving
-or claiming jobs when these bounds are zero/negative or the model settings are
-incoherent. For a remote production model, configure both processes with:
+The API and separation worker eagerly validate `Stems` at startup
+(`ValidateOnStart`) and exit before serving or claiming jobs when these bounds are
+zero/negative or the model settings are incoherent. For a remote production
+model, configure both processes with:
 
 ```bash
 Stems__ModelUri=https://models.example.com/htdemucs.onnx
