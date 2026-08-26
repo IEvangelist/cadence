@@ -15,10 +15,9 @@ public sealed class StemOptionsValidator(bool isProduction) : IValidateOptions<S
         AddPositiveFailure(options.ProcessingLeaseSeconds, nameof(StemOptions.ProcessingLeaseSeconds), failures);
         AddPositiveFailure(options.MaxAttempts, nameof(StemOptions.MaxAttempts), failures);
 
-        var modelUri = NullIfWhiteSpace(options.ModelUri);
         var checksum = NullIfWhiteSpace(options.ModelSha256);
 
-        if (modelUri is null)
+        if (string.IsNullOrWhiteSpace(options.ModelUri))
         {
             if (checksum is not null)
             {
@@ -27,9 +26,10 @@ public sealed class StemOptionsValidator(bool isProduction) : IValidateOptions<S
         }
         else
         {
+            StemModelLocation? modelLocation = null;
             try
             {
-                StemModelIntegrity.RequireSecureModelUri(modelUri);
+                modelLocation = StemModelIntegrity.ParseModelLocation(options.ModelUri);
             }
             catch (InvalidOperationException exception)
             {
@@ -41,7 +41,7 @@ public sealed class StemOptionsValidator(bool isProduction) : IValidateOptions<S
                 failures.Add("Stems:ModelSha256 must be a 64-digit hexadecimal SHA-256 digest.");
             }
 
-            if (isProduction && IsRemoteHttpsUri(modelUri) && checksum is null)
+            if (isProduction && modelLocation is { IsRemote: true } && checksum is null)
             {
                 failures.Add("Stems:ModelSha256 is required for a remote production model.");
             }
@@ -62,8 +62,4 @@ public sealed class StemOptionsValidator(bool isProduction) : IValidateOptions<S
 
     private static string? NullIfWhiteSpace(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-
-    private static bool IsRemoteHttpsUri(string uri) =>
-        Uri.TryCreate(uri, UriKind.Absolute, out var parsed) &&
-        string.Equals(parsed.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
 }

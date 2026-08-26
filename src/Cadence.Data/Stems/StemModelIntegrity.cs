@@ -2,6 +2,37 @@ using System.Security.Cryptography;
 
 namespace Cadence.Data.Stems;
 
+/// <summary>The supported ways a stem model can be resolved.</summary>
+public enum StemModelLocationKind
+{
+    /// <summary>A plain absolute or relative local path.</summary>
+    LocalPath,
+
+    /// <summary>An absolute <c>file://</c> URI.</summary>
+    FileUri,
+
+    /// <summary>A remote model fetched over HTTPS.</summary>
+    Https,
+}
+
+/// <summary>A normalized, security-classified stem model reference.</summary>
+public readonly record struct StemModelLocation(
+    StemModelLocationKind Kind,
+    string Reference,
+    Uri? ParsedUri)
+{
+    /// <summary>Whether the model must be fetched from a remote HTTPS endpoint.</summary>
+    public bool IsRemote => Kind == StemModelLocationKind.Https;
+
+    /// <summary>The local path represented by a local path or file URI.</summary>
+    public string LocalPath => Kind switch
+    {
+        StemModelLocationKind.LocalPath => Reference,
+        StemModelLocationKind.FileUri => ParsedUri!.LocalPath,
+        _ => throw new InvalidOperationException("A remote model does not have a local source path."),
+    };
+}
+
 /// <summary>
 /// Pure integrity guards for the pinned separation model: enforce a secure transport
 /// for remote model URIs and verify a fetched (or local) model against a pinned
@@ -11,28 +42,43 @@ namespace Cadence.Data.Stems;
 public static class StemModelIntegrity
 {
     /// <summary>
-    /// Reject an insecure <c>http://</c> model URI: a plaintext model download is
-    /// MITM-substitutable. <c>https</c>, <c>file</c>, and bare local paths are allowed
-    /// (the latter two are not exposed to a network transport).
+    /// Normalize and classify a model reference once so startup validation and model
+    /// loading agree on HTTPS, file URI, and local-path handling.
     /// </summary>
-    /// <exception cref="InvalidOperationException">The URI uses the <c>http</c> scheme.</exception>
-    public static void RequireSecureModelUri(string uri)
+    public static StemModelLocation ParseModelLocation(string modelUri)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(uri);
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelUri);
+        var normalized = modelUri.Trim();
 
-        if (IsWindowsPath(uri) || Path.IsPathRooted(uri))
+        if (IsWindowsPath(normalized) || Path.IsPathRooted(normalized))
         {
-            return;
+            return new StemModelLocation(StemModelLocationKind.LocalPath, normalized, null);
         }
 
-        if (Uri.TryCreate(uri, UriKind.Absolute, out var parsed) &&
-            !parsed.IsFile &&
-            !string.Equals(parsed.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        if (Uri.TryCreate(normalized, UriKind.Absolute, out var parsed))
         {
+            if (parsed.IsFile)
+            {
+                return new StemModelLocation(StemModelLocationKind.FileUri, normalized, parsed);
+            }
+
+            if (string.Equals(parsed.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+            {
+                return new StemModelLocation(StemModelLocationKind.Https, normalized, parsed);
+            }
+
             throw new InvalidOperationException(
                 "Stems:ModelUri must use https for remote models; file URIs and local paths are also allowed.");
         }
+
+        return new StemModelLocation(StemModelLocationKind.LocalPath, normalized, null);
     }
+
+    /// <summary>
+    /// Reject an insecure or unsupported remote model scheme. HTTPS, file URIs, and
+    /// bare local paths are allowed.
+    /// </summary>
+    public static void RequireSecureModelUri(string uri) => ParseModelLocation(uri);
 
     /// <summary>Whether <paramref name="digest"/> is a 64-digit SHA-256 hex value.</summary>
     public static bool IsValidSha256(string digest)

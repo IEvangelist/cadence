@@ -81,30 +81,21 @@ public sealed class HttpStemModelProvider : IStemModelProvider
                 return _cachedPath;
             }
 
-            var uri = _options.ModelUri
+            var configuredModelUri = _options.ModelUri
                 ?? throw new InvalidOperationException("Stems:ModelUri is not configured.");
+            var modelLocation = StemModelIntegrity.ParseModelLocation(configuredModelUri);
 
-            // Reject an insecure http:// pin outright (MITM-substitutable), regardless
-            // of whether a digest is configured.
-            StemModelIntegrity.RequireSecureModelUri(uri);
-
-            // A local path or file URI is used in place (still digest-verified when a
-            // pin is configured, but never purged — it is the operator's own file).
-            if (Uri.TryCreate(uri, UriKind.Absolute, out var parsed) && parsed.IsFile)
+            // Local paths and file URIs are used in place (still digest-verified when
+            // pinned, but never purged — they are the operator's own files).
+            if (!modelLocation.IsRemote)
             {
-                await VerifyIfPinnedAsync(parsed.LocalPath, purgeOnMismatch: false, cancellationToken);
-                _cachedPath = parsed.LocalPath;
+                var localPath = modelLocation.LocalPath;
+                await VerifyIfPinnedAsync(localPath, purgeOnMismatch: false, cancellationToken);
+                _cachedPath = localPath;
                 return _cachedPath;
             }
 
-            if (!uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
-                !uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-            {
-                await VerifyIfPinnedAsync(uri, purgeOnMismatch: false, cancellationToken);
-                _cachedPath = uri;
-                return _cachedPath;
-            }
-
+            var uri = modelLocation.Reference;
             Directory.CreateDirectory(_cacheDirectory);
 
             var cachePath = Path.Combine(_cacheDirectory, HashUri(uri) + ".onnx");

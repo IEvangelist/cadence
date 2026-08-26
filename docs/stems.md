@@ -210,7 +210,8 @@ When `Stems:ModelUri` is set, the model download is now hardened by
 
 - **Secure transport required.** An `http://` model URI is rejected outright — a
   plaintext download is MITM-substitutable. `https://`, `file://`, and bare local
-  paths are allowed.
+  paths are allowed. Surrounding configuration whitespace is removed once before
+  both startup validation and loading classify the reference.
 - **Pinned digest verified.** When `Stems:ModelSha256` is set, the fetched bytes
   are hashed (SHA-256) and compared to the pin (case-, whitespace-, and
   `sha256:`-prefix-insensitive). A downloaded model is verified **before** it is

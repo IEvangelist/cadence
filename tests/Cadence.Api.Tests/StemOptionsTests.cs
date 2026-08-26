@@ -112,6 +112,21 @@ public class StemOptionsTests
         Assert.True(new StemOptionsValidator(isProduction: false).Validate(null, options).Succeeded);
     }
 
+    [Theory]
+    [InlineData(" \thttps://models.example.test/model.onnx\r\n ")]
+    [InlineData(" \tfile:///models/model.onnx\r\n ")]
+    [InlineData(" \tC:\\models\\model.onnx\r\n ")]
+    public void Validate_WhitespaceWrappedSecureAndLocalModels_Succeeds(string modelUri)
+    {
+        var options = new StemOptions
+        {
+            ModelUri = modelUri,
+            ModelSha256 = new string('a', 64),
+        };
+
+        Assert.True(new StemOptionsValidator(isProduction: true).Validate(null, options).Succeeded);
+    }
+
     [Fact]
     public async Task AddCadenceStems_InvalidBoundsFailHostStartup()
     {
