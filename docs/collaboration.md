@@ -212,7 +212,9 @@ After a successful `/api/auth/me` or sign-in, the browser retains only
 because the API is unreachable, AuthProvider exposes that identity separately
 from `user`, enters `offline` (not authenticated) state, and enables local-only
 hydration. It does **not** authorize API calls, entitlements, sharing, a socket,
-or server writes. Matching live authentication rebuilds the provider with
+or server writes. The offline account bar offers **Sign in** to reconfirm live
+identity and **Sign out** to forget all local owner data. Matching live
+authentication rebuilds the provider with
 networking enabled and merges; a confirmed 401, explicit sign-out, or account
 switch clears the cached identity, serialized backups, and every registered
 owner-scoped Yjs database. Blocked database deletion remains registered for a
