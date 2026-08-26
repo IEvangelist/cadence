@@ -19,6 +19,8 @@ run-locally steps, and the feature matrix; use the map below to go deeper.
   API, and a worked reference plugin.
 - [`share.md`](share.md) — import / export / share and format interop (MIDI, MusicXML,
   WAV, portable `.cadence.json`, client-side share links).
+- [`platform-pwa.md`](platform-pwa.md) — SSR-safe runtime capabilities, responsive
+  seams, service-worker registration, and offline route-cache warming.
 
 ## Setup guides
 

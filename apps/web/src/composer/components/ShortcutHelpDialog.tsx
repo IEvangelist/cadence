@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, type RefObject } from 'react'
 import { formatKeybinding } from '../plugins/keybindings'
 import type { StudioCommandGroup, StudioCommandRegistry } from '../commands/studioCommands'
 import { DialogClose, DialogSurface } from '../../ui/Dialog'
+import { usePlatformCapabilities } from '../../platform/platformCapabilitiesContext'
 import './EditorWorkspace.css'
 
 interface ShortcutHelpDialogProps {
@@ -20,6 +21,7 @@ export function ShortcutHelpDialog({
   returnFocusRef,
 }: ShortcutHelpDialogProps) {
   const [query, setQuery] = useState('')
+  const { keyboardPlatform } = usePlatformCapabilities()
   const searchRef = useRef<HTMLInputElement>(null)
   const commands = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase()
@@ -82,7 +84,9 @@ export function ShortcutHelpDialog({
                   <li key={command.id}>
                     <span>{command.title}</span>
                     <span>
-                      {command.binding ? formatKeybinding(command.binding) : 'Unassigned'}
+                      {command.binding
+                        ? formatKeybinding(command.binding, keyboardPlatform)
+                        : 'Unassigned'}
                       {!command.enabled ? ' (disabled)' : ''}
                     </span>
                   </li>
@@ -96,10 +100,11 @@ export function ShortcutHelpDialog({
         <div className="shortcut-help__conflicts" role="status">
           {registry.conflicts.map((conflict) => (
             <p key={`${conflict.rejectedId}-${conflict.binding}`}>
-              {conflict.rejectedId} cannot use {formatKeybinding(conflict.binding)} because it is
+              {conflict.rejectedId} cannot use{' '}
+              {formatKeybinding(conflict.binding, keyboardPlatform)} because it is
               already assigned to {conflict.winnerId}.
               {conflict.suggestedBinding
-                ? ` Try ${formatKeybinding(conflict.suggestedBinding)}.`
+                ? ` Try ${formatKeybinding(conflict.suggestedBinding, keyboardPlatform)}.`
                 : ''}
             </p>
           ))}

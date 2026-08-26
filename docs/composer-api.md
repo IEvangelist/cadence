@@ -279,6 +279,13 @@ do not become durable project fields.
 | `PwaInstallState` | Install affordance state |
 | `PwaController` | Browser install prompt wrapper |
 | `OfflineProjectStore` | Alias for `ProjectStore` used by offline decorators |
+| `KeyboardPlatform` | Mac-family versus Ctrl/Alt keybinding labels |
+| `PlatformCapabilities` | Observable viewport, pointer, install, connectivity, and browser API facts |
+| `PlatformCapabilitySource` | SSR-safe injectable snapshot/subscription seam |
+
+The browser implementation and PWA behavior are documented in
+[`platform-pwa.md`](platform-pwa.md). These are additive runtime contracts;
+viewport and platform facts remain outside durable project data.
 
 ```ts
 function offlineBadge(cache: OfflineCacheState, viewport: ComposerViewport) {
