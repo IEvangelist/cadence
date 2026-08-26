@@ -35,6 +35,7 @@ public class ShareLinkEndpointTests(CadenceApiFactory factory) : IClassFixture<C
         Assert.Equal(HttpStatusCode.Created, create.StatusCode);
         var link = await create.Content.ReadFromJsonAsync<ShareLinkResponse>();
         Assert.Equal("viewer", link!.Role);
+        Assert.False(string.IsNullOrWhiteSpace(link.OwnerId));
         Assert.False(string.IsNullOrWhiteSpace(link.Token));
 
         var list = await client.GetFromJsonAsync<List<ShareLinkResponse>>("/api/projects/share-p1/shares");

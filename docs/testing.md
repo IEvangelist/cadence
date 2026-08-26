@@ -364,8 +364,24 @@ paths first. See [`collaboration.md`](collaboration.md) for the design.
   `coerceNote` seam permits (a hostile peer cannot inject illegal data).
 - **Offline replay**: updates buffered while "disconnected" exchange on
   reconnect and both docs converge with no lost edits.
-- **Deferred single-seed**: only the first client to see an empty doc seeds it;
-  joiners adopt without duplicating tracks.
+- **IndexedDB reload**: real `y-indexeddb` running against deterministic
+  `fake-indexeddb` persists an offline CRDT, hydrates it into a fresh `Y.Doc`,
+  and converges its update with an independently edited relay doc.
+- **Deferred single-seed**: IndexedDB must finish before seed/adoption. A
+  non-empty persisted doc is editable while offline; an empty doc also waits
+  for relay sync, so stale serialized autosave cannot overwrite CRDT state.
+- **Isolation + cleanup**: cache names separate relay/account/owner/project,
+  persistence and listeners are destroyed on session changes, and the socket
+  connects exactly once only after local hydration.
+- **Failure bounds**: deterministic open/request failure and a hung
+  `whenSynced` both destroy the IndexedDB provider, surface a nonfatal
+  unavailable status, and connect the live socket exactly once; destroying the
+  session cancels the bound without a late connect.
+- **Auth + production-store wiring**: real `AppProviders` and
+  `SyncingProjectStore` prove remote-primary autosave also writes an
+  owner/project/grant-scoped serialized backup, full API failure reloads only
+  the matching cached identity, and sign-out/account switch purge backup and
+  registered Yjs databases without exposing either to anonymous/different users.
 - **Presence**: awareness add/remove reflects join/leave; the roster renders
   accessible avatars with WCAG-contrast ink for both hex and `hsl` colors.
 
@@ -390,6 +406,11 @@ throwaway Node relay fixture (`apps/web/e2e/collab-server.mjs`; a second
   the editor's note count unchanged (proving the server gate, not just UI
   gating).
 - The collaborative composer (presence bar + remote cursors) is **axe-clean**.
+- An editor disconnects, loses every `/api/**` request, edits, fully reloads
+  while both API and WebSocket are unavailable, hydrates without creating a
+  socket, edits again, then live-authenticates as the matching user and
+  converges both persisted changes and a peer's remote change. Socket
+  cleanup/reconnect counts remain covered by the route test.
 
 Note-adds in the e2e specs use deterministic keyboard input (focus the note
 grid, arrow to an empty pitch row, `Enter`) rather than pixel clicks, and assert

@@ -41,22 +41,45 @@ export function AuthBar({
     return <div className="authbar authbar--loading" aria-hidden="true" />
   }
 
-  if (auth.status === 'authenticated' && auth.user) {
+  const visibleUser =
+    auth.status === 'offline'
+      ? auth.offlineUser
+      : auth.user ?? auth.offlineUser
+  if (
+    (auth.status === 'authenticated' ||
+      auth.status === 'offline' ||
+      auth.status === 'signing-out') &&
+    visibleUser
+  ) {
     return (
       <div className="authbar">
         <span className="authbar-greeting">
-          Signed in as <strong>{auth.user.displayName}</strong>
+          {auth.status === 'offline' ? 'Offline as ' : 'Signed in as '}
+          <strong>{visibleUser.displayName}</strong>
         </span>
-        <button
-          type="button"
-          className="btn btn-sm"
-          data-interaction="auth.profile.open"
-          aria-pressed={profileActive}
-          disabled={signingOut}
-          onClick={onShowProfile}
-        >
-          Profile
-        </button>
+        {auth.status === 'offline' ? (
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            data-interaction="auth.panel.toggle"
+            disabled={signingOut}
+            onClick={onShowSignIn}
+          >
+            Sign in
+          </button>
+        ) : null}
+        {auth.status === 'authenticated' ? (
+          <button
+            type="button"
+            className="btn btn-sm"
+            data-interaction="auth.profile.open"
+            aria-pressed={profileActive}
+            disabled={signingOut}
+            onClick={onShowProfile}
+          >
+            Profile
+          </button>
+        ) : null}
         <button
           type="button"
           className="btn btn-sm"

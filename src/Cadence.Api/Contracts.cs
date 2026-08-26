@@ -49,7 +49,7 @@ public sealed record SaveProjectRequest(string? Id, string Name, int SchemaVersi
 public sealed record CreateShareLinkRequest(string Role);
 
 /// <summary>A server-issued collaboration share link for a project.</summary>
-public sealed record ShareLinkResponse(string Token, string Role, DateTimeOffset CreatedAt);
+public sealed record ShareLinkResponse(string Token, string OwnerId, string Role, DateTimeOffset CreatedAt);
 
 /// <summary>The external providers currently wired (for rendering sign-in buttons).</summary>
 public sealed record ProvidersResponse(IReadOnlyList<string> Providers);

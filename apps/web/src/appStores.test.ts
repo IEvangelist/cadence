@@ -4,7 +4,7 @@ import { createEmptyProject } from './composer/model/project'
 import { serializeProject } from './composer/model/persistence'
 
 afterEach(async () => {
-  await handleAuthChange(false)
+  await handleAuthChange({ mode: 'anonymous', ownerId: null, purgeOwnerIds: [] })
   localStorage.clear()
 })
 
@@ -46,7 +46,11 @@ describe('appStores wiring', () => {
     })
     vi.stubGlobal('fetch', fetchImpl)
 
-    await handleAuthChange(true)
+    await handleAuthChange({
+      mode: 'authenticated',
+      ownerId: 'test-owner',
+      purgeOwnerIds: [],
+    })
 
     // The offline project was pushed up during sign-in sync.
     const postCalls = fetchImpl.mock.calls.filter(([, init]) => (init?.method ?? 'GET') === 'POST')

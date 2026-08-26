@@ -11,6 +11,7 @@ import { CsrfClient, type FetchLike } from '../../../api/csrfClient'
 /** A server-issued share link for a project. */
 export interface ShareLink {
   token: string
+  ownerId: string
   role: CollaborationRole
   createdAt: string
 }
@@ -25,6 +26,7 @@ export function shareLinkUrl(origin: string, projectId: string, share: ShareLink
   const base = origin.replace(/\/+$/, '')
   const params = new URLSearchParams({
     collab: projectId,
+    owner: share.ownerId,
     role: share.role,
     share: share.token,
   })

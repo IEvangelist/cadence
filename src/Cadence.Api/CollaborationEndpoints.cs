@@ -357,5 +357,5 @@ public static class CollaborationEndpoints
     private static string RoomKey(string ownerId, string projectId) => $"{ownerId}:{projectId}";
 
     private static ShareLinkResponse ToResponse(ProjectShareLink link) =>
-        new(link.Token, link.Role.ToString().ToLowerInvariant(), link.CreatedAt);
+        new(link.Token, link.OwnerId, link.Role.ToString().ToLowerInvariant(), link.CreatedAt);
 }

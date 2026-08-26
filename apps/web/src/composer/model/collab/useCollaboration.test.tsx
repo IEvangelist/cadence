@@ -62,6 +62,54 @@ function fakeSyncingProvider() {
   return provider
 }
 
+/** A provider with independently controlled local-persistence and relay sync. */
+function fakePersistentSyncingProvider() {
+  const doc = new Y.Doc()
+  const awareness = new Awareness(doc)
+  let persistenceListener: (() => void) | null = null
+  let persistenceStatusListener:
+    | ((status: 'loading' | 'ready' | 'unavailable') => void)
+    | null = null
+  let syncedListener: (() => void) | null = null
+  const provider: CollabProvider & {
+    firePersistenceSync: () => void
+    firePersistenceStatus: (
+      status: 'loading' | 'ready' | 'unavailable',
+    ) => void
+    fireSync: () => void
+  } = {
+    doc,
+    awareness,
+    destroy: vi.fn(() => {
+      awareness.destroy()
+      doc.destroy()
+    }),
+    onPersistenceSynced: (listener) => {
+      persistenceListener = listener
+      return () => {
+        persistenceListener = null
+      }
+    },
+    onPersistenceStatus: (listener) => {
+      persistenceStatusListener = listener
+      listener('loading')
+      return () => {
+        persistenceStatusListener = null
+      }
+    },
+    onSynced: (listener) => {
+      syncedListener = listener
+      return () => {
+        syncedListener = null
+      }
+    },
+    firePersistenceSync: () => persistenceListener?.(),
+    firePersistenceStatus: (status) => persistenceStatusListener?.(status),
+    fireSync: () => syncedListener?.(),
+  }
+  return provider
+}
+
 const providers: CollabProvider[] = []
 function factory() {
   const p = fakeProvider()
@@ -85,6 +133,8 @@ function makeBinding(project: Project): CollabBinding {
 
 const config: CollabConfig = {
   projectId: 'p1',
+  roomOwnerId: 'owner-1',
+  networkEnabled: true,
   role: 'editor',
   url: 'ws://test/api/collab',
   user: { id: 'u1', name: 'Ada', color: '#f0f' },
@@ -93,6 +143,7 @@ const config: CollabConfig = {
 function useIntegratedComposerCollaboration(
   initialProject: Project,
   store: LocalStorageProjectStore,
+  providerFactory = factory,
 ) {
   const controller = useComposer({
     createEngine: () => new SilentAudioEngine(),
@@ -111,7 +162,7 @@ function useIntegratedComposerCollaboration(
       subscribeProjectTransitions: controller.subscribeProjectTransitions,
     },
     config,
-    factory,
+    providerFactory,
   )
   const setHistoryEnabled = controller.setHistoryEnabled
   useEffect(() => {
@@ -297,6 +348,104 @@ describe('useCollaboration', () => {
     // Now the first client seeds the shared doc from its local project.
     expect(built[0].doc.getMap('project').get('id')).toBe('shared')
     built[0].destroy()
+  })
+
+  it('waits for IndexedDB when relay sync arrives first and never overwrites persisted CRDT', () => {
+    const built: Array<ReturnType<typeof fakePersistentSyncingProvider>> = []
+    const persistentFactory = () => {
+      const provider = fakePersistentSyncingProvider()
+      built.push(provider)
+      return provider
+    }
+    const stale = seedProject()
+    stale.name = 'Stale localStorage'
+    renderHook(() => useCollaboration(makeBinding(stale), config, persistentFactory))
+
+    act(() => built[0].fireSync())
+    expect(built[0].doc.getMap('project').size).toBe(0)
+
+    const persisted = seedProject()
+    persisted.name = 'Persisted CRDT'
+    act(() => {
+      reconcileDoc(built[0].doc, persisted, 'indexeddb')
+      built[0].firePersistenceSync()
+    })
+
+    expect(readProject(built[0].doc).name).toBe('Persisted CRDT')
+    built[0].destroy()
+  })
+
+  it('continues persisting edits after offline reload without waiting for relay sync', () => {
+    const built: Array<ReturnType<typeof fakePersistentSyncingProvider>> = []
+    const persistentFactory = () => {
+      const provider = fakePersistentSyncingProvider()
+      built.push(provider)
+      return provider
+    }
+    const stale = seedProject()
+    const binding = makeBinding(stale)
+    const { rerender } = renderHook(
+      (props: CollabBinding) => useCollaboration(props, config, persistentFactory),
+      { initialProps: binding },
+    )
+
+    const persisted = seedProject()
+    persisted.name = 'Persisted CRDT'
+    act(() => {
+      reconcileDoc(built[0].doc, persisted, 'indexeddb')
+      built[0].firePersistenceSync()
+    })
+
+    const offlineEdit = structuredClone(persisted)
+    offlineEdit.tracks[0].notes.push(createNote({ pitch: 64, start: 1 }, 'offline-reload'))
+    act(() => rerender({ ...binding, project: offlineEdit }))
+
+    expect(readProject(built[0].doc).tracks[0].notes.map((note) => note.id))
+      .toContain('offline-reload')
+    built[0].destroy()
+  })
+
+  it('surfaces nonfatal offline-persistence availability', () => {
+    const built: Array<ReturnType<typeof fakePersistentSyncingProvider>> = []
+    const persistentFactory = () => {
+      const provider = fakePersistentSyncingProvider()
+      built.push(provider)
+      return provider
+    }
+    const { result } = renderHook(() =>
+      useCollaboration(makeBinding(seedProject()), config, persistentFactory),
+    )
+
+    expect(result.current.offlinePersistence).toBe('loading')
+    act(() => built[0].firePersistenceStatus('unavailable'))
+    expect(result.current.offlinePersistence).toBe('unavailable')
+  })
+
+  it('keeps serialized project autosave after adopting the persisted CRDT', async () => {
+    const built: Array<ReturnType<typeof fakePersistentSyncingProvider>> = []
+    const persistentFactory = () => {
+      const provider = fakePersistentSyncingProvider()
+      built.push(provider)
+      return provider
+    }
+    const storage = new MemoryStorage()
+    const store = new LocalStorageProjectStore(storage)
+    const stale = seedProject()
+    stale.name = 'Stale localStorage'
+    renderHook(() =>
+      useIntegratedComposerCollaboration(stale, store, persistentFactory),
+    )
+
+    const persisted = seedProject()
+    persisted.name = 'Persisted CRDT'
+    act(() => {
+      reconcileDoc(built[0].doc, persisted, 'indexeddb')
+      built[0].firePersistenceSync()
+    })
+
+    await waitFor(async () => {
+      expect((await store.load('shared'))?.name).toBe('Persisted CRDT')
+    })
   })
 })
 

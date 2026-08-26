@@ -15,6 +15,7 @@ describe('parseCollabParams', () => {
   it('parses projectId, role, and token', () => {
     expect(parseCollabParams('?collab=p1&role=editor&share=tok')).toEqual({
       projectId: 'p1',
+      roomOwnerId: undefined,
       role: 'editor',
       token: 'tok',
     })
@@ -69,17 +70,44 @@ describe('buildCollabConfig', () => {
 
   it('builds a config tied to the signed-in identity', () => {
     const config = buildCollabConfig({
-      search: '?collab=p1&role=owner&share=tok',
+      search: '?collab=p1&owner=owner-1&role=owner&share=tok',
       location,
       user: { id: 'u1', displayName: 'Ada' },
     })
     expect(config).toMatchObject({
       projectId: 'p1',
+      roomOwnerId: 'owner-1',
+      networkEnabled: true,
       role: 'owner',
       token: 'tok',
       url: 'wss://app.test/api/collab',
       user: { id: 'u1', name: 'Ada' },
     })
     expect(config?.user.color).toBe(colorForId('u1'))
+  })
+
+  it('falls back safely for legacy links without an owner identity', () => {
+    const config = buildCollabConfig({
+      search: '?collab=p1&role=editor&share=legacy-token',
+      location,
+      user: { id: 'u1', displayName: 'Ada' },
+    })
+    expect(config?.roomOwnerId).toBe('legacy-owner')
+  })
+
+  it('builds a local-only config from cached identity when auth verification is offline', () => {
+    const config = buildCollabConfig({
+      search: '?collab=p1&owner=owner-1&role=editor&share=token',
+      location,
+      user: null,
+      offlineUser: { id: 'u1', displayName: 'Cached Ada' },
+    })
+
+    expect(config).toMatchObject({
+      projectId: 'p1',
+      roomOwnerId: 'owner-1',
+      networkEnabled: false,
+      user: { id: 'u1', name: 'Cached Ada' },
+    })
   })
 })

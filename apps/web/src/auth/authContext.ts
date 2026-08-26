@@ -7,12 +7,30 @@
  */
 import { createContext, useContext } from 'react'
 import { type AuthClient, type Me } from './authClient'
+import type { OfflineAuthIdentity } from './offlineIdentity'
 
-export type AuthStatus = 'loading' | 'authenticated' | 'anonymous'
+export type AuthStatus =
+  | 'loading'
+  | 'authenticated'
+  | 'signing-out'
+  | 'offline'
+  | 'anonymous'
+
+export interface AuthPersistenceChange {
+  mode: 'authenticated' | 'offline' | 'anonymous'
+  ownerId: string | null
+  purgeOwnerIds: string[]
+}
 
 export interface AuthContextValue {
   /** The signed-in user, or null when anonymous. */
   user: Me | null
+  /**
+   * Last server-confirmed identity, available only when session verification
+   * failed because the API is unreachable. It locates local collaboration data
+   * and never authorizes network or API access.
+   */
+  offlineUser: OfflineAuthIdentity | null
   /** Coarse auth lifecycle state for rendering. */
   status: AuthStatus
   /** External OAuth providers the server has wired. */

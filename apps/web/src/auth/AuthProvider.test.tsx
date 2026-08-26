@@ -1,9 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useState } from 'react'
 import type { AuthClient, Me } from './authClient'
 import { AuthProvider } from './AuthProvider'
-import { useAuth } from './authContext'
+import { useAuth, type AuthPersistenceChange } from './authContext'
+import { OfflineIdentityStore } from './offlineIdentity'
+import { MemoryStorage } from '../composer/model/storage'
 
 const user: Me = { id: '1', email: 'a@b.com', displayName: 'Ada', tier: 'Free' }
 
@@ -29,6 +31,9 @@ function Harness() {
     <div>
       <output data-testid="status">{auth.status}</output>
       <output data-testid="user">{auth.user?.displayName ?? 'none'}</output>
+      <output data-testid="offline-user">
+        {auth.offlineUser?.displayName ?? 'none'}
+      </output>
       <output data-testid="providers">{auth.providers.join(',')}</output>
       <output data-testid="error">{auth.error ?? ''}</output>
       <output data-testid="signout-complete">{String(signOutComplete)}</output>
@@ -49,21 +54,35 @@ function Harness() {
   )
 }
 
-const renderWith = (client: AuthClient, onAuthChange?: (a: boolean) => void) =>
+const renderWith = (
+  client: AuthClient,
+  onAuthChange?: (change: AuthPersistenceChange) => void | Promise<void>,
+  offlineIdentityStore?: OfflineIdentityStore,
+) =>
   render(
-    <AuthProvider client={client} onAuthChange={onAuthChange}>
+    <AuthProvider
+      client={client}
+      onAuthChange={onAuthChange}
+      offlineIdentityStore={offlineIdentityStore}
+    >
       <Harness />
     </AuthProvider>,
   )
 
 describe('AuthProvider / useAuth', () => {
+  beforeEach(() => localStorage.clear())
+
   it('resolves to anonymous when there is no session', async () => {
     const onAuthChange = vi.fn()
     renderWith(fakeClient(), onAuthChange)
 
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('anonymous'))
     expect(screen.getByTestId('user')).toHaveTextContent('none')
-    expect(onAuthChange).toHaveBeenCalledWith(false)
+    expect(onAuthChange).toHaveBeenCalledWith({
+      mode: 'anonymous',
+      ownerId: null,
+      purgeOwnerIds: [],
+    })
   })
 
   it('resolves to authenticated and loads providers', async () => {
@@ -71,13 +90,91 @@ describe('AuthProvider / useAuth', () => {
       me: vi.fn(async () => user),
       providers: vi.fn(async () => ['GitHub', 'Google']),
     })
+
     const onAuthChange = vi.fn()
     renderWith(client, onAuthChange)
 
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'))
     expect(screen.getByTestId('user')).toHaveTextContent('Ada')
     expect(screen.getByTestId('providers')).toHaveTextContent('GitHub,Google')
-    expect(onAuthChange).toHaveBeenCalledWith(true)
+    expect(onAuthChange).toHaveBeenCalledWith({
+      mode: 'authenticated',
+      ownerId: '1',
+      purgeOwnerIds: [],
+    })
+  })
+
+  it('uses a minimal confirmed identity only when session verification is offline', async () => {
+    const storage = new MemoryStorage()
+    const identityStore = new OfflineIdentityStore(storage)
+    identityStore.remember(user)
+    const onAuthChange = vi.fn()
+    renderWith(
+      fakeClient({
+        me: vi.fn(async () => {
+          throw new TypeError('Failed to fetch')
+        }),
+      }),
+      onAuthChange,
+      identityStore,
+    )
+
+    await waitFor(() =>
+      expect(screen.getByTestId('status')).toHaveTextContent('offline'),
+    )
+    expect(screen.getByTestId('user')).toHaveTextContent('none')
+    expect(screen.getByTestId('offline-user')).toHaveTextContent('Ada')
+    expect(onAuthChange).toHaveBeenCalledWith({
+      mode: 'offline',
+      ownerId: '1',
+      purgeOwnerIds: [],
+    })
+  })
+
+  it('clears cached ownership after a confirmed anonymous response', async () => {
+    const storage = new MemoryStorage()
+    const identityStore = new OfflineIdentityStore(storage)
+    identityStore.remember(user)
+    const onAuthChange = vi.fn()
+    renderWith(fakeClient(), onAuthChange, identityStore)
+
+    await waitFor(() =>
+      expect(screen.getByTestId('status')).toHaveTextContent('anonymous'),
+    )
+    expect(identityStore.read()).toBeNull()
+    expect(onAuthChange).toHaveBeenCalledWith({
+      mode: 'anonymous',
+      ownerId: null,
+      purgeOwnerIds: ['1'],
+    })
+  })
+
+  it('purges the previous owner before confirming an account switch', async () => {
+    const storage = new MemoryStorage()
+    const identityStore = new OfflineIdentityStore(storage)
+    identityStore.remember(user)
+    const nextUser: Me = {
+      id: '2',
+      email: 'b@b.com',
+      displayName: 'Bea',
+      tier: 'Free',
+    }
+    const onAuthChange = vi.fn()
+    renderWith(
+      fakeClient({ me: vi.fn(async () => nextUser) }),
+      onAuthChange,
+      identityStore,
+    )
+
+    await waitFor(() =>
+      expect(screen.getByTestId('user')).toHaveTextContent('Bea'),
+    )
+    expect(onAuthChange).toHaveBeenCalledWith({
+      mode: 'authenticated',
+      ownerId: '2',
+      purgeOwnerIds: ['1'],
+    })
+    expect(identityStore.read()).toEqual({ id: '2', displayName: 'Bea' })
   })
 
   it('signIn authenticates and notifies onAuthChange(true)', async () => {
@@ -88,7 +185,11 @@ describe('AuthProvider / useAuth', () => {
     fireEvent.click(screen.getByText('signin'))
 
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'))
-    expect(onAuthChange).toHaveBeenLastCalledWith(true)
+    expect(onAuthChange).toHaveBeenLastCalledWith({
+      mode: 'authenticated',
+      ownerId: '1',
+      purgeOwnerIds: [],
+    })
   })
 
   it('publishes authenticated state only after store reconciliation settles', async () => {
@@ -96,14 +197,20 @@ describe('AuthProvider / useAuth', () => {
     const reconciliation = new Promise<void>((resolve) => {
       finishReconciliation = resolve
     })
-    const onAuthChange = vi.fn(async (authenticated: boolean) => {
-      if (authenticated) await reconciliation
+    const onAuthChange = vi.fn(async (change: AuthPersistenceChange) => {
+      if (change.mode === 'authenticated') await reconciliation
     })
     renderWith(fakeClient(), onAuthChange)
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('anonymous'))
 
     fireEvent.click(screen.getByText('signin'))
-    await waitFor(() => expect(onAuthChange).toHaveBeenLastCalledWith(true))
+    await waitFor(() =>
+      expect(onAuthChange).toHaveBeenLastCalledWith({
+        mode: 'authenticated',
+        ownerId: '1',
+        purgeOwnerIds: [],
+      }),
+    )
     expect(screen.getByTestId('status')).toHaveTextContent('loading')
     expect(screen.getByTestId('user')).toHaveTextContent('none')
 
@@ -163,7 +270,11 @@ describe('AuthProvider / useAuth', () => {
     fireEvent.click(screen.getByText('signout'))
 
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('anonymous'))
-    expect(onAuthChange).toHaveBeenLastCalledWith(false)
+    expect(onAuthChange).toHaveBeenLastCalledWith({
+      mode: 'anonymous',
+      ownerId: null,
+      purgeOwnerIds: ['1'],
+    })
   })
 
   it('does not resolve signOut before the store transition completes', async () => {
@@ -172,14 +283,16 @@ describe('AuthProvider / useAuth', () => {
       releaseStore = resolve
     })
     const client = fakeClient({ me: vi.fn(async () => user) })
-    const onAuthChange = vi.fn(async (authenticated: boolean) => {
-      if (!authenticated) await storeTransition
+    const onAuthChange = vi.fn(async (change: AuthPersistenceChange) => {
+      if (change.mode === 'anonymous') await storeTransition
     })
     renderWith(client, onAuthChange)
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'))
 
     fireEvent.click(screen.getByText('signout'))
-    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('loading'))
+    await waitFor(() =>
+      expect(screen.getByTestId('status')).toHaveTextContent('signing-out'),
+    )
     expect(screen.getByTestId('signout-complete')).toHaveTextContent('false')
 
     releaseStore()

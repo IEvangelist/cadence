@@ -18,6 +18,7 @@ import {
   type CollabUser,
   createCollabSession,
 } from './collabSession'
+import { isProjectDocEmpty } from './crdt'
 import { createWebsocketProvider } from './websocketProvider'
 
 /** Server-authoritative role attached to a share link. */
@@ -26,6 +27,14 @@ export type CollaborationRole = 'owner' | 'editor' | 'viewer'
 /** Everything needed to join a collaborative session, parsed from a share link. */
 export interface CollabConfig {
   projectId: string
+  /** Stable owner identity used by the relay to scope this collaboration room. */
+  roomOwnerId: string
+  /**
+   * True only after the server has confirmed the current authenticated user.
+   * Cached offline identity may hydrate local CRDT state but never enables a
+   * relay connection or server mutation.
+   */
+  networkEnabled: boolean
   role: CollaborationRole
   user: CollabUser
   /** WebSocket relay base URL (e.g. `ws://host/api/collab`). */
@@ -47,6 +56,16 @@ export interface CollabProvider {
    * only the first client seeds. Returns an unsubscribe.
    */
   onSynced?: (listener: () => void) => () => void
+  /**
+   * Optional local CRDT persistence signal. The hook never seeds from the
+   * serialized project until this fires, so a persisted Y.Doc wins over a stale
+   * localStorage snapshot.
+   */
+  onPersistenceSynced?: (listener: () => void) => () => void
+  /** Optional nonfatal local-persistence lifecycle stream. */
+  onPersistenceStatus?: (
+    listener: (status: OfflinePersistenceStatus) => void,
+  ) => () => void
 }
 
 export type CollabProviderFactory = (config: CollabConfig) => CollabProvider
@@ -71,6 +90,7 @@ export interface CollaborationState {
   active: boolean
   connected: boolean
   canWrite: boolean
+  offlinePersistence: OfflinePersistenceStatus | 'inactive'
   presence: CollabPresence[]
   /**
    * Collaborative undo/redo (#156): a `Y.UndoManager` scoped to the shared
@@ -87,10 +107,13 @@ export interface CollaborationState {
   stopCapturing: () => void
 }
 
+export type OfflinePersistenceStatus = 'loading' | 'ready' | 'unavailable'
+
 const INERT: CollaborationState = {
   active: false,
   connected: false,
   canWrite: false,
+  offlinePersistence: 'inactive',
   presence: [],
   canUndo: false,
   canRedo: false,
@@ -106,6 +129,8 @@ export function useCollaboration(
 ): CollaborationState {
   const [presence, setPresence] = useState<CollabPresence[]>([])
   const [connected, setConnected] = useState(false)
+  const [offlinePersistence, setOfflinePersistence] =
+    useState<CollaborationState['offlinePersistence']>('inactive')
   const [undoState, setUndoState] = useState({ canUndo: false, canRedo: false })
 
   // Keep a live ref so the connection effect (which must not re-run on every
@@ -124,6 +149,8 @@ export function useCollaboration(
   const mirrorReadyRef = useRef(false)
   const canWrite = config ? config.role !== 'viewer' : false
   const projectId = config?.projectId
+  const roomOwnerId = config?.roomOwnerId
+  const networkEnabled = config?.networkEnabled
   const role = config?.role
   const url = config?.url
   const token = config?.token
@@ -164,6 +191,8 @@ export function useCollaboration(
   useEffect(() => {
     if (
       !projectId ||
+      !roomOwnerId ||
+      networkEnabled == null ||
       !role ||
       !url ||
       userId == null ||
@@ -174,17 +203,20 @@ export function useCollaboration(
     }
     const activeConfig: CollabConfig = {
       projectId,
+      roomOwnerId,
+      networkEnabled,
       role,
       url,
       token,
       user: { id: userId, name: userName, color: userColor },
     }
     const provider = providerFactory(activeConfig)
-    // A real network provider seeds after its initial sync (see onSynced below)
-    // so only the first client — the one that finds an empty server doc — seeds,
-    // and late joiners adopt the shared project instead of duplicating it.
-    // In-memory/test providers expose no onSynced and seed synchronously here.
-    const deferSeed = typeof provider.onSynced === 'function'
+    // Real providers defer until local IndexedDB has hydrated. An empty local
+    // Y.Doc additionally waits for the relay, while a non-empty persisted doc is
+    // immediately safe for continued offline editing.
+    const deferSeed =
+      typeof provider.onSynced === 'function' ||
+      typeof provider.onPersistenceSynced === 'function'
     mirrorReadyRef.current = !deferSeed
     const session = createCollabSession({
       doc: provider.doc,
@@ -201,25 +233,40 @@ export function useCollaboration(
       setUndoState({ canUndo: session.canUndo(), canRedo: session.canRedo() }),
     )
     const offStatus = provider.onStatus?.((isConnected) => setConnected(isConnected))
+    const offPersistenceStatus = provider.onPersistenceStatus?.(setOfflinePersistence)
     const offProjectTransitions = subscribeProjectTransitions?.((transition) => {
       if (!mirrorReadyRef.current) return
       pushTransition(session, transition)
     })
-    const offSynced = provider.onSynced?.(() => {
-      // First client seeds the empty doc; joiners no-op and adopt via sync.
-      session.seedIfEmpty(bindingRef.current.project)
-      // Now it is safe to mirror subsequent local edits into the shared doc.
+    let persistenceSynced = typeof provider.onPersistenceSynced !== 'function'
+    let relaySynced = typeof provider.onSynced !== 'function'
+    let initialSyncComplete = false
+    const completeInitialSync = () => {
+      if (initialSyncComplete || !persistenceSynced) return
+
+      // A hydrated local CRDT is authoritative over serialized localStorage and
+      // can keep accepting offline edits before the socket reconnects. Only an
+      // empty local CRDT needs the relay's state before it may seed.
+      if (isProjectDocEmpty(provider.doc)) {
+        if (!relaySynced) return
+        session.seedIfEmpty(bindingRef.current.project)
+      }
+
+      initialSyncComplete = true
       mirrorReadyRef.current = true
-      // Enable collaborative undo only now — AFTER the seed/adoption above —
-      // so that seeding or adopting the shared project is never itself
-      // undoable (#156).
-      session.enableUndo()
-    })
-    if (!deferSeed) {
-      // In-memory/test providers seeded synchronously above (no `onSynced`
-      // to defer to), so it is already safe to enable undo here.
+      // The manager is created only after hydration/seed/adoption, so none of
+      // those setup transactions become undoable.
       session.enableUndo()
     }
+    const offPersistenceSynced = provider.onPersistenceSynced?.(() => {
+      persistenceSynced = true
+      completeInitialSync()
+    })
+    const offSynced = provider.onSynced?.(() => {
+      relaySynced = true
+      completeInitialSync()
+    })
+    completeInitialSync()
     // Push our starting state so a viewer/late editor immediately sees us.
     session.announce()
 
@@ -227,7 +274,9 @@ export function useCollaboration(
       offPresence()
       offUndoStack()
       offStatus?.()
+      offPersistenceStatus?.()
       offProjectTransitions?.()
+      offPersistenceSynced?.()
       offSynced?.()
       session.destroy()
       provider.destroy()
@@ -236,10 +285,13 @@ export function useCollaboration(
       lastCaptureGroupRef.current = null
       lastCaptureBoundaryRef.current = bindingRef.current.historyCaptureBoundary ?? 0
       setConnected(false)
+      setOfflinePersistence('inactive')
       setUndoState({ canUndo: false, canRedo: false })
     }
   }, [
     projectId,
+    roomOwnerId,
+    networkEnabled,
     url,
     token,
     role,
@@ -297,6 +349,7 @@ export function useCollaboration(
     active: true,
     connected,
     canWrite,
+    offlinePersistence,
     presence,
     canUndo: undoState.canUndo,
     canRedo: undoState.canRedo,
