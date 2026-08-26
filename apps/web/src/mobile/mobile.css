@@ -1,3 +1,10 @@
+:root {
+  --mobile-safe-area-top: env(safe-area-inset-top);
+  --mobile-safe-area-right: env(safe-area-inset-right);
+  --mobile-safe-area-bottom: env(safe-area-inset-bottom);
+  --mobile-safe-area-left: env(safe-area-inset-left);
+}
+
 .mobile-sheet-layer {
   position: fixed;
   inset: 0;
@@ -26,15 +33,15 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding-right: max(var(--space-4), env(safe-area-inset-right));
-  padding-left: max(var(--space-4), env(safe-area-inset-left));
+  padding-right: max(var(--space-4), var(--mobile-safe-area-right));
+  padding-left: max(var(--space-4), var(--mobile-safe-area-left));
   background: var(--color-surface-raised);
 }
 
 .mobile-sheet__header {
   justify-content: space-between;
   min-height: 64px;
-  padding-top: max(var(--space-3), env(safe-area-inset-top));
+  padding-top: max(var(--space-3), var(--mobile-safe-area-top));
   padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--color-border);
 }
@@ -65,15 +72,15 @@
   min-width: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  padding: var(--space-4) max(var(--space-4), env(safe-area-inset-right))
-    max(var(--space-6), env(safe-area-inset-bottom))
-    max(var(--space-4), env(safe-area-inset-left));
+  padding: var(--space-4) max(var(--space-4), var(--mobile-safe-area-right))
+    max(var(--space-6), var(--mobile-safe-area-bottom))
+    max(var(--space-4), var(--mobile-safe-area-left));
 }
 
 .mobile-sheet__footer {
   justify-content: stretch;
   padding-top: var(--space-3);
-  padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  padding-bottom: max(var(--space-3), var(--mobile-safe-area-bottom));
   border-top: 1px solid var(--color-border);
 }
 
@@ -116,14 +123,15 @@
 }
 
 .mobile-task-nav {
+  box-sizing: border-box;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-1);
   width: 100%;
   min-width: 0;
-  padding: var(--space-2) max(var(--space-2), env(safe-area-inset-right))
-    max(var(--space-2), env(safe-area-inset-bottom))
-    max(var(--space-2), env(safe-area-inset-left));
+  padding: var(--space-2) max(var(--space-2), var(--mobile-safe-area-right))
+    max(var(--space-2), var(--mobile-safe-area-bottom))
+    max(var(--space-2), var(--mobile-safe-area-left));
   border-top: 1px solid var(--color-border);
   background: var(--color-surface-raised);
 }
@@ -229,6 +237,7 @@
 }
 
 .mobile-coach-mark {
+  box-sizing: border-box;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -327,9 +336,9 @@
 .mobile-studio__transport {
   min-width: 0;
   overflow-x: auto;
-  padding: max(var(--space-2), env(safe-area-inset-top))
-    max(var(--space-2), env(safe-area-inset-right)) var(--space-2)
-    max(var(--space-2), env(safe-area-inset-left));
+  padding: max(var(--space-2), var(--mobile-safe-area-top))
+    max(var(--space-2), var(--mobile-safe-area-right)) var(--space-2)
+    max(var(--space-2), var(--mobile-safe-area-left));
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface-raised);
   scrollbar-width: thin;
@@ -345,7 +354,8 @@
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  padding: var(--space-3);
+  padding: var(--space-3) max(var(--space-3), var(--mobile-safe-area-right))
+    var(--space-3) max(var(--space-3), var(--mobile-safe-area-left));
 }
 
 .mobile-studio__stack {
