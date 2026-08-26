@@ -7,6 +7,7 @@ import {
 import { AppFrame } from './AppFrame'
 import { AppProviders } from './AppProviders'
 import type { ProjectStore } from '../composer/model/storage'
+import type { PlatformCapabilitySource } from '../composer/contract/platform'
 import {
   loadLicensesRoute,
   loadPricingRoute,
@@ -71,11 +72,12 @@ export function createAppBrowserRouter() {
 export function createAppMemoryRouter(
   initialEntries: InitialEntry[] = ['/'],
   store?: ProjectStore,
+  platformCapabilities?: PlatformCapabilitySource,
 ) {
   const routes = appRoutes()
-  if (store) {
+  if (store || platformCapabilities) {
     routes[0].element = (
-      <AppProviders store={store}>
+      <AppProviders store={store} platformCapabilities={platformCapabilities}>
         <AppFrame />
       </AppProviders>
     )

@@ -3,6 +3,7 @@ import {
   canonicalizeKeybinding,
   eventToKeybinding,
   formatKeybinding,
+  detectKeybindingPlatform,
   resolveKeybindingMap,
 } from './keybindings'
 import type { CommandContribution } from './types'
@@ -73,6 +74,14 @@ describe('formatKeybinding', () => {
     expect(formatKeybinding('mod+k', 'other')).toBe('Ctrl+K')
     expect(formatKeybinding('alt+mod+space', 'other')).toBe('Ctrl+Alt+Space')
     expect(formatKeybinding('mod+alt+k', 'mac')).toBe('Cmd+Option+K')
+  })
+
+  it('preserves platform detection and existing shortcut output', () => {
+    expect(detectKeybindingPlatform('MacIntel')).toBe('mac')
+    expect(detectKeybindingPlatform('iPad')).toBe('mac')
+    expect(detectKeybindingPlatform('Win32')).toBe('other')
+    expect(formatKeybinding('shift+mod+h', 'mac')).toBe('Cmd+Shift+H')
+    expect(formatKeybinding('shift+mod+h', 'other')).toBe('Ctrl+Shift+H')
   })
 })
 

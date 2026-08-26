@@ -1,4 +1,6 @@
 import { warmRouteLoaders } from './routeLoaders'
+import type { PlatformCapabilitySource } from '../composer/contract/platform'
+import { capabilitySourceFor } from '../platform/platformCapabilities'
 
 declare global {
   interface Window {
@@ -17,6 +19,7 @@ export interface RoutePrefetchOptions {
   cacheStorage?: CacheStorage | null
   fetchImpl?: typeof fetch
   resourceUrls?: () => readonly string[]
+  platformCapabilities?: PlatformCapabilitySource
 }
 
 async function waitForLoadedResources(win: Window): Promise<void> {
@@ -50,8 +53,11 @@ function waitForIdle(win: Window): Promise<void> {
   })
 }
 
-async function waitForServiceWorkerControl(nav: Navigator): Promise<void> {
-  if (!('serviceWorker' in nav)) return
+async function waitForServiceWorkerControl(
+  nav: Navigator,
+  hasServiceWorker: boolean,
+): Promise<void> {
+  if (!hasServiceWorker || !('serviceWorker' in nav)) return
   await nav.serviceWorker.ready
   if (nav.serviceWorker.controller) return
   await new Promise<void>((resolve) => {
@@ -108,17 +114,20 @@ export async function prefetchSecondaryRoutes(
 ): Promise<void> {
   const win = options.win ?? window
   const nav = options.nav ?? navigator
+  const platformCapabilities =
+    options.platformCapabilities ?? capabilitySourceFor(win, nav)
+  const capabilities = platformCapabilities.getSnapshot()
   if (win.__CADENCE_ROUTE_PREFETCH_READY__) return
   win.__CADENCE_ROUTE_PREFETCH_CACHE_READY__ = false
 
-  await waitForServiceWorkerControl(nav)
+  await waitForServiceWorkerControl(nav, capabilities.hasServiceWorker)
   await waitForIdle(win)
   await Promise.all((options.loaders ?? warmRouteLoaders).map((load) => load()))
   await waitForLoadedResources(win)
 
   const cacheStorage =
     options.cacheStorage === undefined
-      ? 'caches' in win
+      ? capabilities.hasCacheStorage && 'caches' in win
         ? win.caches
         : null
       : options.cacheStorage

@@ -7,6 +7,8 @@
  * wires them to a `keydown` listener.
  */
 import type { CommandContribution } from './types'
+import type { KeyboardPlatform } from '../contract/platform'
+import { browserPlatformCapabilitySource } from '../../platform/platformCapabilities'
 
 const MODIFIER_ORDER = ['mod', 'alt', 'shift'] as const
 const MODIFIER_KEYS = new Set(['control', 'meta', 'alt', 'shift'])
@@ -70,11 +72,14 @@ export function resolveKeybindingMap(
   return map
 }
 
-export type KeybindingPlatform = 'mac' | 'other'
+export type KeybindingPlatform = KeyboardPlatform
 
 export function detectKeybindingPlatform(
-  platform = typeof navigator === 'undefined' ? '' : navigator.platform,
+  platform?: string,
 ): KeybindingPlatform {
+  if (platform === undefined) {
+    return browserPlatformCapabilitySource.getSnapshot().keyboardPlatform
+  }
   return /mac|iphone|ipad|ipod/i.test(platform) ? 'mac' : 'other'
 }
 

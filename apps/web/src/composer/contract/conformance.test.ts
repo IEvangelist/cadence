@@ -8,6 +8,7 @@ import {
   type AudioEngine,
   type CollaborationStatus,
   type ComposerViewport,
+  type PlatformCapabilities,
   type CompositionAssistant,
   type InstrumentPreset,
   type OfflineCacheState,
@@ -30,7 +31,7 @@ import type { Entitlements } from '../../billing/entitlementsClient'
 describe('composer contract conformance', () => {
   it('keeps the controller aligned with the frozen public surface (forward conformance)', () => {
     expect(controllerImplementsContract).toBe(true)
-    expect(COMPOSER_CONTRACT_VERSION).toBe('1.2.0')
+    expect(COMPOSER_CONTRACT_VERSION).toBe('1.3.0')
   })
 
   it('excludes #9 collaboration sync internals from the public contract', () => {
@@ -121,6 +122,17 @@ describe('composer contract conformance', () => {
       height: 720,
       coarsePointer: false,
     }
+    const platformCapabilities: PlatformCapabilities = {
+      keyboardPlatform: 'other',
+      viewport,
+      coarsePointer: true,
+      finePointer: true,
+      primaryPointer: 'fine',
+      isStandalone: false,
+      isOnline: true,
+      hasCacheStorage: true,
+      hasServiceWorker: true,
+    }
     const offline: OfflineCacheState = { status: 'offline', pendingSync: 2 }
     const pwa: PwaController = {
       installState: 'available',
@@ -140,6 +152,7 @@ describe('composer contract conformance', () => {
     expect(preset.instrumentId).toBe('poly-synth')
     expect(soundDesign.engine).toBe('synth')
     expect(viewport.kind).toBe('desktop')
+    expect(platformCapabilities.primaryPointer).toBe('fine')
     expect(offline.pendingSync).toBe(2)
     await expect(pwa.promptInstall()).resolves.toBe(true)
   })

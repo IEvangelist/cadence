@@ -1,6 +1,7 @@
 import { type KeyboardEvent, useState } from 'react'
 import type { PluginsController } from '../plugins/usePlugins'
 import { eventToKeybinding, formatKeybinding } from '../plugins/keybindings'
+import { usePlatformCapabilities } from '../../platform/platformCapabilitiesContext'
 
 interface PluginsPanelProps {
   plugins: PluginsController
@@ -17,6 +18,7 @@ function KeybindingRecorder({
   onChange: (commandId: string, binding: string | null) => void
 }) {
   const [recording, setRecording] = useState(false)
+  const { keyboardPlatform } = usePlatformCapabilities()
 
   const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (!recording) return
@@ -37,7 +39,10 @@ function KeybindingRecorder({
     setRecording(false)
   }
 
-  const label = recording ? 'Press keys…' : binding ? formatKeybinding(binding) : 'Set shortcut'
+  const formattedBinding = binding
+    ? formatKeybinding(binding, keyboardPlatform)
+    : undefined
+  const label = recording ? 'Press keys…' : formattedBinding ?? 'Set shortcut'
 
   return (
     <button
@@ -46,7 +51,7 @@ function KeybindingRecorder({
       data-interaction="studio.plugins.keybinding.record"
       data-shortcut-recorder={recording ? 'active' : undefined}
       aria-pressed={recording}
-      aria-label={`Shortcut for command${binding ? `, currently ${formatKeybinding(binding)}` : ', not set'}`}
+      aria-label={`Shortcut for command${formattedBinding ? `, currently ${formattedBinding}` : ', not set'}`}
       onClick={() => setRecording((value) => !value)}
       onKeyDown={handleKeyDown}
       onBlur={() => setRecording(false)}
