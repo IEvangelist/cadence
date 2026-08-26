@@ -30,6 +30,10 @@ describe('AuthClient', () => {
     await expect(client.requestMagicLink('person@example.com')).rejects.toMatchObject({
       status: 0,
     })
+    await expect(client.logout()).rejects.toMatchObject({ status: 0 })
+    await expect(client.updateProfile({ displayName: 'Person' })).rejects.toMatchObject({
+      status: 0,
+    })
     expect(fetchImpl).not.toHaveBeenCalled()
   })
 
