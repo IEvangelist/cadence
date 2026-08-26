@@ -20,11 +20,35 @@ public static class StemModelIntegrity
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(uri);
 
-        if (uri.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+        if (IsWindowsPath(uri) || Path.IsPathRooted(uri))
+        {
+            return;
+        }
+
+        if (Uri.TryCreate(uri, UriKind.Absolute, out var parsed) &&
+            !parsed.IsFile &&
+            !string.Equals(parsed.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                "Stems:ModelUri must use https — an http model download is MITM-substitutable.");
+                "Stems:ModelUri must use https for remote models; file URIs and local paths are also allowed.");
         }
+    }
+
+    /// <summary>Whether <paramref name="digest"/> is a 64-digit SHA-256 hex value.</summary>
+    public static bool IsValidSha256(string digest)
+    {
+        if (string.IsNullOrWhiteSpace(digest))
+        {
+            return false;
+        }
+
+        var normalized = digest.Trim();
+        if (normalized.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = normalized["sha256:".Length..];
+        }
+
+        return normalized.Length == 64 && normalized.All(Uri.IsHexDigit);
     }
 
     /// <summary>Lowercase hex SHA-256 of <paramref name="bytes"/>.</summary>
@@ -56,4 +80,10 @@ public static class StemModelIntegrity
                 $"Model checksum mismatch: expected {expected}, computed {actual}. Refusing to use the model.");
         }
     }
+
+    private static bool IsWindowsPath(string uri) =>
+        uri.Length >= 3 &&
+        char.IsLetter(uri[0]) &&
+        uri[1] == ':' &&
+        (uri[2] == '\\' || uri[2] == '/');
 }

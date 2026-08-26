@@ -111,12 +111,28 @@ through environment variables, .NET user-secrets (local), or Key Vault
 | `Billing:Stripe:SecretKey` / `PublishableKey` / `WebhookSecret` / `PriceId` | empty | Stripe API keys, the webhook signing secret, and the price id for the paid (Pro) plan. |
 | `Billing:SuccessUrl` / `CancelUrl` / `PortalReturnUrl` | empty | Post-checkout and billing-portal return URLs. |
 | `ApiDocs:Enabled` | `true` | Serve `/openapi/v1.json` and `/scalar`. Set to `false` to hide the API reference on a hardened deployment. |
-| `Stems:ModelUri` / `Stems:ModelSha256` | unset | Optional pinned Demucs ONNX model URI (HTTPS) and its SHA-256. Unset uses the deterministic band-split fallback. Other `Stems:*` knobs (upload size, duration, container) have sensible defaults and are not secrets. |
+| `Stems:ModelUri` / `Stems:ModelSha256` | unset | Optional pinned Demucs ONNX model URI and its 64-digit hexadecimal SHA-256. A remote Production model requires both values and HTTPS; unset uses the deterministic band-split fallback. |
+| `Stems:MaxUploadBytes` / `MaxDurationSeconds` | `52428800` / `600` | Positive upload-byte and WAV-duration limits. |
+| `Stems:ProcessingLeaseSeconds` / `MaxAttempts` | `300` / `3` | Positive worker lease/reaper bounds. |
 
 Connection strings for Postgres, Redis, and Blob storage are injected by the
 Aspire AppHost (locally and on publish), so you do not set them by hand. Stripe
 settings are forwarded from the AppHost's configuration to the API only when
 present, so a local run needs none of them.
+
+The API and separation worker validate `Stems` at startup and exit before serving
+or claiming jobs when these bounds are zero/negative or the model settings are
+incoherent. For a remote production model, configure both processes with:
+
+```bash
+Stems__ModelUri=https://models.example.com/htdemucs.onnx
+Stems__ModelSha256=<64-hex-digit-sha256>
+```
+
+`file://` URIs and local paths remain supported for operator-managed model files.
+The worker verifies a cached/downloaded model before use; a poisoned cache entry
+is purged and re-downloaded. Plain HTTP and unsupported remote URI schemes are
+rejected.
 
 ## Deploy from your machine
 

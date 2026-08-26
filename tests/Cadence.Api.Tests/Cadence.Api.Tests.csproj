@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Cadence.Api\Cadence.Api.csproj" />
     <ProjectReference Include="..\..\src\Cadence.Data\Cadence.Data.csproj" />
+    <ProjectReference Include="..\..\src\Cadence.SeparationWorker\Cadence.SeparationWorker.csproj" Aliases="StemWorker" />
   </ItemGroup>
 
   <!--
