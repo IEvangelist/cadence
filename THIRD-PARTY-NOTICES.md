@@ -23,15 +23,15 @@ different license.
 | [`@fontsource-variable/inter`](https://www.npmjs.com/package/@fontsource-variable/inter) | 5.3.0 | OFL-1.1 | Self-hosted Latin variable UI font |
 | [`@fontsource-variable/space-grotesk`](https://www.npmjs.com/package/@fontsource-variable/space-grotesk) | 5.3.0 | OFL-1.1 | Self-hosted Latin variable display font |
 | [`@fontsource-variable/jetbrains-mono`](https://www.npmjs.com/package/@fontsource-variable/jetbrains-mono) | 5.3.0 | OFL-1.1 | Self-hosted Latin variable numeric font |
-| [`astro`](https://www.npmjs.com/package/astro) | 7.2.0 | MIT | Landing-site island runtime |
-| [`@astrojs/react`](https://www.npmjs.com/package/@astrojs/react) | 6.0.2 | MIT | React island renderer |
+| [`astro`](https://www.npmjs.com/package/astro) | 7.2.2 | MIT | Landing-site island runtime |
+| [`@astrojs/react`](https://www.npmjs.com/package/@astrojs/react) | 6.0.3 | MIT | React island renderer |
 | [`react`](https://www.npmjs.com/package/react) | 19.2.8 | MIT | Landing-site component runtime |
 | [`react-dom`](https://www.npmjs.com/package/react-dom) | 19.2.8 | MIT | Landing-site DOM renderer |
 | [`scheduler`](https://www.npmjs.com/package/scheduler) | 0.27.0 | MIT | React scheduling runtime |
-| [`motion`](https://www.npmjs.com/package/motion) | 12.43.0 | MIT | Landing-site motion entry point |
-| [`framer-motion`](https://www.npmjs.com/package/framer-motion) | 12.43.0 | MIT | Motion React runtime |
-| [`motion-dom`](https://www.npmjs.com/package/motion-dom) | 12.43.0 | MIT | Motion DOM runtime |
-| [`motion-utils`](https://www.npmjs.com/package/motion-utils) | 12.39.0 | MIT | Shared Motion utilities |
+| [`motion`](https://www.npmjs.com/package/motion) | 13.1.0 | MIT | Landing-site motion entry point |
+| [`framer-motion`](https://www.npmjs.com/package/framer-motion) | 13.1.0 | MIT | Motion React runtime |
+| [`motion-dom`](https://www.npmjs.com/package/motion-dom) | 13.0.0 | MIT | Motion DOM runtime |
+| [`motion-utils`](https://www.npmjs.com/package/motion-utils) | 13.0.0 | MIT | Shared Motion utilities |
 
 The complete OFL-1.1 text distributed with the fonts is available at
 `apps/web/public/licenses/OFL-1.1.txt`. The complete Lucide ISC notice and the
@@ -53,11 +53,11 @@ Font copyright and source metadata:
 The deployed landing page includes browser code from the Astro island runtime,
 the Astro React renderer, React, and Motion. The exact production graph is:
 
-- `astro@7.2.0` and `@astrojs/react@6.0.2` provide the island custom element and
+- `astro@7.2.2` and `@astrojs/react@6.0.3` provide the island custom element and
   React renderer loaded by the page.
 - `react@19.2.8` and `react-dom@19.2.8` load `scheduler@0.27.0`.
-- `motion@12.43.0` loads `framer-motion@12.43.0`; Framer Motion loads
-  `motion-dom@12.43.0` and `motion-utils@12.39.0`.
+- `motion@13.1.0` loads `framer-motion@13.1.0`; Framer Motion loads
+  `motion-dom@13.0.0` and `motion-utils@13.0.0`.
 
 Astro's build pipeline, Tailwind CSS, Vite plugins, and their dependency trees
 do not run in the deployed page, so they are not listed as browser-runtime
@@ -65,7 +65,7 @@ redistributions here.
 
 ### Astro and Astro React
 
-The `astro@7.2.0` and `@astrojs/react@6.0.2` packages contain the same license
+The `astro@7.2.2` and `@astrojs/react@6.0.3` packages contain the same license
 file. It is reproduced once here for both packages:
 
 ```text
@@ -177,7 +177,7 @@ SOFTWARE.
 
 ### Motion, Motion DOM, and Motion Utils
 
-`motion@12.43.0`, `motion-dom@12.43.0`, and `motion-utils@12.39.0` contain the
+`motion@13.1.0`, `motion-dom@13.0.0`, and `motion-utils@13.0.0` contain the
 same license terms and copyright notice:
 
 ```text
@@ -206,7 +206,7 @@ SOFTWARE.
 
 ### Framer Motion
 
-`framer-motion@12.43.0` is licensed as follows:
+`framer-motion@13.1.0` is licensed as follows:
 
 ```text
 The MIT License (MIT)

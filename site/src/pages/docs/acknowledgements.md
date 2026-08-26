@@ -62,15 +62,15 @@ MP3 export possible.
 | [`@fontsource-variable/inter`](https://www.npmjs.com/package/@fontsource-variable/inter) | 5.3.0 | OFL-1.1 |
 | [`@fontsource-variable/space-grotesk`](https://www.npmjs.com/package/@fontsource-variable/space-grotesk) | 5.3.0 | OFL-1.1 |
 | [`@fontsource-variable/jetbrains-mono`](https://www.npmjs.com/package/@fontsource-variable/jetbrains-mono) | 5.3.0 | OFL-1.1 |
-| [`astro`](https://www.npmjs.com/package/astro) | 7.2.0 | MIT |
-| [`@astrojs/react`](https://www.npmjs.com/package/@astrojs/react) | 6.0.2 | MIT |
+| [`astro`](https://www.npmjs.com/package/astro) | 7.2.2 | MIT |
+| [`@astrojs/react`](https://www.npmjs.com/package/@astrojs/react) | 6.0.3 | MIT |
 | [`react`](https://www.npmjs.com/package/react) | 19.2.8 | MIT |
 | [`react-dom`](https://www.npmjs.com/package/react-dom) | 19.2.8 | MIT |
 | [`scheduler`](https://www.npmjs.com/package/scheduler) | 0.27.0 | MIT |
-| [`motion`](https://www.npmjs.com/package/motion) | 12.43.0 | MIT |
-| [`framer-motion`](https://www.npmjs.com/package/framer-motion) | 12.43.0 | MIT |
-| [`motion-dom`](https://www.npmjs.com/package/motion-dom) | 12.43.0 | MIT |
-| [`motion-utils`](https://www.npmjs.com/package/motion-utils) | 12.39.0 | MIT |
+| [`motion`](https://www.npmjs.com/package/motion) | 13.1.0 | MIT |
+| [`framer-motion`](https://www.npmjs.com/package/framer-motion) | 13.1.0 | MIT |
+| [`motion-dom`](https://www.npmjs.com/package/motion-dom) | 13.0.0 | MIT |
+| [`motion-utils`](https://www.npmjs.com/package/motion-utils) | 13.0.0 | MIT |
 
 Radix Dialog provides Cadence's accessible project/replacement dialogs.
 
