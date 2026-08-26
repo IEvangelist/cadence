@@ -249,6 +249,12 @@ transitions are broadcast across tabs (`BroadcastChannel`, with a `storage`
 event fallback), invalidating other tabs' auth operations, sockets, and store
 generation without trusting the broadcast as a new login.
 
+An external transition to account B first enters `verification-pending`: the
+tab clears its live user, disables the project store/mutations, and unmounts
+collaboration before calling `/me`. B becomes active only after that response
+matches and owner-specific cleanup/reconciliation completes. A stale A
+autosave therefore cannot capture B's cookie during the verification window.
+
 Server connections retain caller, room, and validated share-grant identity.
 Revoking a grant marks and closes every matching live socket before returning;
 the relay loop rechecks revocation before persisting or broadcasting another
@@ -257,10 +263,23 @@ Client logout and owner cleanup are bounded: local anonymous state is published
 after the fixed deadline even when fetch never settles, while late non-abort
 errors remain observable.
 
+Revocation is replica-wide in ACA. Production uses the existing Redis
+connection for typed `Grant`/`User` generation markers and a versioned pub/sub
+channel; every replica's resilient subscriber closes matching local sockets.
+Tests use the same bus contract with two hubs over one deterministic in-memory
+bus. Grant validation/join and durable deletion/generation increment share a
+grant barrier. Every frame takes the caller and grant barriers, rechecks both
+durable generations, then performs gate/append/broadcast inside that critical
+section. DELETE/logout waits for already accepted frames; no older-generation
+frame can land after the response completes. Other grants, users, and rooms use
+different barriers and continue independently.
+
 Serialized recovery merges the complete `Project`: notes/tracks plus automation
 lanes/points and mixer state/inserts/parameters. Backup conflicts win while
 server-only lanes, points, tracks, and inserts survive. The recovery callback
-also reapplies non-CRDT fields to the composer. Final collaboration integration
+dispatches a dedicated one-shot reducer action that adopts non-CRDT fields
+instead of `sync-remote` preserving the bootstrap mix/automation. Final
+collaboration integration
 will rebase onto PR #190's shared mix/automation CRDT schema rather than creating
 a competing effect schema here.
 

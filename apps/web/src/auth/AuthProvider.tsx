@@ -218,7 +218,24 @@ export function AuthProvider({
         operationRef.current.controller?.abort()
         if (transition.mode !== 'anonymous') {
           const operation = beginOperation(false)
-          void performRefresh(operation)
+          setUser(null)
+          setOfflineUser(null)
+          setStatus('verification-pending')
+          void Promise.resolve(
+            onAuthChangeRef.current?.({
+              generation: operation.generation,
+              mode: 'anonymous',
+              ownerId: null,
+              purgeOwnerIds: [],
+              broadcast: false,
+            }),
+          )
+            .catch((error) => {
+              console.warn('Cross-tab verification lock did not complete.', error)
+            })
+            .then(() => {
+              if (isCurrent(operation)) return performRefresh(operation)
+            })
           return
         }
         const generation = nextAuthGeneration()
@@ -243,7 +260,7 @@ export function AuthProvider({
           console.warn('Cross-tab auth cleanup did not complete.', error)
         })
       }),
-    [beginOperation, offlineIdentityStore, performRefresh],
+    [beginOperation, isCurrent, offlineIdentityStore, performRefresh],
   )
 
   useEffect(() => {

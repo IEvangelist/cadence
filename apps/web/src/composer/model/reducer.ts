@@ -43,6 +43,7 @@ export interface ComposerState {
 export type ComposerAction =
   | { type: 'load-project'; project: Project }
   | { type: 'sync-remote'; project: Project }
+  | { type: 'recover-collaboration-backup'; project: Project }
   | { type: 'set-project-name'; name: string }
   | { type: 'set-tempo'; tempo: number }
   | { type: 'set-loop'; loop: Partial<LoopRegion> }
@@ -189,6 +190,30 @@ export function composerReducer(
         project,
         selectedTrackId,
         selectedNoteIds: state.selectedNoteIds.filter((id) => liveNoteIds.has(id)),
+      }
+    }
+
+    case 'recover-collaboration-backup': {
+      // One-shot full serialized recovery. Unlike routine CRDT sync, this must
+      // adopt non-CRDT fields (mix/automation) rather than preserve the stale
+      // bootstrap state. PR #190 will move those fields into shared CRDT state.
+      const project = action.project
+      const selectedTrackId = project.tracks.some(
+        (track) => track.id === state.selectedTrackId,
+      )
+        ? state.selectedTrackId
+        : (project.tracks[0]?.id ?? '')
+      const liveNoteIds = new Set(
+        project.tracks
+          .find((track) => track.id === selectedTrackId)
+          ?.notes.map((note) => note.id) ?? [],
+      )
+      return {
+        project,
+        selectedTrackId,
+        selectedNoteIds: state.selectedNoteIds.filter((id) =>
+          liveNoteIds.has(id),
+        ),
       }
     }
 

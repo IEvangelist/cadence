@@ -117,17 +117,22 @@ public static class CollaborationEndpoints
         CollabHub hub)
     {
         var ownerId = users.GetUserId(principal)!;
-        var link = await db.ProjectShareLinks
-            .FirstOrDefaultAsync(s => s.Token == token && s.OwnerId == ownerId && s.ProjectId == projectId);
-        if (link is null)
-        {
-            return Results.NotFound();
-        }
-
-        db.ProjectShareLinks.Remove(link);
-        await db.SaveChangesAsync();
-        await hub.RevokeGrantAsync(RoomKey(ownerId, projectId), token);
-        return Results.NoContent();
+        var grantId = hub.GrantId(token);
+        var revoked = await hub.RevokeGrantAsync(
+            grantId,
+            async () =>
+            {
+                var link = await db.ProjectShareLinks
+                    .FirstOrDefaultAsync(share =>
+                        share.Token == token &&
+                        share.OwnerId == ownerId &&
+                        share.ProjectId == projectId);
+                if (link is null) return false;
+                db.ProjectShareLinks.Remove(link);
+                await db.SaveChangesAsync();
+                return true;
+            });
+        return revoked ? Results.NoContent() : Results.NotFound();
     }
 
     private static async Task RelayAsync(
@@ -166,31 +171,63 @@ public static class CollaborationEndpoints
             return;
         }
 
-        var (role, ownerId) = await ResolveRoleAsync(db, callerId, projectId, context.Request.Query["token"]);
-        if (role is null)
+        var isOwner = await OwnsProjectAsync(db, callerId, projectId);
+        var token = context.Request.Query["token"].ToString();
+        var grantId = isOwner || string.IsNullOrEmpty(token)
+            ? null
+            : hub.GrantId(token);
+        WebSocket? socket = null;
+        CollabConnection? connection = null;
+        var ownerId = string.Empty;
+        var room = string.Empty;
+        var joined = await hub.WithConnectionBarrierAsync(
+            callerId,
+            grantId,
+            async () =>
+            {
+                CollaborationRole role;
+                if (isOwner)
+                {
+                    role = CollaborationRole.Owner;
+                    ownerId = callerId;
+                }
+                else
+                {
+                    if (grantId is null) return false;
+                    var link = await db.ProjectShareLinks
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(share =>
+                            share.Token == token &&
+                            share.ProjectId == projectId);
+                    if (link is null) return false;
+                    role = link.Role;
+                    ownerId = link.OwnerId;
+                }
+
+                socket = await context.WebSockets.AcceptWebSocketAsync();
+                room = RoomKey(ownerId, projectId);
+                connection = await hub.JoinAsync(
+                    room,
+                    socket,
+                    role,
+                    callerId,
+                    ownerId,
+                    projectId,
+                    grantId,
+                    () => documents.LoadAsync(
+                        ownerId,
+                        projectId,
+                        context.RequestAborted),
+                    context.RequestAborted);
+                return true;
+            });
+        if (!joined || socket is null || connection is null)
         {
-            // Authenticated but neither owner nor holder of a valid share token.
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             return;
         }
 
-        using var socket = await context.WebSockets.AcceptWebSocketAsync();
-        var room = RoomKey(ownerId, projectId);
-
-        // Load the room's persisted document (if any) on first join, so a client
-        // reconnecting after all peers left can be rehydrated from the server.
-        var connection = await hub.JoinAsync(
-            room,
-            socket,
-            role.Value,
-            callerId,
-            ownerId,
-            projectId,
-            role == CollaborationRole.Owner
-                ? null
-                : context.Request.Query["token"].ToString(),
-            () => documents.LoadAsync(ownerId, projectId, context.RequestAborted),
-            context.RequestAborted);
+        using (socket)
         try
         {
             await RelayLoopAsync(hub, room, connection, context.RequestAborted);
@@ -249,29 +286,37 @@ public static class CollaborationEndpoints
             var message = frame.ToArray();
             if (connection.IsRevoked) return;
 
-            // Server-side role enforcement: a viewer's document-write frames are
-            // dropped here and never reach other peers. This is the authoritative
-            // gate — the client cannot bypass it. Fail closed on malformed frames.
-            if (!connection.CanWrite && YProtocol.IsWriteMessage(message))
-            {
-                continue;
-            }
+            var accepted = await hub.ProcessFrameAsync(
+                connection,
+                async () =>
+                {
+                    // Authoritative viewer gate remains inside the same barrier
+                    // as generation validation, append, and broadcast.
+                    if (!connection.CanWrite && YProtocol.IsWriteMessage(message))
+                    {
+                        return;
+                    }
 
-            // Answer a state request from the room's durable log so a reconnecting
-            // collaborator (or the first client of a fresh room) converges from the
-            // server — this is what lets a room survive all peers disconnecting.
-            if (YProtocol.IsSyncStep1(message))
-            {
-                await SendSnapshotAsync(hub, room, connection, cancellationToken);
-            }
-            else if (YProtocol.TryReadUpdatePayload(message, out var payload))
-            {
-                // Capture every writer's document update so the room's persisted
-                // state stays current for the next reconnect.
-                hub.AppendUpdate(room, payload);
-            }
+                    if (YProtocol.IsSyncStep1(message))
+                    {
+                        await SendSnapshotAsync(
+                            hub,
+                            room,
+                            connection,
+                            cancellationToken);
+                    }
+                    else if (YProtocol.TryReadUpdatePayload(message, out var payload))
+                    {
+                        hub.AppendUpdate(room, payload);
+                    }
 
-            await hub.BroadcastAsync(room, connection.Id, message, cancellationToken);
+                    await hub.BroadcastAsync(
+                        room,
+                        connection.Id,
+                        message,
+                        cancellationToken);
+                });
+            if (!accepted) return;
         }
     }
 

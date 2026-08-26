@@ -6,6 +6,9 @@ import { AuthProvider } from './AuthProvider'
 import { useAuth, type AuthPersistenceChange } from './authContext'
 import { OfflineIdentityStore } from './offlineIdentity'
 import { MemoryStorage } from '../composer/model/storage'
+import { authMutationCoordinator } from './authMutationCoordinator'
+import { RemoteProjectStore } from '../composer/model/remoteStore'
+import { createEmptyProject } from '../composer/model/project'
 
 const user: Me = { id: '1', email: 'a@b.com', displayName: 'Ada', tier: 'Free' }
 
@@ -288,6 +291,70 @@ describe('AuthProvider / useAuth', () => {
 
     expect(screen.getByTestId('user')).toHaveTextContent('Bea')
     expect(identityStore.read()).toEqual({ id: '2', displayName: 'Bea' })
+  })
+
+  it('locks mutations while an external owner switch awaits local verification', async () => {
+    let resolveOwnerB!: (value: Me | null) => void
+    const ownerB = new Promise<Me | null>((resolve) => {
+      resolveOwnerB = resolve
+    })
+    const nextUser: Me = {
+      id: 'owner-b',
+      email: 'b@b.com',
+      displayName: 'Bea',
+      tier: 'Free',
+    }
+    let reads = 0
+    const client = fakeClient({
+      me: vi.fn(() => {
+        reads += 1
+        return reads === 1
+          ? Promise.resolve({ ...user, id: 'owner-a' })
+          : ownerB
+      }),
+    })
+    renderWith(client)
+    await waitFor(() =>
+      expect(screen.getByTestId('status')).toHaveTextContent('authenticated'),
+    )
+    authMutationCoordinator.transition({
+      generation: 1,
+      mode: 'authenticated',
+      ownerId: 'owner-a',
+      purgeOwnerIds: [],
+    }, false)
+
+    authMutationCoordinator.acceptExternalTransition({
+      mode: 'authenticated',
+      ownerId: 'owner-b',
+    })
+    await waitFor(() =>
+      expect(screen.getByTestId('status')).toHaveTextContent(
+        'verification-pending',
+      ),
+    )
+
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 204 }))
+    const oldOwnerStore = new RemoteProjectStore(
+      fetchImpl,
+      '',
+      () => authMutationCoordinator.capture('owner-a'),
+    )
+    await expect(
+      oldOwnerStore.save(createEmptyProject('stale-owner-a')),
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(fetchImpl).not.toHaveBeenCalled()
+
+    resolveOwnerB(nextUser)
+    await waitFor(() =>
+      expect(screen.getByTestId('user')).toHaveTextContent('Bea'),
+    )
+    authMutationCoordinator.transition({
+      generation: 2,
+      mode: 'anonymous',
+      ownerId: null,
+      purgeOwnerIds: [],
+    }, false)
   })
 
   it('signIn authenticates and notifies onAuthChange(true)', async () => {

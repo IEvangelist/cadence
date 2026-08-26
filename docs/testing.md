@@ -395,6 +395,16 @@ paths first. See [`collaboration.md`](collaboration.md) for the design.
   grant revoke and cannot broadcast another write; logout closes every caller
   socket. A never-resolving logout still reaches anonymous UI and purges caches
   within the configured bound.
+- **Distributed barriers**: two `CollabHub` replicas sharing one deterministic
+  revocation bus both close a revoked grant while an unrelated grant survives;
+  paused-join and accepted-frame barriers prove DELETE waits and no later frame
+  appends.
+- **Verification pending**: a cross-tab owner-B signal disables the owner-A
+  store before deferred `/me`; an attempted old autosave performs zero network
+  mutations until B is locally confirmed.
+- **Reducer recovery**: reducer/controller/hook integration proves the dedicated
+  recovery action adopts mixer inserts/params and automation rather than the
+  normal `sync-remote` preservation path dropping them.
 - **Auth + production-store wiring**: real `AppProviders` and
   `SyncingProjectStore` prove remote-primary autosave also writes an
   owner/project/grant-scoped serialized backup, full API failure reloads only

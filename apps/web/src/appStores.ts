@@ -20,7 +20,11 @@ const authFlag: AuthFlag = {
   generation: 0,
 }
 const localStore = createProjectStore()
-const remoteStore = new RemoteProjectStore()
+const remoteStore = new RemoteProjectStore(
+  undefined,
+  undefined,
+  () => authMutationCoordinator.capture(authFlag.ownerId),
+)
 
 /** The single persistence store handed to the composer. */
 export const projectStore = new SyncingProjectStore(localStore, remoteStore, authFlag)

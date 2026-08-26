@@ -63,7 +63,11 @@ export function StudioRoute() {
     )
   }, [location.pathname, location.search, navigate])
 
-  if (auth.status === 'loading' || auth.status === 'signing-out') {
+  if (
+    auth.status === 'loading' ||
+    auth.status === 'verification-pending' ||
+    auth.status === 'signing-out'
+  ) {
     return (
       <section
         className="composer-hydration"

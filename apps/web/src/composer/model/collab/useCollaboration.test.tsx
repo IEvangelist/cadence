@@ -137,6 +137,7 @@ function makeBinding(project: Project): CollabBinding {
     selectedTrackId: 'track_a',
     selectedNoteIds: [],
     applyRemoteProject: vi.fn(),
+    recoverCollaborationBackup: vi.fn(),
   }
 }
 
@@ -166,6 +167,7 @@ function useIntegratedComposerCollaboration(
       selectedTrackId: controller.selectedTrackId,
       selectedNoteIds: controller.state.selectedNoteIds,
       applyRemoteProject: controller.applyRemoteProject,
+      recoverCollaborationBackup: controller.recoverCollaborationBackup,
       historyCaptureGroup: controller.historyCaptureGroup,
       historyCaptureBoundary: controller.historyCaptureBoundary,
       subscribeProjectTransitions: controller.subscribeProjectTransitions,
@@ -454,7 +456,8 @@ describe('useCollaboration', () => {
 
     act(() => built[0].fireSerializedBackup(recovered))
 
-    expect(binding.applyRemoteProject).toHaveBeenCalledWith(recovered)
+    expect(binding.recoverCollaborationBackup).toHaveBeenCalledWith(recovered)
+    expect(binding.applyRemoteProject).not.toHaveBeenCalledWith(recovered)
   })
 
   it('keeps serialized project autosave after adopting the persisted CRDT', async () => {

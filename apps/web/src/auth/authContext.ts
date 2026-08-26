@@ -19,6 +19,7 @@ export function nextAuthGeneration(): number {
 
 export type AuthStatus =
   | 'loading'
+  | 'verification-pending'
   | 'authenticated'
   | 'signing-out'
   | 'offline'

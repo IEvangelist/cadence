@@ -37,7 +37,7 @@ export function AuthBar({
     )
   }
 
-  if (auth.status === 'loading') {
+  if (auth.status === 'loading' || auth.status === 'verification-pending') {
     return <div className="authbar authbar--loading" aria-hidden="true" />
   }
 

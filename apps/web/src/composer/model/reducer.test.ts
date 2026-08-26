@@ -695,4 +695,36 @@ describe('automation', () => {
       { target: 'masterGain', points: [{ beat: 0, value: -4 }] },
     ])
   })
+
+  it('adopts recovered collaboration mix and automation instead of preserving bootstrap values', () => {
+    const state = seed()
+    const recovered = createEmptyProject('p')
+    recovered.tracks = [createTrack({ name: 'Synth' }, 'track_a')]
+    recovered.automation = [
+      { target: 'masterGain', points: [{ beat: 2, value: -7 }] },
+    ]
+    recovered.mix = {
+      tracks: {
+        track_a: {
+          gainDb: -5,
+          pan: 0.25,
+          solo: true,
+          inserts: [],
+        },
+      },
+      master: {
+        gainDb: -3,
+        limiterEnabled: true,
+        limiterThresholdDb: -4,
+      },
+    }
+
+    const next = composerReducer(state, {
+      type: 'recover-collaboration-backup',
+      project: recovered,
+    })
+
+    expect(next.project.automation).toEqual(recovered.automation)
+    expect(next.project.mix).toEqual(recovered.mix)
+  })
 })

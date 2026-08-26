@@ -85,6 +85,7 @@ export interface CollabBinding {
   selectedTrackId: string
   selectedNoteIds: string[]
   applyRemoteProject: (project: Project) => void
+  recoverCollaborationBackup: (project: Project) => void
   /** Optional single-user action classification reused for Yjs capture grouping. */
   historyCaptureGroup?: string | null
   /** Explicit pointer/field boundary; changes seal the current Yjs capture item. */
@@ -246,7 +247,7 @@ export function useCollaboration(
     const offStatus = provider.onStatus?.((isConnected) => setConnected(isConnected))
     const offPersistenceStatus = provider.onPersistenceStatus?.(setOfflinePersistence)
     const offSerializedBackup = provider.onSerializedBackupRecovered?.(
-      (project) => bindingRef.current.applyRemoteProject(project),
+      (project) => bindingRef.current.recoverCollaborationBackup(project),
     )
     const offProjectTransitions = subscribeProjectTransitions?.((transition) => {
       if (!mirrorReadyRef.current) return

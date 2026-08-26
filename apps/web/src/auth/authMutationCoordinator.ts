@@ -108,6 +108,11 @@ export class AuthMutationCoordinator {
     return () => this.listeners.delete(listener)
   }
 
+  /** Apply a transport-delivered transition; public for deterministic adapters/tests. */
+  acceptExternalTransition(transition: ExternalAuthTransition): void {
+    this.apply(transition.mode, transition.ownerId, true)
+  }
+
   dispose(): void {
     this.controller.abort()
     this.channel?.close()
@@ -145,7 +150,10 @@ export class AuthMutationCoordinator {
     ) {
       return
     }
-    this.apply(candidate.mode, candidate.ownerId, true)
+    this.acceptExternalTransition({
+      mode: candidate.mode,
+      ownerId: candidate.ownerId,
+    })
   }
 }
 

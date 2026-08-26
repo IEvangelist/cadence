@@ -15,7 +15,9 @@ public sealed class CollabConnection(
     string callerId,
     string ownerId,
     string projectId,
-    string? grantToken)
+    string? grantId,
+    long grantGeneration,
+    long userGeneration)
 {
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private int _revoked;
@@ -36,7 +38,11 @@ public sealed class CollabConnection(
     public string ProjectId { get; } = projectId;
 
     /// <summary>The validated share grant for non-owner connections.</summary>
-    public string? GrantToken { get; } = grantToken;
+    public string? GrantId { get; } = grantId;
+
+    public long GrantGeneration { get; } = grantGeneration;
+
+    public long UserGeneration { get; } = userGeneration;
 
     public bool IsRevoked => Volatile.Read(ref _revoked) != 0;
 
