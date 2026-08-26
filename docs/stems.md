@@ -134,7 +134,8 @@ Nothing here is a secret; all values have safe defaults (see `StemOptions`).
 The API and worker validate this section during host startup. Invalid settings stop
 the process before it accepts traffic or claims work: upload/duration/lease/attempt
 bounds must all be greater than zero, and a checksum cannot be configured without
-a model URI.
+a model URI. Validation is eager (`ValidateOnStart`), not deferred until the first
+request or queued job.
 
 | Key | Default | Meaning |
 |---|---|---|
