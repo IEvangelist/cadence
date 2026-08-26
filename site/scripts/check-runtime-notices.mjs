@@ -13,17 +13,18 @@ const acknowledgementsPath = join(
 );
 
 const islandRuntime = ['astro', '@astrojs/react'];
-const expectedRuntimeNames = [
-  '@astrojs/react',
-  'astro',
-  'framer-motion',
-  'motion',
-  'motion-dom',
-  'motion-utils',
-  'react',
-  'react-dom',
-  'scheduler',
-];
+const expectedRuntimeVersions = new Map([
+  ['@astrojs/react', '6.0.3'],
+  ['astro', '7.2.2'],
+  ['framer-motion', '13.1.0'],
+  ['motion', '13.1.0'],
+  ['motion-dom', '13.0.0'],
+  ['motion-utils', '13.0.0'],
+  ['react', '19.2.8'],
+  ['react-dom', '19.2.8'],
+  ['scheduler', '0.27.0'],
+]);
+const expectedRuntimeNames = [...expectedRuntimeVersions.keys()].sort();
 
 const packagePath = (name) =>
   join(siteRoot, 'node_modules', ...name.split('/'));
@@ -96,6 +97,14 @@ if (actualRuntimeNames.join('\n') !== expectedRuntimeNames.join('\n')) {
       `Actual: ${actualRuntimeNames.join(', ')}`,
     ].join('\n'),
   );
+}
+for (const [name, expectedVersion] of expectedRuntimeVersions) {
+  const actualVersion = packages.get(name)?.version;
+  if (actualVersion !== expectedVersion) {
+    throw new Error(
+      `Browser runtime version changed for ${name}: expected ${expectedVersion}, actual ${actualVersion}`,
+    );
+  }
 }
 for (const name of manifestOnlyDependencies) {
   if (!skippedManifestOnlyDependencies.has(name)) {

@@ -25,3 +25,30 @@ test('primary nav follows the 48rem breakpoint', async ({ page }, testInfo) => {
     await expect(desktopNav).toBeVisible();
   }
 });
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`Motion renders the ${theme} theme without responsive regressions`, async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+    await page.addInitScript((preference) => {
+      localStorage.setItem('cadence.v1.theme', preference);
+    }, theme);
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'no-preference' });
+    await page.goto('/cadence/', { waitUntil: 'networkidle' });
+
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    await expect(page.locator('html')).toHaveAttribute('data-motion', 'full');
+    await expect(page.getByRole('heading', { level: 1, name: 'Make the idea land.' })).toBeVisible();
+
+    const reveal = page.locator('.ai-copy');
+    await reveal.scrollIntoViewIfNeeded();
+    await expect(reveal).toHaveCSS('opacity', '1');
+    await expect(reveal).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(1);
+    expect(pageErrors).toEqual([]);
+  });
+}
