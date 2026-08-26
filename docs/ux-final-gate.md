@@ -48,3 +48,23 @@ baseline inputs, helpers, and approved Linux snapshots.
 
 The integrated pre-snapshot checkpoint measures 214,823 gzip bytes across the
 initial entry and module-preload graph, 3.43% below the 222,450-byte baseline.
+
+## Whole-song loop invariant
+
+For locally authored timeline changes and projects entering through
+`load-project`, the reducer maintains `project.loop.end >=
+project.lengthBeats`. Cadence exposes Loop as a whole-song toggle rather than an
+A/B region, so letting the loop end trail the project would make later notes
+inaudible. Timeline growth from a single note, an accepted AI batch, note
+resizing, explicit length changes, and stale project loading all grow the loop
+as needed.
+
+The executable contract is covered by the existing
+[`loop follows the timeline (whole-song loop)` reducer tests](../apps/web/src/composer/model/reducer.test.ts#L116-L216),
+including the
+[`load-project` repair for stale stored length and loop data](../apps/web/src/composer/model/reducer.test.ts#L179-L204).
+`sync-remote` is the deliberate boundary exception: it adopts the converged
+CRDT document verbatim to remain echo-safe, as asserted by the
+[`sync-remote` convergence test](../apps/web/src/composer/model/reducer.test.ts#L206-L215);
+the invariant is restored when that document later enters through
+`load-project`.

@@ -401,7 +401,7 @@ test.describe('auth', () => {
     await page.reload()
     await page.getByRole('button', { name: 'Sign out' }).click()
     await expect(page).toHaveURL(/\/$/)
-    expect(signOuts).toBe(2)
+    await expect.poll(() => signOuts).toBe(2)
   })
 
   test('re-enters the guard on profile 401 and retries profile 500', async ({ page }) => {

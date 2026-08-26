@@ -73,6 +73,7 @@ test.describe('professional Studio frame', () => {
       await expect(frame).toBeVisible()
       await expect(page.locator('footer')).toHaveCount(0)
       await expectInsideViewport(page, '.piano-roll')
+      expect(await page.evaluate(() => window.scrollY)).toBe(0)
       expect(await documentHeight(page)).toBeLessThanOrEqual(viewport.height + 1)
 
       for (const owner of ['rail', 'editor']) {
@@ -130,12 +131,21 @@ test.describe('professional Studio frame', () => {
     }))
     expect(dimensions.scrollHeight).toBeLessThanOrEqual(dimensions.innerHeight + 1)
     expect(dimensions.scrollWidth - dimensions.innerWidth).toBeLessThanOrEqual(1)
+    expect(await page.evaluate(() => window.scrollY)).toBe(0)
 
     await expect(page.getByRole('navigation', { name: 'Composer tasks' })).toBeInViewport()
     await expect(page.getByRole('group', { name: 'Transport controls' })).toBeInViewport()
 
     const roll = page.locator('.piano-roll')
     await expect(roll).toBeInViewport()
+
+    const projectTask = page
+      .getByRole('navigation', { name: 'Composer tasks' })
+      .locator('[data-interaction="mobile.task.open"]')
+      .filter({ hasText: 'Project' })
+    await projectTask.click()
+    await expect(page.getByTestId('mobile-project-sheet')).toBeVisible()
+    expect(await page.evaluate(() => window.scrollY)).toBe(0)
   })
 
   test('keeps default chrome concise and ordered before the editor', async ({ page }) => {

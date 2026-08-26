@@ -7,6 +7,13 @@ interface Point {
   y: number
 }
 
+const mobileSafeArea = {
+  top: 23,
+  right: 17,
+  bottom: 29,
+  left: 19,
+} as const
+
 async function touchGesture(
   page: Page,
   points: readonly Point[],
@@ -84,6 +91,21 @@ async function mockAnonymousApi(route: Route): Promise<void> {
 
 test.describe('production mobile Studio', () => {
   test.beforeEach(async ({ page }) => {
+    await page.addInitScript((safeArea) => {
+      const applySafeArea = () => {
+        const root = document.documentElement
+        if (!root) return false
+        for (const [edge, inset] of Object.entries(safeArea)) {
+          root.style.setProperty(`--mobile-safe-area-${edge}`, `${inset}px`)
+        }
+        return true
+      }
+      if (applySafeArea()) return
+      const observer = new MutationObserver(() => {
+        if (applySafeArea()) observer.disconnect()
+      })
+      observer.observe(document, { childList: true })
+    }, mobileSafeArea)
     await page.addInitScript((entries) => {
       for (const entry of entries) localStorage.setItem(entry.name, entry.value)
       localStorage.setItem('cadence.v1.onboarding.seen', '1')
@@ -272,6 +294,65 @@ test.describe('production mobile Studio', () => {
       .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
       .analyze()
     expect(results.violations).toEqual([])
+  })
+
+  test('keeps contextual guidance clear of the creative surface and safe task area', async ({
+    page,
+  }) => {
+    const coach = page.getByRole('complementary', {
+      name: 'Pan first, draw on purpose',
+    })
+    const creativeSurface = page.locator('.piano-roll')
+    const taskNavigator = page.getByRole('navigation', { name: 'Composer tasks' })
+    await expect(coach).toBeVisible()
+    await expect(creativeSurface).toBeVisible()
+    await expect(taskNavigator).toBeVisible()
+
+    const [coachBox, creativeBox, taskBox, firstTaskBox, lastTaskBox] =
+      await Promise.all([
+      coach.boundingBox(),
+      creativeSurface.boundingBox(),
+      taskNavigator.boundingBox(),
+      taskNavigator.locator('.mobile-task-nav__button').first().boundingBox(),
+      taskNavigator.locator('.mobile-task-nav__button').last().boundingBox(),
+    ])
+    expect(coachBox).not.toBeNull()
+    expect(creativeBox).not.toBeNull()
+    expect(taskBox).not.toBeNull()
+    expect(firstTaskBox).not.toBeNull()
+    expect(lastTaskBox).not.toBeNull()
+    expect(coachBox!.y + coachBox!.height).toBeLessThanOrEqual(creativeBox!.y + 1)
+    expect(coachBox!.y + coachBox!.height).toBeLessThanOrEqual(taskBox!.y + 1)
+    expect(coachBox!.x).toBeGreaterThanOrEqual(mobileSafeArea.left)
+    expect(coachBox!.x + coachBox!.width).toBeLessThanOrEqual(
+      390 - mobileSafeArea.right,
+    )
+    expect(creativeBox!.x).toBeGreaterThanOrEqual(mobileSafeArea.left)
+    expect(creativeBox!.x + creativeBox!.width).toBeLessThanOrEqual(
+      390 - mobileSafeArea.right,
+    )
+    expect(firstTaskBox!.x).toBeGreaterThanOrEqual(mobileSafeArea.left)
+    expect(lastTaskBox!.x + lastTaskBox!.width).toBeLessThanOrEqual(
+      390 - mobileSafeArea.right,
+    )
+    expect(firstTaskBox!.y).toBeGreaterThanOrEqual(mobileSafeArea.top)
+    expect(firstTaskBox!.y + firstTaskBox!.height).toBeLessThanOrEqual(
+      844 - mobileSafeArea.bottom,
+    )
+    expect(lastTaskBox!.y + lastTaskBox!.height).toBeLessThanOrEqual(
+      844 - mobileSafeArea.bottom,
+    )
+    expect(taskBox!.y + taskBox!.height).toBeLessThanOrEqual(845)
+
+    await page
+      .getByRole('button', { name: 'Dismiss Pan first, draw on purpose' })
+      .click()
+    await taskNavigator
+      .locator('[data-interaction="mobile.task.open"]')
+      .filter({ hasText: 'Project' })
+      .click()
+    await expect(page.getByTestId('mobile-project-sheet')).toBeVisible()
+    expect(await page.evaluate(() => window.scrollY)).toBe(0)
   })
 })
 

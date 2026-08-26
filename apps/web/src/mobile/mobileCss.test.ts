@@ -9,13 +9,13 @@ const composerCss = readFileSync(
 )
 
 describe('mobile CSS contract', () => {
-  it('accounts for every safe-area edge', () => {
+  it('routes every safe-area edge through overridable env-backed variables', () => {
     expect(css).toContain('env(safe-area-inset-top)')
     expect(css).toContain('env(safe-area-inset-right)')
     expect(css).toContain('env(safe-area-inset-bottom)')
     expect(css).toContain('env(safe-area-inset-left)')
     expect(css).toMatch(
-      /\.mobile-sheet__body\s*\{[\s\S]*?env\(safe-area-inset-bottom\)/,
+      /\.mobile-sheet__body\s*\{[\s\S]*?var\(--mobile-safe-area-bottom\)/,
     )
   })
 
