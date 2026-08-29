@@ -20,6 +20,6 @@ tauri-build = { version = "=2.6.3" }
 [dependencies]
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
-log = "=0.4.33"
+log = "=0.4.34"
 tauri = { version = "=2.11.5" }
 tauri-plugin-log = "=2.9.0"
