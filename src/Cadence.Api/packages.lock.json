@@ -4,9 +4,9 @@
     "net10.0": {
       "Aspire.Azure.Storage.Blobs": {
         "type": "Direct",
-        "requested": "[13.5.2, )",
-        "resolved": "13.5.2",
-        "contentHash": "roMO1tfv3J+ZWYxGg2e0mp3l9cgfvYr+b77fvyoOUb0ZNrfDy0z/1EuXFiTF7NJsvTwp48XgPvixb7we0vec7Q==",
+        "requested": "[13.5.3, )",
+        "resolved": "13.5.3",
+        "contentHash": "NIOJJ5lCdDsqA03XiNlr0WT3gw4nqdQEFbG34ZtCh5TtnwJfjg0Kfpv2YqutS6JGVXwmvDK8WPRz8BBhUJ7RJA==",
         "dependencies": {
           "AspNetCore.HealthChecks.Azure.Storage.Blobs": "9.0.0",
           "Azure.Core": "1.57.0",
@@ -18,9 +18,9 @@
       },
       "Aspire.Npgsql.EntityFrameworkCore.PostgreSQL": {
         "type": "Direct",
-        "requested": "[13.5.2, )",
-        "resolved": "13.5.2",
-        "contentHash": "E1sE6XBkpOcpDugBDwUphwKk/pKNu48UDteaCdjhDjGj7FIjLOZ+hi6O14kyh+wMgHpzvAfk4KpCmn2ZgmEExA==",
+        "requested": "[13.5.3, )",
+        "resolved": "13.5.3",
+        "contentHash": "w2yuaPhTQsmFcEEvGGe4bKq919EfRwZ/TnXj3Cqrxers7pACv/9LUSXacGLggC3bkgJczKtx7SwL8RzsAm4ABA==",
         "dependencies": {
           "Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore": "10.0.11",
           "Npgsql.DependencyInjection": "10.0.2",
@@ -31,9 +31,9 @@
       },
       "Aspire.StackExchange.Redis": {
         "type": "Direct",
-        "requested": "[13.5.2, )",
-        "resolved": "13.5.2",
-        "contentHash": "gqw0F70XkWk37qt2C+894e3WpDSOQAyJ27ECueef8oA/pR1qLNMlWqqF2aDicFNIZzrae5KhPiKojEk6BTJi4w==",
+        "requested": "[13.5.3, )",
+        "resolved": "13.5.3",
+        "contentHash": "B0mJpW8715pp8ecZ5RXh3pG78ncg8EKMM1pOZO2X10z0RLqTLerhyW4i2RrxOZMkx00BDRrZT+43e6GHmvdjUQ==",
         "dependencies": {
           "AspNetCore.HealthChecks.Redis": "9.0.0",
           "Microsoft.Extensions.DependencyInjection.AutoActivation": "10.8.0",
@@ -50,9 +50,9 @@
       },
       "CommunityToolkit.Aspire.OllamaSharp": {
         "type": "Direct",
-        "requested": "[13.4.0, )",
-        "resolved": "13.4.0",
-        "contentHash": "Xy64OnQNNxCMLFyH1S3HrUEdwwwIraQHjAhKl5PHIq5vWp6jkSMO1gnHHVrfbo6BgSFndFOBWb91eVc2vynbaQ==",
+        "requested": "[13.5.0, )",
+        "resolved": "13.5.0",
+        "contentHash": "blHamecCYW/Gew1F+NRXmVY19D8TA6OxvRmDAIuAP6n5NB+bLDTrKstXdxSPq+tPPsbtoePsVybbpHBXPrXgEg==",
         "dependencies": {
           "Microsoft.Extensions.AI": "10.6.0",
           "OllamaSharp": "5.4.12",
@@ -82,15 +82,15 @@
       },
       "Scalar.AspNetCore": {
         "type": "Direct",
-        "requested": "[2.17.1, )",
-        "resolved": "2.17.1",
-        "contentHash": "7np19IKEqPi+Isbo5Ka1wdMsQedv5jUECPHq223NgKEL7eGd+z98ncZRmpYfKotU/BD07kJSpnPaXp6X0TzRKw=="
+        "requested": "[2.17.2, )",
+        "resolved": "2.17.2",
+        "contentHash": "ciW2HuRWJgNEecophHN9DvoRlTs/+8TNPhB6tQW1gmJWh/eoAIO0ys8XIxx7irUpIu3KRHZyxyuHstqqrTn1Tw=="
       },
       "Stripe.net": {
         "type": "Direct",
-        "requested": "[52.3.0, )",
-        "resolved": "52.3.0",
-        "contentHash": "zqaHgeEITTvRGLk9QlxG4GoJ8aQlM17pJeqea6z4uge4cddTgJ5HyTd3znKqfJARxu1rR2pcHFjFbSBlQbYsnQ==",
+        "requested": "[52.4.0, )",
+        "resolved": "52.4.0",
+        "contentHash": "EIsOiIzQBTPNvCb7mvpEVor+rn0z9bcL+D43buAqF2c2aYx3PEyDdjX/XwDWYGq6PTc8r6NVCcRoOs3hrzfcAg==",
         "dependencies": {
           "Newtonsoft.Json": "13.0.3",
           "System.Configuration.ConfigurationManager": "9.0.0"
@@ -409,7 +409,7 @@
       "cadence.data": {
         "type": "Project",
         "dependencies": {
-          "Azure.Storage.Blobs": "[12.29.1, )",
+          "Azure.Storage.Blobs": "[12.29.2, )",
           "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "[10.0.11, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
         }
@@ -428,9 +428,9 @@
       },
       "Azure.Storage.Blobs": {
         "type": "CentralTransitive",
-        "requested": "[12.29.1, )",
-        "resolved": "12.29.1",
-        "contentHash": "pWh7xZBto8YcwiO853AB3uijTfVqs9PDte0Bu9/Zd8O9nwKiitWm0Jej1vsNkmYUzeG1552f8vJPjmtW30pBUQ==",
+        "requested": "[12.29.2, )",
+        "resolved": "12.29.2",
+        "contentHash": "NeZmk7bphspT2BYn8XaNCTV4/9vQG+ea79F85MBTi2o2WiXIIJNsRBtFyeBrzK2HIk476rfSqLNwPt4vXgOEkQ==",
         "dependencies": {
           "Azure.Core": "1.55.0",
           "Azure.Storage.Common": "12.28.0"

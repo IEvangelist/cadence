@@ -4,9 +4,9 @@
     "net10.0": {
       "Aspire.Azure.Storage.Blobs": {
         "type": "Direct",
-        "requested": "[13.5.2, )",
-        "resolved": "13.5.2",
-        "contentHash": "roMO1tfv3J+ZWYxGg2e0mp3l9cgfvYr+b77fvyoOUb0ZNrfDy0z/1EuXFiTF7NJsvTwp48XgPvixb7we0vec7Q==",
+        "requested": "[13.5.3, )",
+        "resolved": "13.5.3",
+        "contentHash": "NIOJJ5lCdDsqA03XiNlr0WT3gw4nqdQEFbG34ZtCh5TtnwJfjg0Kfpv2YqutS6JGVXwmvDK8WPRz8BBhUJ7RJA==",
         "dependencies": {
           "AspNetCore.HealthChecks.Azure.Storage.Blobs": "9.0.0",
           "Azure.Core": "1.57.0",
@@ -18,9 +18,9 @@
       },
       "Aspire.Npgsql.EntityFrameworkCore.PostgreSQL": {
         "type": "Direct",
-        "requested": "[13.5.2, )",
-        "resolved": "13.5.2",
-        "contentHash": "E1sE6XBkpOcpDugBDwUphwKk/pKNu48UDteaCdjhDjGj7FIjLOZ+hi6O14kyh+wMgHpzvAfk4KpCmn2ZgmEExA==",
+        "requested": "[13.5.3, )",
+        "resolved": "13.5.3",
+        "contentHash": "w2yuaPhTQsmFcEEvGGe4bKq919EfRwZ/TnXj3Cqrxers7pACv/9LUSXacGLggC3bkgJczKtx7SwL8RzsAm4ABA==",
         "dependencies": {
           "Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore": "10.0.11",
           "Npgsql.DependencyInjection": "10.0.2",
@@ -302,7 +302,7 @@
       "cadence.data": {
         "type": "Project",
         "dependencies": {
-          "Azure.Storage.Blobs": "[12.29.1, )",
+          "Azure.Storage.Blobs": "[12.29.2, )",
           "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "[10.0.11, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
         }
@@ -321,9 +321,9 @@
       },
       "Azure.Storage.Blobs": {
         "type": "CentralTransitive",
-        "requested": "[12.29.1, )",
-        "resolved": "12.29.1",
-        "contentHash": "pWh7xZBto8YcwiO853AB3uijTfVqs9PDte0Bu9/Zd8O9nwKiitWm0Jej1vsNkmYUzeG1552f8vJPjmtW30pBUQ==",
+        "requested": "[12.29.2, )",
+        "resolved": "12.29.2",
+        "contentHash": "NeZmk7bphspT2BYn8XaNCTV4/9vQG+ea79F85MBTi2o2WiXIIJNsRBtFyeBrzK2HIk476rfSqLNwPt4vXgOEkQ==",
         "dependencies": {
           "Azure.Core": "1.55.0",
           "Azure.Storage.Common": "12.28.0"
