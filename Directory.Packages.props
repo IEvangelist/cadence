@@ -6,8 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup Label="Aspire hosting integrations">
-    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.5.2" />
-    <PackageVersion Include="Aspire.Hosting.Redis" Version="13.5.2" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL" Version="13.5.3" />
+    <PackageVersion Include="Aspire.Hosting.Redis" Version="13.5.3" />
     <!--
       Azure managed variants for go-live. The AppHost calls
       AddAzurePostgresFlexibleServer(...).RunAsContainer() and
@@ -15,13 +15,13 @@
       managed Azure resources (data survives ACA revision restarts) while
       `aspire run` continues to use local Postgres/Redis containers.
     -->
-    <PackageVersion Include="Aspire.Hosting.Azure.PostgreSQL" Version="13.5.2" />
-    <PackageVersion Include="Aspire.Hosting.Azure.Redis" Version="13.5.2" />
-    <PackageVersion Include="Aspire.Hosting.Azure.Storage" Version="13.5.2" />
+    <PackageVersion Include="Aspire.Hosting.Azure.PostgreSQL" Version="13.5.3" />
+    <PackageVersion Include="Aspire.Hosting.Azure.Redis" Version="13.5.3" />
+    <PackageVersion Include="Aspire.Hosting.Azure.Storage" Version="13.5.3" />
     <!-- Redis client integration: registers IConnectionMultiplexer wired to the
          "redis" resource, used to back the auth rate limiters with a distributed
          (cross-replica) fixed-window store. Pulls StackExchange.Redis transitively. -->
-    <PackageVersion Include="Aspire.StackExchange.Redis" Version="13.5.2" />
+    <PackageVersion Include="Aspire.StackExchange.Redis" Version="13.5.3" />
     <!--
       Node.js hosting integration (AddNpmApp) for the apps/web dev server. The
       curated feed publishes this package only up to 9.5.2 (the core Aspire
@@ -40,7 +40,7 @@
       consuming server-side AI endpoint (and its #71 daily cap) is tracked
       separately in #140.
     -->
-    <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Ollama" Version="13.4.0" />
+    <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Ollama" Version="13.5.0" />
     <!--
       Community Toolkit Ollama CLIENT integration (AddOllamaSharpChatClient) consumed
       by Cadence.Api's optional, default-off server-side AI endpoint (#140). Registers
@@ -51,12 +51,12 @@
       the feature flag is enabled and the model's connection string is present
       (a developer started the local Ollama).
     -->
-    <PackageVersion Include="CommunityToolkit.Aspire.OllamaSharp" Version="13.4.0" />
+    <PackageVersion Include="CommunityToolkit.Aspire.OllamaSharp" Version="13.5.0" />
   </ItemGroup>
 
   <ItemGroup Label="Stem separation (Blob storage, ONNX Runtime)">
-    <PackageVersion Include="Azure.Storage.Blobs" Version="12.29.1" />
-    <PackageVersion Include="Aspire.Azure.Storage.Blobs" Version="13.5.2" />
+    <PackageVersion Include="Azure.Storage.Blobs" Version="12.29.2" />
+    <PackageVersion Include="Aspire.Azure.Storage.Blobs" Version="13.5.3" />
     <PackageVersion Include="Microsoft.ML.OnnxRuntime" Version="1.29.0" />
   </ItemGroup>
 
@@ -73,7 +73,7 @@
     -->
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.12" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
-    <PackageVersion Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.5.2" />
+    <PackageVersion Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.5.3" />
   </ItemGroup>
 
   <ItemGroup Label="Authentication (external OAuth providers)">
@@ -104,15 +104,15 @@
     <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
     <!-- Scalar: human-facing interactive API reference UI rendered over the
          OpenAPI document. net10.0 target carries no package dependencies. -->
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.17.1" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.17.2" />
   </ItemGroup>
 
   <ItemGroup Label="Billing (Stripe)">
-    <PackageVersion Include="Stripe.net" Version="52.3.0" />
+    <PackageVersion Include="Stripe.net" Version="52.4.1" />
   </ItemGroup>
 
   <ItemGroup Label="Testing">
-    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.5.2" />
+    <PackageVersion Include="Aspire.Hosting.Testing" Version="13.5.3" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.11" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
